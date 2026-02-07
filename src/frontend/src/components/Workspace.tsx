@@ -10,18 +10,18 @@ import {
 } from 'react'
 import { createComponent } from 'react-fela'
 
-const replaceNth = function<T>(arr: T[], n: number, replacement: T): T[] {
-  const copy = [...arr];
-  copy[n] = replacement;
-  return copy;
+const replaceNth = function <T>(arr: T[], n: number, replacement: T): T[] {
+  const copy = [...arr]
+  copy[n] = replacement
+  return copy
 }
 
 const StyledIframe = createComponent(
-  () => ({
+  ({ dragging }: { dragging: boolean }) => ({
     border: '0',
     flex: '1 1',
     width: '100%',
-    pointerEvents: 'none',
+    pointerEvents: dragging ? 'none' : 'auto',
   }),
   'iframe',
   ['src']
@@ -141,7 +141,11 @@ function reducer(state: State, action: WorkspaceAction): State {
         nextWindowID: state.nextWindowID + 1,
         windows: [
           ...state.windows,
-          { ...action.payload, id: state.nextWindowID, zIndex: state.zIndexCounter },
+          {
+            ...action.payload,
+            id: state.nextWindowID,
+            zIndex: state.zIndexCounter,
+          },
         ],
         zIndexCounter: state.zIndexCounter + 1,
       }
@@ -287,7 +291,10 @@ export const Workspace = ({ children }: Props) => {
             <Title data-window-index={i} onMouseDown={onMouseDown}>
               {win.title}
             </Title>
-            <StyledIframe src="https://app.app.onetrueos.com/"></StyledIframe>
+            <StyledIframe
+              dragging={!!workspaceState.dragOrigin}
+              src="https://app.app.onetrueos.com/"
+            ></StyledIframe>
           </Chrome>
         )
       })}
