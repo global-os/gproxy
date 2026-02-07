@@ -21,6 +21,7 @@ const StyledIframe = createComponent(
     border: '0',
     flex: '1 1',
     width: '100%',
+    pointerEvents: 'none',
   }),
   'iframe',
   ['src']
@@ -286,7 +287,7 @@ export const Workspace = ({ children }: Props) => {
             <Title data-window-index={i} onMouseDown={onMouseDown}>
               {win.title}
             </Title>
-            <StyledIframe src="http://news.ycombinator.com"></StyledIframe>
+            <StyledIframe src="https://app.app.onetrueos.com/"></StyledIframe>
           </Chrome>
         )
       })}

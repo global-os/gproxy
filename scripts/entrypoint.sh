@@ -6,9 +6,6 @@ GITHUB_CLIENT_ID="${GITHUB_CLIENT_ID:?GITHUB_CLIENT_ID is required}"
 
 echo "Starting server..."
 
-echo "false thing" && false
-echo "another false thing" && false
-
 yarn start
 
 tail -f /dev/null
