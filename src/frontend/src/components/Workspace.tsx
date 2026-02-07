@@ -10,6 +10,22 @@ import {
 } from 'react'
 import { createComponent } from 'react-fela'
 
+const replaceNth = function<T>(arr: T[], n: number, replacement: T): T[] {
+  const copy = [...arr];
+  copy[n] = replacement;
+  return copy;
+}
+
+const StyledIframe = createComponent(
+  () => ({
+    border: '0',
+    flex: '1 1',
+    width: '100%',
+  }),
+  'iframe',
+  ['src']
+)
+
 const Frame = createComponent(
   () => ({
     position: 'relative',
@@ -27,15 +43,20 @@ const Chrome = createComponent(
     top,
     width,
     height,
+    zIndex,
   }: {
     left: string
     top: string
     width: string
     height: string
+    zIndex: number
   }) => ({
+    display: 'flex',
+    flexDirection: 'column',
     border: '1px solid rgba(0,0,0, 0.5)',
     background: 'red',
     position: 'absolute',
+    zIndex: zIndex,
     width,
     height,
     top,
@@ -48,6 +69,7 @@ const Title = createComponent(
     borderBottom: '1px solid rgba(0,0,0, 0.5)',
     background: 'rgba(255,255,255, 0.8)',
     userSelect: 'none',
+    flex: '0 0',
   }),
   'div',
   ['data-window-index', 'onMouseMove', 'onMouseDown']
@@ -58,6 +80,7 @@ type State = {
   nextWindowID: number
   draggingWindow: number | undefined
   dragOrigin: undefined | [number, number]
+  zIndexCounter: number
 }
 
 type WindowSpec = {
@@ -72,6 +95,7 @@ type WindowSpec = {
 
 type Window = {
   id: number
+  zIndex: number
 
   title: string
 
@@ -116,8 +140,9 @@ function reducer(state: State, action: WorkspaceAction): State {
         nextWindowID: state.nextWindowID + 1,
         windows: [
           ...state.windows,
-          { ...action.payload, id: state.nextWindowID },
+          { ...action.payload, id: state.nextWindowID, zIndex: state.zIndexCounter },
         ],
+        zIndexCounter: state.zIndexCounter + 1,
       }
     }
     case WorkspaceActionKind.DRAG_WINDOW: {
@@ -144,6 +169,11 @@ function reducer(state: State, action: WorkspaceAction): State {
     case WorkspaceActionKind.START_DRAGGING_WINDOW: {
       return {
         ...state,
+        windows: replaceNth(state.windows, action.index, {
+          ...state.windows[action.index],
+          zIndex: state.zIndexCounter,
+        }),
+        zIndexCounter: state.zIndexCounter + 1,
         dragOrigin: action.payload,
         draggingWindow: action.index,
       }
@@ -177,6 +207,7 @@ export const Workspace = ({ children }: Props) => {
     windows: [],
     dragOrigin: undefined,
     draggingWindow: undefined,
+    zIndexCounter: 1,
   })
 
   const workspaceActions: WorkspaceActions = {
@@ -250,10 +281,12 @@ export const Workspace = ({ children }: Props) => {
             top={computeY(win.y, win.height) + 'px'}
             width={win.width + 'px'}
             height={win.height + 'px'}
+            zIndex={win.zIndex}
           >
             <Title data-window-index={i} onMouseDown={onMouseDown}>
               {win.title}
             </Title>
+            <StyledIframe src="http://news.ycombinator.com"></StyledIframe>
           </Chrome>
         )
       })}
