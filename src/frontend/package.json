@@ -7,9 +7,12 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "regenerate": "npx @tanstack/router-cli generate"
+    "regenerate": "npx @tanstack/router-cli generate",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@base-ui/react": "^1.4.1",
     "@tanstack/react-query": "^5.90.16",
     "@tanstack/react-router": "^1.115.3",
     "better-auth": "^1.2.5",
@@ -25,19 +28,31 @@
     "react-fela": "^12.2.1"
   },
   "devDependencies": {
+    "@chromatic-com/storybook": "^5.1.2",
     "@eslint/js": "^9.21.0",
+    "@storybook/addon-a11y": "^10.3.5",
+    "@storybook/addon-docs": "^10.3.5",
+    "@storybook/addon-onboarding": "^10.3.5",
+    "@storybook/addon-vitest": "^10.3.5",
+    "@storybook/react-vite": "^10.3.5",
     "@tanstack/react-router-devtools": "^1.115.3",
     "@tanstack/router-plugin": "^1.115.3",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/browser-playwright": "^4.1.5",
+    "@vitest/coverage-v8": "^4.1.5",
     "eslint": "^9.21.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.19",
+    "eslint-plugin-storybook": "^10.3.5",
     "globals": "^15.15.0",
+    "playwright": "^1.59.1",
+    "storybook": "^10.3.5",
     "typescript": "~5.9.3",
     "typescript-eslint": "8.50.1",
-    "vite": "^6.2.0",
-    "vite-plugin-rewrite-all": "^1.0.2"
+    "vite": "^8.0.10",
+    "vite-plugin-rewrite-all": "^1.0.2",
+    "vitest": "^4.1.5"
   }
 }
