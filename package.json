@@ -39,11 +39,13 @@
     "kysely": "^0.28.9",
     "pg": "^8.16.3",
     "prettier": "^3.7.4",
+    "stripe": "^20.3.1",
     "styled-components": "^6.1.19",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "@tanstack/router-cli": "^1.157.16"
+    "@tanstack/router-cli": "^1.157.16",
+    "@types/stripe": "^8.0.417"
   }
 }

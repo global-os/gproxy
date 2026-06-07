@@ -1,8 +1,21 @@
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { db } from './db/index.js'
+import Stripe from 'stripe'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+console.log('stripe is', stripe);
 
 export const auth = betterAuth({
+  logger: {
+		disabled: false,
+		disableColors: false,
+		level: "debug",
+		log: (level, message, ...args) => {
+			// Custom logging implementation
+			console.log(`[${level}] ${message}`, ...args);
+		}
+	},
   basePath: '/api/auth',
   database: drizzleAdapter(db, {
     provider: 'pg',
@@ -27,6 +40,19 @@ export const auth = betterAuth({
     //   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     // },
   },
+  databaseHooks: {
+    user: {
+      create: {
+        async before() {
+          console.log('about to call stripe')
+        },
+        async after(user, context) {
+          console.log('really about to call stripe')
+          await stripe.customers.create(user);
+        }
+      }
+    }
+  }
 })
 
 export type AuthType = {

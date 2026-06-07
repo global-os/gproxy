@@ -26,9 +26,14 @@ const app = new Hono<Env>({
 
     console.log('getPath called - hostname:', hostname, 'path:', path)
 
-    const resolved = pathFromHostnameAndPath(hostname, path)
-    console.log('resolved:', resolved)
-    return resolved
+    try {
+      const resolved = pathFromHostnameAndPath(hostname, path)
+      console.log('resolved:', resolved)
+      return resolved
+    } catch (e) {
+      console.error('getPath error:', e)
+      throw e
+    }
   },
 })
 
