@@ -7,8 +7,5 @@
   },
   "rewrites": [
     { "source": "/(.*)", "destination": "/api/index" }
-  ],
-  "healthCheck": {
-    "path": "/health"
-  }
+  ]
 }
