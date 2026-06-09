@@ -1,9 +1,6 @@
 {
   "name": "nodeproxy-backend",
   "private": true,
-  "workspaces": [
-    "frontend"
-  ],
   "engines": {
     "node": "24.x"
   },
@@ -16,7 +13,7 @@
     "start": "node dist/src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "format": "prettier -w src/frontend/src/**/*.{ts,tsx} **/*.{ts,tsx} ./drizzle.config.ts",
-    "vercel-build": "(cd src/frontend && yarn install --frozen-lockfile) && yarn build"
+    "vercel-build": "yarn install && (cd src/frontend && yarn install --frozen-lockfile) && yarn build"
   },
   "version": "1.0.0",
   "description": "",
@@ -29,6 +26,7 @@
     "@hono/node-server": "^1.19.7",
     "@types/node": "^25.0.1",
     "@types/pg": "^8.16.0",
+    "@types/tar": "^7.0.87",
     "better-auth": "^1.4.7",
     "bunx": "^0.1.0",
     "dotenv": "^17.2.3",
@@ -39,6 +37,7 @@
     "jsdom": "^27.3.0",
     "kysely": "^0.28.9",
     "pg": "^8.16.3",
+    "tar": "^7.5.16",
     "prettier": "^3.7.4",
     "styled-components": "^6.1.19",
     "ts-node": "^10.9.2",
