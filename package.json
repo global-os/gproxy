@@ -15,7 +15,8 @@
     "build": "npm run-script build:frontend && npm run-script build:backend",
     "start": "node dist/src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "format": "prettier -w src/frontend/src/**/*.{ts,tsx} **/*.{ts,tsx} ./drizzle.config.ts"
+    "format": "prettier -w src/frontend/src/**/*.{ts,tsx} **/*.{ts,tsx} ./drizzle.config.ts",
+    "vercel-build": "(cd src/frontend && yarn install --frozen-lockfile) && yarn build"
   },
   "version": "1.0.0",
   "description": "",

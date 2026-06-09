@@ -34,5 +34,6 @@ export const pathFromHostnameAndPath = (
     return path === '/' ? '/app' : '/app/' + removeLeadingSlash(path);
   }
   
-  throw new Error('unrecognized domain: ' + hostname);
+  // Fallback for unrecognized domains (e.g., Vercel preview URLs)
+  return path
 }
