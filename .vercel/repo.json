@@ -1,0 +1,11 @@
+{
+  "remoteName": "origin",
+  "projects": [
+    {
+      "id": "prj_YzDbpigPcAjP3uOJc6OiU0jmdopH",
+      "name": "global-os",
+      "directory": ".",
+      "orgId": "team_xx5yJzNru2p4zBytKd4iyRQ1"
+    }
+  ]
+}
