@@ -35,6 +35,18 @@ app.get('/www', async (c) => {
   return c.html(html)
 })
 
+app.get('/www-assets/*', async (c) => {
+  const relativePath = c.req.path.replace(/^\/www-assets\//, '')
+  const filePath = path.join(process.cwd(), 'src/www/dist', relativePath)
+  if (!filePath.startsWith(path.join(process.cwd(), 'src/www/dist')) || !fs.existsSync(filePath)) {
+    return c.notFound()
+  }
+  return c.body(fs.readFileSync(filePath), 200, {
+    'Content-Type': 'application/javascript; charset=utf-8',
+    'Cache-Control': 'public, max-age=31536000, immutable',
+  })
+})
+
 app.get('/www-redirect', (c) => c.redirect('https://www.onetrueos.com', 301))
 app.get('/vercel-git-redirect', (c) => c.redirect('https://app.app.onetrueos.com', 301))
 

@@ -8,20 +8,13 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
     body { font-family: 'Inter', sans-serif; }
-    .fade-slide {
-      animation: fadeSlide 0.5s ease-in-out;
-    }
-    @keyframes fadeSlide {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
   </style>
 </head>
 <body class="bg-slate-950 text-white min-h-screen flex flex-col">
 
   <!-- Nav -->
   <nav class="px-8 py-6 flex items-center justify-between max-w-6xl mx-auto w-full relative z-10">
-    <span class="text-lg font-semibold tracking-tight">GlobalOS</span>
+    <span class="text-lg font-semibold tracking-tight" style="border-bottom: 2px solid #a855f7; padding-bottom: 1px;">GlobalOS</span>
     <a
       href="https://app.app.onetrueos.com"
       class="text-sm text-slate-400 hover:text-white transition-colors"
@@ -36,7 +29,7 @@
 
     <p class="mt-8 text-xl sm:text-2xl text-slate-400 font-light">
       Run tasks, access your documents, from
-      <span id="rotating" class="text-white font-medium"></span>
+      <span id="rotating-mount"></span>
     </p>
 
     <a
@@ -52,21 +45,6 @@
     © 2026 GlobalOS
   </footer>
 
-  <script>
-    const phrases = ['public computers', 'your laptop', 'your phone', 'the cloud']
-    let i = 0
-    const el = document.getElementById('rotating')
-
-    function tick() {
-      el.classList.remove('fade-slide')
-      void el.offsetWidth // reflow to restart animation
-      el.textContent = phrases[i % phrases.length]
-      el.classList.add('fade-slide')
-      i++
-    }
-
-    tick()
-    setInterval(tick, 2500)
-  </script>
+  <script src="/www-assets/rotating.js"></script>
 </body>
 </html>

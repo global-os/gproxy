@@ -1,0 +1,17 @@
+{
+  "name": "globalos-www",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "preact": "^10.26.4"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.9.5",
+    "typescript": "~5.9.3",
+    "vite": "^6.3.5"
+  }
+}

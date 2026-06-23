@@ -6,7 +6,7 @@
   "functions": {
     "api/index.ts": {
       "maxDuration": 30,
-      "includeFiles": "src/frontend/dist/index.html,src/landing.html"
+      "includeFiles": "src/frontend/dist/index.html,src/landing.html,src/www/dist/rotating.js"
     }
   },
   "headers": [

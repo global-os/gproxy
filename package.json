@@ -11,11 +11,12 @@
     "dev:frontend": "cd src/frontend; npm run-script dev",
     "build:backend": "tsc",
     "build:frontend": "cd src/frontend; npm run-script build",
-    "build": "npm run-script build:frontend && npm run-script build:backend",
+    "build:www": "cd src/www && npm install && npm run build",
+    "build": "npm run-script build:www && npm run-script build:frontend && npm run-script build:backend",
     "start": "node dist/src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "format": "prettier -w src/frontend/src/**/*.{ts,tsx} **/*.{ts,tsx} ./drizzle.config.ts",
-    "vercel-build": "npm install && (cd src/frontend && npm install --legacy-peer-deps) && npm run build && node scripts/verify-frontend-bundle.mjs && node scripts/sync-public-assets.mjs"
+    "vercel-build": "npm install && (cd src/frontend && npm install --legacy-peer-deps) && (cd src/www && npm install) && npm run build && node scripts/verify-frontend-bundle.mjs && node scripts/sync-public-assets.mjs"
   },
   "version": "1.0.0",
   "description": "",
