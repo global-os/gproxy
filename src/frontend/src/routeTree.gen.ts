@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SessionSessionIdRouteImport } from './routes/session.$sessionId'
@@ -18,6 +20,16 @@ import { Route as SessionSessionIdRouteImport } from './routes/session.$sessionI
 const SessionsRoute = SessionsRouteImport.update({
   id: '/sessions',
   path: '/sessions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RegisterRoute = RegisterRouteImport.update({
@@ -45,6 +57,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sessions': typeof SessionsRoute
   '/session/$sessionId': typeof SessionSessionIdRoute
 }
@@ -52,6 +66,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sessions': typeof SessionsRoute
   '/session/$sessionId': typeof SessionSessionIdRoute
 }
@@ -60,19 +76,23 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sessions': typeof SessionsRoute
   '/session/$sessionId': typeof SessionSessionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/register' | '/sessions' | '/session/$sessionId'
+  fullPaths: '/' | '/login' | '/register' | '/forgot-password' | '/reset-password' | '/sessions' | '/session/$sessionId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/register' | '/sessions' | '/session/$sessionId'
+  to: '/' | '/login' | '/register' | '/forgot-password' | '/reset-password' | '/sessions' | '/session/$sessionId'
   id:
     | '__root__'
     | '/'
     | '/login'
     | '/register'
+    | '/forgot-password'
+    | '/reset-password'
     | '/sessions'
     | '/session/$sessionId'
   fileRoutesById: FileRoutesById
@@ -81,6 +101,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SessionsRoute: typeof SessionsRoute
   SessionSessionIdRoute: typeof SessionSessionIdRoute
 }
@@ -99,6 +121,20 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -129,6 +165,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SessionsRoute: SessionsRoute,
   SessionSessionIdRoute: SessionSessionIdRoute,
 }

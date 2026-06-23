@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
-import { forgetPassword } from '../lib/auth-client'
+import { requestPasswordReset } from '../lib/auth-client'
 import { Page } from '../components/Page'
 import { VerticalFrame } from '../components/VerticalFrame'
 
@@ -17,11 +17,11 @@ function RouteComponent() {
     e.preventDefault()
     setError(null)
 
-    await forgetPassword(
+    await requestPasswordReset(
       { email, redirectTo: '/reset-password' },
       {
         onSuccess: () => setSubmitted(true),
-        onError: (ctx) => setError(ctx.error.message),
+        onError: (ctx: { error: { message: string } }) => setError(ctx.error.message),
       }
     )
   }
