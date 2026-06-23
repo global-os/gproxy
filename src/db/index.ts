@@ -2,7 +2,6 @@ import { Pool } from 'pg'
 import { drizzle } from 'drizzle-orm/node-postgres'
 
 import * as schema from './schema.js'
-import relations from './relations.js'
 
 const dbConfig = {
   connectionString: process.env.DATABASE_URL,
@@ -18,7 +17,7 @@ const dbConfig = {
 // Create connection pool
 export const pool = new Pool(dbConfig)
 
-export const db = drizzle({ schema, relations, client: pool })
+export const db = drizzle({ schema, client: pool })
 
 // Test connection on startup
 export async function testConnection() {

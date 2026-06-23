@@ -1,7 +1,6 @@
 import { MiddlewareHandler } from 'hono'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { db, pool } from './db/index.js'
-import relations from './db/relations.js'
 import { Env } from './types'
 import * as schema from './db/schema.js'
 import { eq } from 'drizzle-orm'
@@ -80,7 +79,7 @@ export const setRlsUser: MiddlewareHandler<Env> = async (c, next) => {
   try {
     await client.query('BEGIN')
     await client.query('SELECT set_config($1, $2, true)', ['app.user_id', user.id])
-    c.set('db', drizzle({ client, schema, relations }) as any)
+    c.set('db', drizzle({ client, schema }) as any)
     await next()
     await client.query('COMMIT')
   } catch (e) {
