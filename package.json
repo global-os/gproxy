@@ -2,8 +2,10 @@
   "name": "nodeproxy-backend",
   "private": true,
   "engines": {
-    "node": "24.x"
+    "node": "24.x",
+    "npm": ">=10"
   },
+  "packageManager": "npm@10.9.2",
   "scripts": {
     "dev:backend": "tsx src/index.tsx",
     "dev:frontend": "cd src/frontend; npm run-script dev",
@@ -13,7 +15,7 @@
     "start": "node dist/src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "format": "prettier -w src/frontend/src/**/*.{ts,tsx} **/*.{ts,tsx} ./drizzle.config.ts",
-    "vercel-build": "yarn install && (cd src/frontend && yarn install --frozen-lockfile) && yarn build"
+    "vercel-build": "npm install && (cd src/frontend && npm install) && npm run build"
   },
   "version": "1.0.0",
   "description": "",
