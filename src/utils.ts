@@ -21,8 +21,13 @@ export const pathFromHostnameAndPath = (
   }
   
   // Landing page
-  if (hostWithoutPort === 'www.onetrueos.com' || hostWithoutPort === 'onetrueos.com') {
+  if (hostWithoutPort === 'www.onetrueos.com') {
     return '/www'
+  }
+
+  // Apex redirect to www
+  if (hostWithoutPort === 'onetrueos.com') {
+    return '/www-redirect'
   }
 
   // App domains: app.dev.onetrueos.com (dev), app.app.onetrueos.com (prod), global-os.vercel.app + any *.vercel.app preview URLs

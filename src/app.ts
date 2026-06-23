@@ -35,6 +35,8 @@ app.get('/www', async (c) => {
   return c.html(html)
 })
 
+app.get('/www-redirect', (c) => c.redirect('https://www.onetrueos.com', 301))
+
 app.get('/health', (c) => c.json({ status: 'ok' }))
 
 app.use(
