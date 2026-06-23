@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { signIn } from '../lib/auth-client'
 import { useState } from 'react'
 import { VerticalFrame } from '../components/VerticalFrame'
@@ -82,9 +82,17 @@ function RouteComponent() {
             </div>
 
             <div className="grid gap-1">
-              <label htmlFor="password" className="text-sm font-medium text-gray-600">
-                Password
-              </label>
+              <div className="flex justify-between items-baseline">
+                <label htmlFor="password" className="text-sm font-medium text-gray-600">
+                  Password
+                </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-amber-700 hover:text-amber-800"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 name="password"
                 id="password"

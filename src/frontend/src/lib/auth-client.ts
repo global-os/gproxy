@@ -19,7 +19,7 @@ export const {
   signIn,
   signUp,
   signOut,
-  // forgetPassword,
+  forgetPassword,
   resetPassword,
 } = authClient
 
