@@ -1,27 +1,9 @@
-import { defineRelations } from 'drizzle-orm';
+// defineRelations was a beta-only API in drizzle-orm (^1.0.0-beta.9-e89174b).
+// Stable drizzle-orm (^0.45.2) uses `relations` from 'drizzle-orm' instead.
+// To revert: swap back to `import { defineRelations } from 'drizzle-orm'` and
+// restore the defineRelations(schema, (r) => ({ ... })) call once it stabilizes.
+import { relations } from 'drizzle-orm';
 import * as schema from './schema.js'
 
-export default defineRelations(schema, (r) => ({
-  // user: {
-  //   sessions: r.many.session({
-  //     from: r.user.id,
-  //     to: r.session.userId,
-  //   }),
-  //   accounts: r.many.account({
-  //     from: r.user.id,
-  //     to: r.account.userId,
-  //   }),
-  // },
-  // session: {
-  //   user: r.one.user({
-  //     from: r.session.userId,
-  //     to: r.user.id,
-  //   }),
-  // },
-  // account: {
-  //   user: r.one.user({
-  //     from: r.account.userId,
-  //     to: r.user.id,
-  //   }),
-  // },
-}));
+// relations defined here when needed
+export default {}

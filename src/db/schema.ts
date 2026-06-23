@@ -1,4 +1,11 @@
-import { pgTable, text, timestamp, boolean, index, serial, integer, pgEnum, bytea } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, serial, integer, pgEnum, customType } from "drizzle-orm/pg-core";
+
+// bytea was a first-class export in drizzle-orm beta (^1.0.0-beta.9-e89174b).
+// Stable drizzle-orm (^0.45.2) dropped it — use customType in the meantime.
+// To revert: replace this block with `bytea` in the import above once it's re-exported.
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() { return 'bytea' },
+});
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
