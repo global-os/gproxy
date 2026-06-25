@@ -1,9 +1,7 @@
 name: Vercel Health Check
 
 on:
-  repository_dispatch:
-    types:
-      - vercel.deployment.ready
+  deployment_status:
   workflow_dispatch:
     inputs:
       deployment_url:
@@ -15,6 +13,7 @@ jobs:
   health:
     name: GET /health
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
     steps:
       - name: Resolve deployment URL
         id: deployment
@@ -22,7 +21,7 @@ jobs:
           if [ -n "${{ github.event.inputs.deployment_url }}" ]; then
             RAW="${{ github.event.inputs.deployment_url }}"
           else
-            RAW="${{ github.event.client_payload.url }}"
+            RAW="${{ github.event.deployment_status.environment_url }}"
           fi
           [[ "$RAW" == https://* ]] || RAW="https://${RAW}"
           echo "url=$RAW" >> "$GITHUB_OUTPUT"
@@ -34,20 +33,21 @@ jobs:
           BASE="${{ steps.deployment.outputs.url }}"
           echo "Checking ${BASE}/health"
 
-          BODY_FILE="$(mktemp)"
-          HTTP_CODE=$(curl -sS -L --max-time 30 -o "$BODY_FILE" -w "%{http_code}" "${BASE}/health")
-          echo "HTTP ${HTTP_CODE}"
-          cat "$BODY_FILE"
+          for i in $(seq 1 12); do
+            BODY_FILE="$(mktemp)"
+            HTTP_CODE=$(curl -sS -L --max-time 30 \
+            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}" \
+            -o "$BODY_FILE" -w "%{http_code}" "${BASE}/health")
+            echo "Attempt ${i}: HTTP ${HTTP_CODE}"
 
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Expected HTTP 200"
-            exit 1
-          fi
+            if [ "$HTTP_CODE" = "200" ] && jq -e '.status == "ok" and .database.ok == true' "$BODY_FILE" > /dev/null 2>&1; then
+              echo "Health check passed"
+              exit 0
+            fi
 
-          jq -e '.status == "ok" and .database.ok == true' "$BODY_FILE" > /dev/null
+            cat "$BODY_FILE"
+            [ "$i" -lt 12 ] && echo "Retrying in 10s..." && sleep 10
+          done
 
-      - name: Report check status to Vercel
-        if: always() && github.event_name == 'repository_dispatch'
-        uses: vercel/repository-dispatch/actions/status@v1
-        with:
-          name: "Vercel - PROXY: health"
+          echo "Health check failed after 12 attempts"
+          exit 1
