@@ -1,4 +1,4 @@
-import { Pool, type PoolConfig } from 'pg'
+import { Pool, Client, type PoolConfig } from 'pg'
 import { drizzle } from 'drizzle-orm/node-postgres'
 
 import * as schema from './schema.js'
@@ -66,17 +66,20 @@ export async function pingDatabase(timeoutMs = 5_000): Promise<{ ok: true } | { 
     return { ok: false, error: 'DATABASE_URL is not set' }
   }
 
+  const client = new Client(buildPoolConfig())
   try {
     await Promise.race([
-      pool.query('SELECT 1'),
-      new Promise<never>((_, reject) => {
+      (async () => { await client.connect(); await client.query('SELECT 1') })(),
+      new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error(`Database ping timed out after ${timeoutMs}ms`)), timeoutMs)
-      }),
+      ),
     ])
     return { ok: true }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Database connection failed'
     return { ok: false, error: message }
+  } finally {
+    await client.end().catch(() => {})
   }
 }
 
