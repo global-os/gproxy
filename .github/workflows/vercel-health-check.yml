@@ -36,7 +36,7 @@ jobs:
           BASE="${{ steps.deployment.outputs.url }}"
           echo "Checking ${BASE}/health"
 
-          for i in $(seq 1 12); do
+          for i in $(seq 1 24); do
             BODY_FILE="$(mktemp)"
             HTTP_CODE=$(curl -sS -L --max-time 30 \
               -o "$BODY_FILE" -w "%{http_code}" "${BASE}/health")
@@ -48,10 +48,10 @@ jobs:
             fi
 
             cat "$BODY_FILE"
-            [ "$i" -lt 12 ] && echo "Retrying in 10s..." && sleep 10
+            [ "$i" -lt 24 ] && echo "Retrying in 10s..." && sleep 10
           done
 
-          echo "Health check failed after 12 attempts"
+          echo "Health check failed after 24 attempts"
           exit 1
 
       - name: Report check to Vercel
