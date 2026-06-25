@@ -19,7 +19,7 @@ const rules: [ReturnType<typeof pm>, (host: string, path: string) => string][] =
   [pm('app.app.onetrueos.com'),       (_h, p)  => appPath(p)],
   [pm('app.dev.onetrueos.com'),       (_h, p)  => appPath(p)],
   [pm('app.app.dev.onetrueos.com'),   (_h, p)  => appPath(p)],
-  [pm('global-os-git-*-philip-petersons-projects.vercel.app'), (_h, _p) => '/vercel-git-redirect'],
+  [pm('global-os-git-*-philip-petersons-projects.vercel.app'), (_h, p)  => appPath(p)],
   [pm('*.vercel.app'),                (_h, p)  => appPath(p)],
   [pm('*.app.onetrueos.com'),         (h, p)   => instancePath(h, p)],
   [pm('*.app.dev.onetrueos.com'),     (h, p)   => instancePath(h, p)],
