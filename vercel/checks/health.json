@@ -1,8 +1,7 @@
 {
   "name": "Health Check",
   "requires": "deployment-url",
-  "blocks": "deployment-alias",
-  "targets": ["production"],
+"targets": ["production"],
   "timeout": 120,
   "source": {
     "kind": "git-provider",
