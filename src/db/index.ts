@@ -51,7 +51,7 @@ function buildPoolConfig(): PoolConfig {
   }
 
   if (sslEnabled) {
-    config.ssl = { rejectUnauthorized: true }
+    config.ssl = true
   }
 
   if (process.env.DATABASE_IPV4 === 'true') {
