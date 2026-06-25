@@ -4,10 +4,18 @@ import { ServerClient } from 'postmark'
 import { db } from './db/index.js'
 
 export const auth = betterAuth({
+  secret: process.env.BETTER_AUTH_SECRET,
+  baseURL: process.env.BETTER_AUTH_URL ?? 'https://app.app.onetrueos.com',
   basePath: '/api/auth',
   database: drizzleAdapter(db, {
     provider: 'pg',
   }),
+  rateLimit: {
+    customRules: {
+      '/sign-in/email': { window: 60, max: 10 },
+      '/sign-up/email': { window: 60, max: 10 },
+    },
+  },
   // Allow requests from the frontend development server
   trustedOrigins: [
     'http://localhost:5173',

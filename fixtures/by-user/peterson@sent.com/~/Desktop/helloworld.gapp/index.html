@@ -1,9 +1,260 @@
-<div>
-    Hello world. Got files?
-    <div id="results">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Editor</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    </div>
+  body {
+    font-family: system-ui, sans-serif;
+    background: #fff;
+    color: #111;
+    padding: 1rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #eee; }
+    textarea { background: #111; color: #eee; border-color: #333; }
+    button { background: #222; color: #eee; border-color: #444; }
+    button:hover:not(:disabled) { background: #333; }
+    .banner { background: #3a2e00; color: #fcd34d; border-color: #78580a; }
+  }
+
+  #waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    gap: 8px;
+    color: #666;
+    font-size: 14px;
+  }
+
+  #shell { display: none; }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .filename {
+    font-size: 13px;
+    color: #666;
+  }
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  button:hover:not(:disabled) { background: #f5f5f5; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  textarea {
+    width: 100%;
+    min-height: calc(100vh - 80px);
+    resize: vertical;
+    font-family: monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    outline: none;
+  }
+
+  textarea:focus { border-color: #888; }
+
+  .statusbar {
+    margin-top: 6px;
+    height: 18px;
+    font-size: 12px;
+    color: #888;
+  }
+
+  .banner {
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    font-size: 13px;
+    background: #fefce8;
+    color: #854d0e;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { animation: spin 1s linear infinite; display: inline-block; }
+</style>
+</head>
+<body>
+
+<div id="waiting">
+  <span class="spin">⟳</span>
+  Waiting for initialization…
 </div>
+
+<div id="shell">
+  <div id="banner" class="banner" style="display:none"></div>
+  <div class="toolbar">
+    <span class="filename" id="filename">untitled</span>
+    <button id="save-btn">
+      <span id="save-icon">💾</span>
+      <span id="save-label">Save</span>
+    </button>
+  </div>
+  <textarea id="editor" spellcheck="false"></textarea>
+  <div class="statusbar" id="statusbar"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/yjs@13.6.18/dist/yjs.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/rxjs@7.8.1/dist/bundles/rxjs.umd.min.js"></script>
 <script>
-    alert(window.parent)
+const { fromEvent, filter, map } = rxjs;
+
+// ── yjs ──────────────────────────────────────────────────────────────────────
+
+const doc      = new Y.Doc();
+const yContent = doc.getText('content');
+
+const applyContent = content => doc.transact(() => {
+  yContent.delete(0, yContent.length);
+  yContent.insert(0, content ?? '');
+});
+
+const getContent     = ()  => yContent.toString();
+const observeContent = fn  => { yContent.observe(fn); return () => yContent.unobserve(fn); };
+
+// ── state ─────────────────────────────────────────────────────────────────────
+
+const state = { status: 'waiting', filename: 'untitled', reason: null };
+let lastSavedContent = '';
+
+// ── messages ──────────────────────────────────────────────────────────────────
+
+const messages$ = fromEvent(window, 'message').pipe(
+  map(e => e.data),
+  filter(d => d && typeof d === 'object' && d.type)
+);
+
+const ofType   = type => filter(d => d.type === type);
+const toParent = msg  => window.parent.postMessage(msg, '*');
+
+// ── ui refs ───────────────────────────────────────────────────────────────────
+
+const $waiting  = document.getElementById('waiting');
+const $shell    = document.getElementById('shell');
+const $filename = document.getElementById('filename');
+const $editor   = document.getElementById('editor');
+const $saveBtn  = document.getElementById('save-btn');
+const $saveIcon = document.getElementById('save-icon');
+const $saveLabel= document.getElementById('save-label');
+const $statusbar= document.getElementById('statusbar');
+const $banner   = document.getElementById('banner');
+
+const REASON_LABELS = {
+  fresh:       'New file',
+  corrupted:   'State was corrupted — starting fresh',
+  userCleared: 'Storage cleared — starting fresh',
+};
+
+const render = () => {
+  const isSaving = state.status === 'saving';
+  $saveBtn.disabled  = isSaving;
+  $saveIcon.textContent  = isSaving ? '⟳' : '💾';
+  $saveIcon.className    = isSaving ? 'spin' : '';
+  $saveLabel.textContent = isSaving ? 'Saving…' : 'Save';
+  $filename.textContent  = state.filename;
+  if (state.reason) {
+    $banner.textContent    = REASON_LABELS[state.reason] ?? state.reason;
+    $banner.style.display  = 'block';
+  }
+};
+
+const setSaved = () => {
+  $statusbar.textContent = 'Saved ' + new Date().toLocaleTimeString();
+  setTimeout(() => { $statusbar.textContent = ''; }, 3000);
+};
+
+// ── lifecycle ─────────────────────────────────────────────────────────────────
+
+const showEditor = () => {
+  $waiting.style.display = 'none';
+  $shell.style.display   = 'block';
+  $editor.focus();
+  render();
+};
+
+const init = ({ filename, content }) => {
+  applyContent(content ?? '');
+  lastSavedContent     = content ?? '';
+  $editor.value        = getContent();
+  state.status         = 'ready';
+  state.filename       = filename ?? 'untitled';
+  state.reason         = null;
+  showEditor();
+};
+
+const initFresh = reason => {
+  state.status  = 'ready';
+  state.reason  = reason ?? 'fresh';
+  showEditor();
+};
+
+const onDie = async () => {
+  const isDirty = getContent() !== lastSavedContent;
+  if (!isDirty) return 'die';
+  return window.confirm('You have unsaved changes. Close anyway?') ? 'die' : 'cancel';
+};
+
+const save = () => {
+  if (state.status === 'saving') return;
+  state.status = 'saving';
+  render();
+  toParent({ type: 'save', filename: state.filename, content: getContent() });
+};
+
+// ── wire up ───────────────────────────────────────────────────────────────────
+
+messages$.pipe(ofType('init')).subscribe(init);
+messages$.pipe(ofType('init:fresh')).subscribe(d => initFresh(d.reason));
+messages$.pipe(ofType('save:complete')).subscribe(() => {
+  lastSavedContent = getContent();
+  state.status     = 'ready';
+  render();
+  setSaved();
+});
+messages$.pipe(ofType('die')).subscribe(async () => {
+  const result = await onDie();
+  toParent({ type: 'die:response', result });
+});
+
+$editor.addEventListener('input', () => applyContent($editor.value));
+observeContent(() => {
+  const v = getContent();
+  if ($editor.value !== v) $editor.value = v;
+});
+
+$saveBtn.addEventListener('click', save);
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault();
+    save();
+  }
+});
+
+toParent({ type: 'ready' });
 </script>
+</body>
+</html>

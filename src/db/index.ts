@@ -3,15 +3,16 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 
 import * as schema from './schema.js'
 
+const isServerless = Boolean(process.env.VERCEL)
+
 const dbConfig = {
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
   family: 4, // force IPv4 — Supabase direct connection returns IPv6 which may be unreachable locally
-  // host: process.env.PGHOST,
-  // port: parseInt(process.env.PGPORT ?? '5432'),
-  // user: process.env.PGUSER,
-  // password: process.env.PGPASSWORD,
-  // database: process.env.PGDATABASE,
+  max: isServerless ? 1 : 10,
+  idleTimeoutMillis: isServerless ? 5_000 : 30_000,
+  connectionTimeoutMillis: 10_000,
+  allowExitOnIdle: isServerless,
 }
 
 // Create connection pool

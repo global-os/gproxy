@@ -69,6 +69,7 @@ async function walkAndCreate(fsPath: string, parentId: number | null, userId: st
 
 function mimeFor(ext: string): string {
   const map: Record<string, string> = {
+    '.app': 'text/html',
     '.html': 'text/html',
     '.css': 'text/css',
     '.js': 'application/javascript',

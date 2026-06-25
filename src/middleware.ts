@@ -4,8 +4,16 @@ import { db, pool } from './db/index.js'
 import { Env } from './types'
 import * as schema from './db/schema.js'
 import { eq } from 'drizzle-orm'
-import { pathFromHostnameAndPath } from './utils'
 import { auth } from './auth.js'
+
+export const isAuthApiPath = (path: string) => path.startsWith('/app/api/auth')
+
+export const unlessAuth =
+  (mw: MiddlewareHandler<Env>): MiddlewareHandler<Env> =>
+  async (c, next) => {
+    if (isAuthApiPath(c.req.path)) return next()
+    return mw(c, next)
+  }
 
 export const provideDb: MiddlewareHandler<Env> = async (c, next) => {
   c.set('db', db)

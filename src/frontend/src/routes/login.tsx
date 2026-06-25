@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { signIn } from '../lib/auth-client'
+import { authErrorMessage, signIn } from '../lib/auth-client'
 import { useState } from 'react'
 import { VerticalFrame } from '../components/VerticalFrame'
 import { Page } from '../components/Page'
@@ -11,48 +11,53 @@ export const Route = createFileRoute('/login')({
 function RouteComponent() {
   const [usernameOrEmail, setUsernameOrEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
+
+  const handleAuthError = (ctx: Parameters<typeof authErrorMessage>[0]) => {
+    setError(authErrorMessage(ctx))
+  }
 
   const handleEmailLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    setError(null)
 
     await signIn.email(
       { email: usernameOrEmail, password },
       {
         onSuccess: () => {
+          setError(null)
           navigate({ to: '/' })
         },
-        onError: (error) => {
-          console.error(error)
-        },
+        onError: handleAuthError,
       }
     )
   }
 
   const handleGoogleLogin = async () => {
+    setError(null)
     await signIn.social(
       { provider: 'google' },
       {
         onSuccess: () => {
+          setError(null)
           navigate({ to: '/' })
         },
-        onError: (error) => {
-          console.error(error)
-        },
+        onError: handleAuthError,
       }
     )
   }
 
   const handleGithubLogin = async () => {
+    setError(null)
     await signIn.social(
       { provider: 'github' },
       {
         onSuccess: () => {
+          setError(null)
           navigate({ to: '/' })
         },
-        onError: (error) => {
-          console.error(error)
-        },
+        onError: handleAuthError,
       }
     )
   }
@@ -66,6 +71,11 @@ function RouteComponent() {
           </h2>
 
           <form onSubmit={handleEmailLogin} className="grid gap-4 mb-4">
+            {error && (
+              <p className="text-sm text-red-600" role="alert">
+                {error}
+              </p>
+            )}
             <div className="grid gap-1">
               <label htmlFor="email" className="text-sm font-medium text-gray-600">
                 Email

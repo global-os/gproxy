@@ -64,9 +64,9 @@ app.use(
   '/app/**',
   middleware.provideDb,
   middleware.parseCookies,
-  middleware.selectTargetHost,
-  middleware.betterAuthMiddleware,
-  middleware.setRlsUser,
+  middleware.unlessAuth(middleware.selectTargetHost),
+  middleware.unlessAuth(middleware.betterAuthMiddleware),
+  middleware.unlessAuth(middleware.setRlsUser),
   middleware.logRequest
 )
 
