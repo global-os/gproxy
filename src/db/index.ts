@@ -14,10 +14,7 @@ function resolveDatabaseUrl(): string | undefined {
   let result = url
 
   if (process.env.DATABASE_SSL === 'true') {
-    result = result.replace(/([?&])sslmode=[^&]*/i, '$1sslmode=require')
-    if (!/[?&]sslmode=/i.test(result)) {
-      result += (result.includes('?') ? '&' : '?') + 'sslmode=require'
-    }
+    result = result.replace(/[?&]sslmode=[^&]*/i, '').replace(/\?&/, '?').replace(/[?&]$/, '')
   }
 
   if (!result.includes('connect_timeout=')) {
