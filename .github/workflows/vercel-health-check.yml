@@ -9,9 +9,12 @@ on:
         required: true
         type: string
 
+permissions:
+  checks: write
+
 jobs:
   health:
-    name: GET /health
+    name: "Vercel - PROXY: health"
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
     steps:
@@ -36,8 +39,8 @@ jobs:
           for i in $(seq 1 12); do
             BODY_FILE="$(mktemp)"
             HTTP_CODE=$(curl -sS -L --max-time 30 \
-            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}" \
-            -o "$BODY_FILE" -w "%{http_code}" "${BASE}/health")
+              -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}" \
+              -o "$BODY_FILE" -w "%{http_code}" "${BASE}/health")
             echo "Attempt ${i}: HTTP ${HTTP_CODE}"
 
             if [ "$HTTP_CODE" = "200" ] && jq -e '.status == "ok" and .database.ok == true' "$BODY_FILE" > /dev/null 2>&1; then
@@ -51,3 +54,21 @@ jobs:
 
           echo "Health check failed after 12 attempts"
           exit 1
+
+      - name: Report check to Vercel
+        if: always() && github.event_name == 'deployment_status'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Vercel - PROXY: health',
+              head_sha: context.payload.deployment.sha,
+              status: 'completed',
+              conclusion: '${{ steps.check.outcome }}' === 'success' ? 'success' : 'failure',
+              output: {
+                title: 'Health Check',
+                summary: '${{ steps.check.outcome }}' === 'success' ? '/health returned ok' : '/health check failed',
+              }
+            });
