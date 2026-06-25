@@ -29,8 +29,13 @@ jobs:
           [[ "$RAW" == https://* ]] || RAW="https://${RAW}"
           echo "url=$RAW" >> "$GITHUB_OUTPUT"
 
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
       - name: Check /health
         id: check
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           BASE="${{ steps.deployment.outputs.url }}"
@@ -38,9 +43,8 @@ jobs:
 
           for i in $(seq 1 12); do
             BODY_FILE="$(mktemp)"
-            HTTP_CODE=$(curl -sS -L --max-time 30 \
-              -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}" \
-              -o "$BODY_FILE" -w "%{http_code}" "${BASE}/health")
+            HTTP_CODE=$(vercel curl "${BASE}/health" --token "$VERCEL_TOKEN" -sS -L --max-time 30 \
+              -o "$BODY_FILE" -w "%{http_code}" 2>/dev/null)
             echo "Attempt ${i}: HTTP ${HTTP_CODE}"
 
             if [ "$HTTP_CODE" = "200" ] && jq -e '.status == "ok" and .database.ok == true' "$BODY_FILE" > /dev/null 2>&1; then
