@@ -4,7 +4,7 @@ const removeLeadingSlash = (path: string) => path.replace(/^\/+/, '')
 
 const appPath = (path: string) => {
   if (path.startsWith('/assets/') || path.startsWith('/static/')) return path
-  if (path === '/health') return path
+  if (path === '/health' || path.startsWith('/debug/')) return path
   return path === '/' ? '/app' : '/app/' + removeLeadingSlash(path)
 }
 
