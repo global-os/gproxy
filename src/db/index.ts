@@ -1,3 +1,5 @@
+import fs from 'fs'
+import path from 'path'
 import { Pool, Client, type PoolConfig } from 'pg'
 import { drizzle } from 'drizzle-orm/node-postgres'
 
@@ -15,10 +17,6 @@ function resolveDatabaseUrl(): string | undefined {
     result = result.replace(/([?&])sslmode=[^&]*/i, '$1sslmode=require')
     if (!/[?&]sslmode=/i.test(result)) {
       result += (result.includes('?') ? '&' : '?') + 'sslmode=require'
-    }
-    result = result.replace(/([?&])sslrootcert=[^&]*/i, '$1sslrootcert=disable')
-    if (!/[?&]sslrootcert=/i.test(result)) {
-      result += (result.includes('?') ? '&' : '?') + 'sslrootcert=disable'
     }
   }
 
@@ -58,7 +56,12 @@ function buildPoolConfig(): PoolConfig {
   }
 
   if (sslEnabled) {
-    config.ssl = { rejectUnauthorized: false }
+    try {
+      const ca = fs.readFileSync(path.join(process.cwd(), 'certs/ca.pem'), 'utf-8')
+      config.ssl = { rejectUnauthorized: true, ca }
+    } catch {
+      config.ssl = { rejectUnauthorized: false }
+    }
   }
 
   if (process.env.DATABASE_IPV4 === 'true') {
