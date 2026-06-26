@@ -6,7 +6,8 @@ import * as schema from './db/schema.js'
 import { eq } from 'drizzle-orm'
 import { auth } from './auth.js'
 
-export const isAuthApiPath = (path: string) => path.startsWith('/app/api/auth')
+export const isAuthApiPath = (path: string) =>
+  path.startsWith('/app/api/auth') || path.startsWith('/api/auth')
 
 export const unlessAuth =
   (mw: MiddlewareHandler<Env>): MiddlewareHandler<Env> =>

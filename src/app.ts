@@ -11,6 +11,7 @@ import * as middleware from './middleware.js'
 import { Env } from './types'
 import { replaceDomainInHTML } from './replace.js'
 import { pathFromHostnameAndPath } from './utils.js'
+import { auth } from './auth.js'
 import authRoutes from './routes/auth.js'
 import fsRoutes from './routes/fs.js'
 import { benchmarkScrypt } from './crypto/password.js'
@@ -99,11 +100,50 @@ app.get('/debug', async (c) => {
     benchmarkScrypt(),
   ])
 
+  const authProbeStart = Date.now()
+  let authProbe: { ok: boolean; ms: number; url?: string; status?: number; error?: string; body?: string } = {
+    ok: false,
+    ms: 0,
+  }
+  const probeUrl = new URL('/api/auth/sign-in/email', c.req.url)
+  try {
+    const probeRequest = new Request(probeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: probeUrl.origin,
+      },
+      body: JSON.stringify({ email: 'nobody-probe@example.com', password: 'wrongpassword' }),
+    })
+    const probeResponse = await Promise.race([
+      auth.handler(probeRequest),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('auth probe timeout')), 10_000)
+      ),
+    ])
+    const body = await probeResponse.text()
+    authProbe = {
+      ok: true,
+      ms: Date.now() - authProbeStart,
+      status: probeResponse.status,
+      url: probeUrl.toString(),
+      body: body.slice(0, 200),
+    }
+  } catch (err) {
+    authProbe = {
+      ok: false,
+      ms: Date.now() - authProbeStart,
+      url: probeUrl.toString(),
+      error: err instanceof Error ? err.message : String(err),
+    }
+  }
+
   return c.json({
     pool: { ok: poolOk, ms: poolMs, ...(poolError ? { error: poolError } : {}) },
     userLookup,
     drizzleUserLookup,
     scrypt,
+    authProbe,
     tables,
     migrations,
     env: {
@@ -133,6 +173,8 @@ app.get('/health', async (c) => {
   }, ok ? 200 : 503)
 })
 
+app.basePath('/app/api/auth').route('/', authRoutes)
+
 app.use(
   '/instance/**',
   middleware.provideDb,
@@ -160,7 +202,6 @@ app.use(
   middleware.logRequest
 )
 
-app.basePath('/app/api/auth').route('/', authRoutes)
 app.basePath('/app/api/fs').route('/', fsRoutes)
 
 app.get('/app/api/sessions', async (c) => {

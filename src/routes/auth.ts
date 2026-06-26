@@ -9,7 +9,23 @@ export type AuthType = {
   }
 }
 
-const AUTH_HANDLER_TIMEOUT_MS = 25_000
+const AUTH_HANDLER_TIMEOUT_MS = 15_000
+
+async function buildAuthRequest(c: Context): Promise<Request> {
+  const headers = new Headers(c.req.raw.headers)
+  const method = c.req.method
+
+  if (method === 'GET' || method === 'HEAD') {
+    return new Request(c.req.url, { method, headers })
+  }
+
+  const body = await c.req.arrayBuffer()
+  if (body.byteLength === 0) {
+    return new Request(c.req.url, { method, headers })
+  }
+
+  return new Request(c.req.url, { method, headers, body })
+}
 
 async function handleAuth(c: Context) {
   if (!isDatabaseConfigured()) {
@@ -21,32 +37,48 @@ async function handleAuth(c: Context) {
 
   const path = new URL(c.req.url).pathname
   const start = Date.now()
-  console.log(`[auth] start ${path}`)
+  console.log(`[auth] start ${path} honoPath=${c.req.path}`)
+
+  let request: Request
+  try {
+    const bodyStart = Date.now()
+    request = await buildAuthRequest(c)
+    console.log(`[auth] body ready in ${Date.now() - bodyStart}ms: ${path}`)
+  } catch (err) {
+    console.error(`[auth] body read failed ${path}:`, err)
+    return c.json({ message: 'Failed to read request body.' }, 400)
+  }
 
   const interval = setInterval(() => {
     console.log(`[auth] still waiting ${Date.now() - start}ms: ${path}`)
   }, 2_000)
 
-  const timeoutResponse = new Promise<Response>((resolve) => {
-    setTimeout(() => {
-      clearInterval(interval)
+  try {
+    const response = await Promise.race([
+      auth.handler(request),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), AUTH_HANDLER_TIMEOUT_MS)
+      ),
+    ])
+    clearInterval(interval)
+    console.log(`[auth] done ${path} → ${response.status} in ${Date.now() - start}ms`)
+    return response
+  } catch (err) {
+    clearInterval(interval)
+    const message = err instanceof Error ? err.message : String(err)
+    if (message === 'timeout') {
       console.log(`[auth] timeout after ${AUTH_HANDLER_TIMEOUT_MS}ms: ${path}`)
-      resolve(
-        Response.json(
-          { message: 'Authentication timed out. If /health is ok, password hashing may be too slow on this runtime — retry after deploy or contact support.' },
-          { status: 504 }
-        )
+      return c.json(
+        {
+          message:
+            'Authentication timed out. Check /debug for authProbe timing if this persists.',
+        },
+        504
       )
-    }, AUTH_HANDLER_TIMEOUT_MS)
-  })
-
-  const result = await Promise.race([
-    auth.handler(c.req.raw)
-      .then(r => { clearInterval(interval); console.log(`[auth] done ${path} → ${r.status} in ${Date.now() - start}ms`); return r })
-      .catch(err => { clearInterval(interval); console.error(`[auth] error ${path}:`, err?.message ?? err); return Response.json({ message: 'Authentication failed.' }, { status: 500 }) }),
-    timeoutResponse,
-  ])
-  return result
+    }
+    console.error(`[auth] error ${path}:`, message)
+    return c.json({ message: 'Authentication failed.' }, 500)
+  }
 }
 
 const router = new Hono<{ Bindings: AuthType }>({ strict: false })
