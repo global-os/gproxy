@@ -144,6 +144,15 @@ app.get('/debug', async (c) => {
     }
   }
 
+  const requiredTables = ['instances', 'workspace_window']
+  const staleTables = ['process_domains']
+  const tableSet = new Set(tables)
+  const schema = {
+    ok: requiredTables.every(t => tableSet.has(t)) && !staleTables.some(t => tableSet.has(t)),
+    missing: requiredTables.filter(t => !tableSet.has(t)),
+    stale: staleTables.filter(t => tableSet.has(t)),
+  }
+
   return c.json({
     pool: { ok: poolOk, ms: poolMs, ...(poolError ? { error: poolError } : {}) },
     userLookup,
@@ -158,6 +167,7 @@ app.get('/debug', async (c) => {
       ),
     },
     tables,
+    schema,
     migrations,
     env: {
       DATABASE_SSL: process.env.DATABASE_SSL,
