@@ -25,55 +25,24 @@ const Frame = createComponent(
   ['onMouseMove', 'onMouseUp']
 )
 
-const IconGrid = createComponent(
+const FileList = createComponent(
   () => ({
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, 80px)',
-    gap: '16px',
-    padding: '16px',
-    alignContent: 'start',
+    margin: 0,
+    padding: '16px 24px',
+    listStyle: 'disc',
+    color: '#fff',
+    fontSize: '14px',
+    textShadow: '0 1px 2px rgba(0,0,0,0.6)',
     pointerEvents: 'none',
   }),
-  'div'
+  'ul'
 )
 
-const IconBox = createComponent(
+const FileListItem = createComponent(
   () => ({
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '4px',
-    cursor: 'default',
-    userSelect: 'none',
-    pointerEvents: 'auto',
+    marginBottom: '4px',
   }),
-  'div'
-)
-
-const IconShape = createComponent(
-  (_props: { isDir?: boolean }) => ({
-    width: '48px',
-    height: '48px',
-    background: 'rgba(255,255,255,0.75)',
-    borderRadius: '8px',
-    border: '1px solid rgba(0,0,0,0.12)',
-  }),
-  'div',
-  ['isDir']
-)
-
-const IconLabel = createComponent(
-  () => ({
-    fontSize: '11px',
-    textAlign: 'center',
-    maxWidth: '80px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    color: '#fff',
-    textShadow: '0 1px 2px rgba(0,0,0,0.6)',
-  }),
-  'span'
+  'li'
 )
 
 const computeX = (x: number, width: number) =>
@@ -98,14 +67,16 @@ export function Workspace({ children }: WorkspaceProps) {
 
   return (
     <Frame onMouseMove={onMouseMove} onMouseUp={onMouseUp}>
-      <IconGrid>
-        {desktopItems.map(item => (
-          <IconBox key={`${item.type}-${item.id}`}>
-            <IconShape isDir={item.type === 'directory'} />
-            <IconLabel>{item.name}</IconLabel>
-          </IconBox>
-        ))}
-      </IconGrid>
+      {desktopItems.length > 0 && (
+        <FileList>
+          {desktopItems.map(item => (
+            <FileListItem key={`${item.type}-${item.id}`}>
+              {item.name}
+              {item.type === 'directory' ? '/' : ''}
+            </FileListItem>
+          ))}
+        </FileList>
+      )}
       {state.windows.map((win, i) => (
         <WorkspaceWindow
           key={win.id}
