@@ -34,7 +34,7 @@ function RouteComponent() {
           {
             email,
             password,
-            ...(name.trim() ? { name: name.trim() } : {}),
+            name: name.trim(),
             roles: ['STUDENT'],
           },
           {
