@@ -1,6 +1,8 @@
 import { Pool, Client, type PoolConfig } from 'pg'
 import { drizzle } from 'drizzle-orm/node-postgres'
 
+import { eq } from 'drizzle-orm'
+
 import * as schema from './schema.js'
 
 const isServerless = Boolean(process.env.VERCEL)
@@ -48,8 +50,6 @@ function buildPoolConfig(): PoolConfig {
     idleTimeoutMillis: isServerless ? 1_000 : 30_000,
     connectionTimeoutMillis: isServerless ? 5_000 : 10_000,
     allowExitOnIdle: isServerless,
-    // Recycle connections between serverless invocations to avoid stale sockets.
-    ...(isServerless ? { maxUses: 1 } : {}),
     options: isServerless ? '-c statement_timeout=7000' : undefined,
   }
 
@@ -127,6 +127,54 @@ export async function pingPool(timeoutMs = 5_000): Promise<PingResult> {
     return { ok: true, ms: Date.now() - start }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Pool query failed'
+    return { ok: false, error: message, ms: Date.now() - start }
+  }
+}
+
+export async function probeDrizzleUserLookup(
+  email = 'nobody@example.com',
+  timeoutMs = 5_000,
+): Promise<PingResult> {
+  if (!isDatabaseConfigured()) {
+    return { ok: false, error: 'DATABASE_URL is not set', ms: 0 }
+  }
+
+  const start = Date.now()
+  try {
+    await withTimeout(
+      db
+        .select({ id: schema.user.id })
+        .from(schema.user)
+        .where(eq(schema.user.email, email))
+        .limit(1),
+      timeoutMs,
+      'Drizzle user lookup',
+    )
+    return { ok: true, ms: Date.now() - start }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Drizzle user lookup failed'
+    return { ok: false, error: message, ms: Date.now() - start }
+  }
+}
+
+export async function probeUserLookup(
+  email = 'nobody@example.com',
+  timeoutMs = 5_000,
+): Promise<PingResult> {
+  if (!isDatabaseConfigured()) {
+    return { ok: false, error: 'DATABASE_URL is not set', ms: 0 }
+  }
+
+  const start = Date.now()
+  try {
+    await withTimeout(
+      pool.query('SELECT id FROM "user" WHERE email = $1 LIMIT 1', [email]),
+      timeoutMs,
+      'User lookup',
+    )
+    return { ok: true, ms: Date.now() - start }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'User lookup failed'
     return { ok: false, error: message, ms: Date.now() - start }
   }
 }

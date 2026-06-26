@@ -13,7 +13,7 @@ import { replaceDomainInHTML } from './replace.js'
 import { pathFromHostnameAndPath } from './utils.js'
 import authRoutes from './routes/auth.js'
 import fsRoutes from './routes/fs.js'
-import { checkAuthTables, pingDatabase, pingPool, pool } from './db/index.js'
+import { checkAuthTables, pingDatabase, pingPool, pool, probeDrizzleUserLookup, probeUserLookup } from './db/index.js'
 
 const app = new Hono<Env>({
   getPath(request, options) {
@@ -92,8 +92,15 @@ app.get('/debug', async (c) => {
     try { return new URL(process.env.DATABASE_URL!.replace(/^postgres(ql)?:\/\/[^@]+@/, 'https://')).hostname } catch { return null }
   })()
 
+  const [userLookup, drizzleUserLookup] = await Promise.all([
+    probeUserLookup(),
+    probeDrizzleUserLookup(),
+  ])
+
   return c.json({
     pool: { ok: poolOk, ms: poolMs, ...(poolError ? { error: poolError } : {}) },
+    userLookup,
+    drizzleUserLookup,
     tables,
     migrations,
     env: {
@@ -107,17 +114,19 @@ app.get('/debug', async (c) => {
 })
 
 app.get('/health', async (c) => {
-  const [direct, pooled, authTables] = await Promise.all([
+  const [direct, pooled, authTables, userLookup] = await Promise.all([
     pingDatabase(),
     pingPool(),
     checkAuthTables(),
+    probeUserLookup(),
   ])
-  const ok = direct.ok && pooled.ok && authTables.ok
+  const ok = direct.ok && pooled.ok && authTables.ok && userLookup.ok
   return c.json({
     status: ok ? 'ok' : 'degraded',
     database: direct,
     pool: pooled,
     authTables,
+    userLookup,
   }, ok ? 200 : 503)
 })
 

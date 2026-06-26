@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono'
 import { auth } from '../auth.js'
-import { isDatabaseConfigured, pingPool } from '../db/index.js'
+import { isDatabaseConfigured } from '../db/index.js'
 
 export type AuthType = {
   Variables: {
@@ -9,24 +9,12 @@ export type AuthType = {
   }
 }
 
-const AUTH_HANDLER_TIMEOUT_MS = 8_000
+const AUTH_HANDLER_TIMEOUT_MS = 25_000
 
 async function handleAuth(c: Context) {
   if (!isDatabaseConfigured()) {
     return c.json(
       { message: 'Server misconfigured: database is not configured.' },
-      503
-    )
-  }
-
-  const poolCheck = await pingPool(3_000)
-  if (!poolCheck.ok) {
-    console.error(`[auth] pool unavailable: ${poolCheck.error}`)
-    return c.json(
-      {
-        message:
-          'Database connection pool is not responding. Check /health for pool and auth table status.',
-      },
       503
     )
   }
