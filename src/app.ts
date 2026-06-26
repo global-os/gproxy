@@ -66,6 +66,18 @@ app.get('/debug/pool', async (c) => {
   }
 })
 
+app.get('/debug/tables', async (c) => {
+  try {
+    const result = await pool.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public' ORDER BY table_name
+    `)
+    return c.json({ tables: result.rows.map((r: { table_name: string }) => r.table_name) })
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 503)
+  }
+})
+
 app.get('/health', async (c) => {
   const db = await pingDatabase()
   return c.json({
