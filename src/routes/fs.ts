@@ -1,9 +1,18 @@
 import { Hono } from 'hono'
 import { and, eq, isNull } from 'drizzle-orm'
+import * as middleware from '../middleware.js'
 import { Env } from '../types.js'
 import * as schema from '../db/schema.js'
 
 const router = new Hono<Env>()
+
+router.use(
+  '*',
+  middleware.provideDb,
+  middleware.parseCookies,
+  middleware.betterAuthMiddleware,
+  middleware.setRlsUser,
+)
 
 router.get('/desktop', async (c) => {
   const user = c.get('user')

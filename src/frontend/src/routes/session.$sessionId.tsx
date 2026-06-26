@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { Page } from '../components/Page'
 import { Workspace, WorkspaceActions } from '../components/Workspace'
+import { useSession } from '../lib/auth-client'
 
 export const Route = createFileRoute('/session/$sessionId')({
   component: RouteComponent,
@@ -8,7 +10,14 @@ export const Route = createFileRoute('/session/$sessionId')({
 
 function RouteComponent() {
   const { sessionId } = Route.useParams()
-  const _navigate = useNavigate()
+  const navigate = useNavigate()
+  const { data: session, isPending } = useSession()
+
+  useEffect(() => {
+    if (!isPending && !session?.user) {
+      navigate({ to: '/login' })
+    }
+  }, [isPending, session?.user, navigate])
 
   const runProgram = () => {
     // create iframe

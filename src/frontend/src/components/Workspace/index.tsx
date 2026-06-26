@@ -90,7 +90,7 @@ export function Workspace({ children }: WorkspaceProps) {
   const { data: desktopItems = [] } = useQuery<DesktopItem[]>({
     queryKey: ['desktop'],
     queryFn: async () => {
-      const r = await fetch('/api/fs/desktop')
+      const r = await fetch('/api/fs/desktop', { credentials: 'include' })
       if (!r.ok) return []
       return r.json()
     },
