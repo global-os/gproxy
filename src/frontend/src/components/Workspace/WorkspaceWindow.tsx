@@ -40,6 +40,27 @@ const TitleBar = createComponent(
   ['data-window-index', 'onMouseDown']
 )
 
+const ResizeHandle = createComponent(
+  ({
+    cursor,
+    side,
+  }: {
+    cursor: string
+    side: 'left' | 'right'
+  }) => ({
+    position: 'absolute',
+    width: '14px',
+    height: '14px',
+    bottom: 0,
+    left: side === 'left' ? 0 : undefined,
+    right: side === 'right' ? 0 : undefined,
+    cursor,
+    zIndex: 1,
+  }),
+  'div',
+  ['data-window-index', 'data-resize-handle', 'onMouseDown']
+)
+
 const StyledIframe = createComponent(
   ({ dragging }: { dragging: boolean }) => ({
     border: '0',
@@ -54,19 +75,19 @@ const StyledIframe = createComponent(
 type Props = {
   win: AppWindow
   windowIndex: number
-  isDragging: boolean
+  isInteracting: boolean
   left: string
   top: string
-  onTitleMouseDown: (e: MouseEvent) => void
+  onMouseDown: (e: MouseEvent) => void
 }
 
 export function WorkspaceWindow({
   win,
   windowIndex,
-  isDragging,
+  isInteracting,
   left,
   top,
-  onTitleMouseDown,
+  onMouseDown,
 }: Props) {
   return (
     <Chrome
@@ -76,12 +97,26 @@ export function WorkspaceWindow({
       height={win.height + 'px'}
       zIndex={win.zIndex}
     >
-      <TitleBar data-window-index={windowIndex} onMouseDown={onTitleMouseDown}>
+      <TitleBar data-window-index={windowIndex} onMouseDown={onMouseDown}>
         {win.title}
       </TitleBar>
       <StyledIframe
-        dragging={isDragging}
+        dragging={isInteracting}
         src="https://app.app.onetrueos.com/"
+      />
+      <ResizeHandle
+        cursor="nesw-resize"
+        side="left"
+        data-window-index={windowIndex}
+        data-resize-handle="bottom-left"
+        onMouseDown={onMouseDown}
+      />
+      <ResizeHandle
+        cursor="nwse-resize"
+        side="right"
+        data-window-index={windowIndex}
+        data-resize-handle="bottom-right"
+        onMouseDown={onMouseDown}
       />
     </Chrome>
   )

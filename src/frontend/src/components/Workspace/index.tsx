@@ -82,10 +82,10 @@ export function Workspace({ children }: WorkspaceProps) {
           key={win.id}
           win={win}
           windowIndex={i}
-          isDragging={!!state.dragOrigin}
+          isInteracting={!!state.dragOrigin || !!state.resizeOrigin}
           left={computeX(win.x, win.width) + 'px'}
           top={computeY(win.y, win.height) + 'px'}
-          onTitleMouseDown={onMouseDown}
+          onMouseDown={onMouseDown}
         />
       ))}
     </Frame>

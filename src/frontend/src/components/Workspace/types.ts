@@ -1,8 +1,13 @@
+export type ResizeHandle = 'bottom-left' | 'bottom-right'
+
 export type State = {
   windows: AppWindow[]
   nextWindowID: number
   draggingWindow: number | undefined
   dragOrigin: undefined | [number, number]
+  resizingWindow: number | undefined
+  resizeOrigin: undefined | [number, number]
+  resizeHandle: ResizeHandle | undefined
   zIndexCounter: number
 }
 
@@ -29,6 +34,9 @@ export enum WorkspaceActionKind {
   DRAG_WINDOW = 'DRAG_WINDOW',
   START_DRAGGING_WINDOW = 'START_DRAGGING_WINDOW',
   STOP_DRAGGING_WINDOW = 'STOP_DRAGGING_WINDOW',
+  START_RESIZING_WINDOW = 'START_RESIZING_WINDOW',
+  RESIZE_WINDOW = 'RESIZE_WINDOW',
+  STOP_RESIZING_WINDOW = 'STOP_RESIZING_WINDOW',
 }
 
 export type WorkspaceAction =
@@ -47,6 +55,19 @@ export type WorkspaceAction =
     }
   | {
       type: WorkspaceActionKind.STOP_DRAGGING_WINDOW
+    }
+  | {
+      type: WorkspaceActionKind.START_RESIZING_WINDOW
+      index: number
+      handle: ResizeHandle
+      payload: [number, number]
+    }
+  | {
+      type: WorkspaceActionKind.RESIZE_WINDOW
+      payload: [number, number]
+    }
+  | {
+      type: WorkspaceActionKind.STOP_RESIZING_WINDOW
     }
 
 export type WorkspaceActions = {
