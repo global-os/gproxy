@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono'
 import { auth } from '../auth.js'
-import { isDatabaseConfigured } from '../db/index.js'
+import { isDatabaseConfigured, pingPool } from '../db/index.js'
 
 export type AuthType = {
   Variables: {
@@ -19,6 +19,18 @@ async function handleAuth(c: Context) {
     )
   }
 
+  const poolCheck = await pingPool(3_000)
+  if (!poolCheck.ok) {
+    console.error(`[auth] pool unavailable: ${poolCheck.error}`)
+    return c.json(
+      {
+        message:
+          'Database connection pool is not responding. Check /health for pool and auth table status.',
+      },
+      503
+    )
+  }
+
   const path = new URL(c.req.url).pathname
   const start = Date.now()
   console.log(`[auth] start ${path}`)
@@ -33,7 +45,7 @@ async function handleAuth(c: Context) {
       console.log(`[auth] timeout after ${AUTH_HANDLER_TIMEOUT_MS}ms: ${path}`)
       resolve(
         Response.json(
-          { message: 'Authentication timed out. The database may be unreachable.' },
+          { message: 'Authentication timed out waiting for the database. Check /health — pool and auth table checks must pass.' },
           { status: 504 }
         )
       )

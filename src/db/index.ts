@@ -45,9 +45,12 @@ function buildPoolConfig(): PoolConfig {
   const config: PoolConfig = {
     connectionString,
     max: isServerless ? 1 : 10,
-    idleTimeoutMillis: isServerless ? 5_000 : 30_000,
-    connectionTimeoutMillis: 10_000,
+    idleTimeoutMillis: isServerless ? 1_000 : 30_000,
+    connectionTimeoutMillis: isServerless ? 5_000 : 10_000,
     allowExitOnIdle: isServerless,
+    // Recycle connections between serverless invocations to avoid stale sockets.
+    ...(isServerless ? { maxUses: 1 } : {}),
+    options: isServerless ? '-c statement_timeout=7000' : undefined,
   }
 
   if (sslEnabled) {
@@ -77,25 +80,88 @@ export function isDatabaseConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL?.trim())
 }
 
-export async function pingDatabase(timeoutMs = 5_000): Promise<{ ok: true } | { ok: false; error: string }> {
+type PingResult = { ok: true; ms: number } | { ok: false; error: string; ms: number }
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs)
+    ),
+  ])
+}
+
+export async function pingDatabase(timeoutMs = 5_000): Promise<PingResult> {
   if (!isDatabaseConfigured()) {
-    return { ok: false, error: 'DATABASE_URL is not set' }
+    return { ok: false, error: 'DATABASE_URL is not set', ms: 0 }
   }
 
+  const start = Date.now()
   const client = new Client(buildPoolConfig())
   try {
-    await Promise.race([
-      (async () => { await client.connect(); await client.query('SELECT 1') })(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Database ping timed out after ${timeoutMs}ms`)), timeoutMs)
-      ),
-    ])
-    return { ok: true }
+    await withTimeout(
+      (async () => {
+        await client.connect()
+        await client.query('SELECT 1')
+      })(),
+      timeoutMs,
+      'Database ping'
+    )
+    return { ok: true, ms: Date.now() - start }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Database connection failed'
-    return { ok: false, error: message }
+    return { ok: false, error: message, ms: Date.now() - start }
   } finally {
     await client.end().catch(() => {})
+  }
+}
+
+export async function pingPool(timeoutMs = 5_000): Promise<PingResult> {
+  if (!isDatabaseConfigured()) {
+    return { ok: false, error: 'DATABASE_URL is not set', ms: 0 }
+  }
+
+  const start = Date.now()
+  try {
+    await withTimeout(pool.query('SELECT 1'), timeoutMs, 'Pool ping')
+    return { ok: true, ms: Date.now() - start }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Pool query failed'
+    return { ok: false, error: message, ms: Date.now() - start }
+  }
+}
+
+export async function checkAuthTables(timeoutMs = 5_000): Promise<PingResult & { tables?: { user: boolean; account: boolean; session: boolean } }> {
+  if (!isDatabaseConfigured()) {
+    return { ok: false, error: 'DATABASE_URL is not set', ms: 0 }
+  }
+
+  const start = Date.now()
+  try {
+    const result = await withTimeout(
+      pool.query<{ user: boolean; account: boolean; session: boolean }>(
+        `SELECT
+          to_regclass('public.user') IS NOT NULL AS "user",
+          to_regclass('public.account') IS NOT NULL AS account,
+          to_regclass('public.session') IS NOT NULL AS session`
+      ),
+      timeoutMs,
+      'Auth table check'
+    )
+    const tables = result.rows[0]
+    const ok = Boolean(tables?.user && tables?.account && tables?.session)
+    if (!ok) {
+      return {
+        ok: false,
+        error: 'Auth tables are missing. Run drizzle-kit push against this database.',
+        ms: Date.now() - start,
+        tables,
+      }
+    }
+    return { ok: true, ms: Date.now() - start, tables }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Auth table check failed'
+    return { ok: false, error: message, ms: Date.now() - start }
   }
 }
 

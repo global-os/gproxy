@@ -13,7 +13,7 @@ import { replaceDomainInHTML } from './replace.js'
 import { pathFromHostnameAndPath } from './utils.js'
 import authRoutes from './routes/auth.js'
 import fsRoutes from './routes/fs.js'
-import { pingDatabase, pool } from './db/index.js'
+import { checkAuthTables, pingDatabase, pingPool, pool } from './db/index.js'
 
 const app = new Hono<Env>({
   getPath(request, options) {
@@ -107,11 +107,18 @@ app.get('/debug', async (c) => {
 })
 
 app.get('/health', async (c) => {
-  const db = await pingDatabase()
+  const [direct, pooled, authTables] = await Promise.all([
+    pingDatabase(),
+    pingPool(),
+    checkAuthTables(),
+  ])
+  const ok = direct.ok && pooled.ok && authTables.ok
   return c.json({
-    status: db.ok ? 'ok' : 'degraded',
-    database: db,
-  }, db.ok ? 200 : 503)
+    status: ok ? 'ok' : 'degraded',
+    database: direct,
+    pool: pooled,
+    authTables,
+  }, ok ? 200 : 503)
 })
 
 app.use(
