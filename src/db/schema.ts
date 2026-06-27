@@ -162,3 +162,15 @@ export const sessions = pgTable('sessions', {
   user_id: text('user_id').notNull().references(() => user.id),
   name: text("name"),
 });
+
+export const sessionLog = pgTable('session_log', {
+  id: serial('id').primaryKey(),
+  session_id: integer('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+  level: text('level').notNull(),
+  source: text('source').notNull(),
+  message: text('message').notNull(),
+  detail: text('detail'),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('session_log_session_id_idx').on(table.session_id),
+])

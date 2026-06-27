@@ -4,6 +4,7 @@ import {
 } from './create-instance.js'
 import { requireLaunchableApp, requireWorkspaceSession } from './session-access.js'
 import { scheduleInstancePrepare } from '../runtime/instance-background.js'
+import { createSessionLogWriter } from './session-logger.js'
 import {
   createWindow,
   focusWindow,
@@ -36,16 +37,17 @@ export async function launchProgram(opts: {
   await requireLaunchableApp(userId, directoryId)
   log('app ok')
 
+  const bundleName = directoryName.endsWith('.gapp') ? directoryName : `${directoryName}.gapp`
   const processRow = await findOrCreateProcess(sessionId, directoryId)
   log(`process ${processRow.id}`)
   const { instanceId, instanceSlug, url } = await ensurePrimaryInstance(processRow.id)
+  const sessionLog = createSessionLogWriter(sessionId)
+  await sessionLog.info('launch', `Launched ${bundleName}`)
   scheduleInstancePrepare(instanceId)
   log(`instance ${instanceSlug}`)
 
   const existingWindows = await listProcessWindows(sessionId, processRow.id)
   log(`windows ${existingWindows.length}`)
-
-  const bundleName = directoryName.endsWith('.gapp') ? directoryName : `${directoryName}.gapp`
   const title = bundleName.replace(/\.gapp$/, '')
 
   if (existingWindows.length > 0) {

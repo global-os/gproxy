@@ -5,6 +5,7 @@ import { WorkspaceProps } from './types'
 import { useWorkspace } from './useWorkspace'
 import { WorkspaceWindow } from './WorkspaceWindow'
 import { useSessionKernel } from '../../kernel/useSessionKernel'
+import { SessionLogger } from '../SessionLogger'
 
 export type { WorkspaceActions } from './types'
 
@@ -223,10 +224,11 @@ export function Workspace({ sessionId, children }: WorkspaceProps) {
         actions.openWindow(appWindow)
       }
       setLaunchMessage(null)
+      void queryClient.invalidateQueries({ queryKey: ['session-logs', sessionId] })
     } catch (err) {
       setLaunchMessage(err instanceof Error ? err.message : 'Launch failed')
     }
-  }, [actions, sessionId])
+  }, [actions, queryClient, sessionId])
 
   const closeWindow = useCallback(async (windowId: number) => {
     actions.closeWindow(windowId)
@@ -260,6 +262,7 @@ export function Workspace({ sessionId, children }: WorkspaceProps) {
         })}
       </IconGrid>
       {launchMessage && <LaunchStatus>{launchMessage}</LaunchStatus>}
+      <SessionLogger sessionId={sessionId} />
       {state.windows.map((win, i) => (
         <WorkspaceWindow
           key={win.id}

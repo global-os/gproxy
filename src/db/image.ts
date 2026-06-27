@@ -4,6 +4,7 @@ import * as tar from "tar";
 import { PassThrough } from "stream";
 import { db } from "./index.js";
 import { directory, image } from "./schema.js";
+import type { GappCompileContext } from "../gapp/compile-context.js";
 import { compileGappTree } from "../gapp/compile-gapp.js";
 import { hashDir, hashTree, collectTree, type DirEntry, type FileEntry } from "./file.js";
 
@@ -12,6 +13,11 @@ type InnerFns = {
   // listDirs: () => Promise<{ id: number; name: string }[]>;
   // recomputeHash: () => Promise<string>;
 };
+
+export type ImageBuildContext = {
+  onProgress?: (message: string) => void
+  compile?: GappCompileContext
+}
 
 export async function access<T>(
   imageId: number,
@@ -99,7 +105,7 @@ export async function resolveImageMeta(
 
 export async function getOrCreateImage(
   directoryId: number,
-  opts?: { onProgress?: (message: string) => void },
+  opts?: ImageBuildContext,
 ): Promise<{
   id: number
   directory_checksum: string
@@ -114,6 +120,7 @@ export async function getOrCreateImage(
       .limit(1)
 
     if (row?.tar_checksum) {
+      await opts?.compile?.log.info('compile', 'Using cached app bundle')
       return {
         id: cached.id,
         directory_checksum: cached.directory_checksum,
@@ -138,6 +145,7 @@ export async function getOrCreateImage(
     .limit(1)
 
   if (existing?.tar_checksum) {
+    await opts?.compile?.log.info('compile', 'Using cached app bundle')
     return {
       id: existing.id,
       directory_checksum: existing.directory_checksum!,
@@ -145,8 +153,8 @@ export async function getOrCreateImage(
     }
   }
 
-  opts?.onProgress?.('Building snapshot…')
-  const id = await createImage(directoryId)
+  opts?.onProgress?.('Compiling app…')
+  const id = await createImage(directoryId, opts)
   const [row] = await db
     .select({
       id: image.id,
@@ -168,7 +176,10 @@ export async function getOrCreateImage(
   }
 }
 
-export async function createImage(directoryId: number): Promise<number> {
+export async function createImage(
+  directoryId: number,
+  opts?: ImageBuildContext,
+): Promise<number> {
   const dirRow = await db
     .select({ name: directory.name })
     .from(directory)
@@ -180,7 +191,18 @@ export async function createImage(directoryId: number): Promise<number> {
   const dirName = dirRow[0].name;
   const { dirs, files } = await collectTree(directoryId, dirName);
   const directory_checksum = hashTree(dirs, files);
-  const compiledFiles = await compileGappTree(dirName, files);
+
+  const hasSquintSource = files.some((f) => f.path === `${dirName}/app.cljs`)
+  let compiledFiles = files
+  if (hasSquintSource) {
+    if (!opts?.compile) {
+      throw new Error('Squint app build requires a session compile context')
+    }
+    compiledFiles = await compileGappTree(dirName, files, {
+      ...opts.compile,
+      bundleName: opts.compile.bundleName ?? dirName,
+    })
+  }
   const tar_bytes = await buildTar(dirName, dirs, compiledFiles);
   const tar_checksum = createHash("sha1").update(tar_bytes).digest("hex");
 

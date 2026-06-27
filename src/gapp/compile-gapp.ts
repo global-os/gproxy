@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import type { FileEntry } from '../db/file.js'
+import type { GappCompileContext } from './compile-context.js'
 import { compileSquintSource } from './compile-squint.js'
 import { resolveGappConfig } from './resolve-config.js'
 import { resolvePlatformDependencies } from './resolve-dependencies.js'
@@ -19,6 +20,7 @@ function injectDependencyScripts(html: string, deps: { path: string }[]): string
 export async function compileGappTree(
   dirName: string,
   files: FileEntry[],
+  ctx?: GappCompileContext,
 ): Promise<FileEntry[]> {
   const manifest = resolveGappConfig(dirName, files)
   if (!manifest?.compile?.squint) return files
@@ -30,12 +32,30 @@ export async function compileGappTree(
     throw new Error(`compile.squint source not found: ${squint.source}`)
   }
 
+  const bundleLabel = ctx?.bundleName ?? dirName
+  await ctx?.log.info(
+    'compile',
+    `Compiling ${squint.source} → ${squint.output} for ${bundleLabel}`,
+  )
+
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'gapp-source-'))
   try {
     const absSource = path.join(tmp, path.basename(squint.source))
     await fs.writeFile(absSource, source.content)
 
-    const appJs = await compileSquintSource(absSource, squint)
+    let appJs: Buffer
+    try {
+      appJs = await compileSquintSource(absSource, squint)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      const detail =
+        err && typeof err === 'object' && 'detail' in err
+          ? String((err as { detail?: string }).detail ?? '')
+          : undefined
+      await ctx?.log.error('compile', message, detail || undefined)
+      throw err
+    }
+
     const platformDeps = await resolvePlatformDependencies(manifest)
 
     const out = files.filter(
@@ -75,6 +95,11 @@ export async function compileGappTree(
         ),
       }
     }
+
+    await ctx?.log.info(
+      'compile',
+      `Compiled ${squint.output} (${appJs.length} bytes) for ${bundleLabel}`,
+    )
 
     return out
   } finally {

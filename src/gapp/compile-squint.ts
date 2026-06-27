@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import { formatExecError } from './exec-error.js'
 import { projectRoot } from './registry-paths.js'
 import type { SquintCompileSpec } from './types.js'
 
@@ -17,6 +18,27 @@ function globalBanner(externals: Record<string, string>): string {
   return lines.join('')
 }
 
+async function runCommand(
+  command: string,
+  args: string[],
+  opts: { cwd: string; label: string },
+): Promise<void> {
+  try {
+    await execFileAsync(command, args, {
+      cwd: opts.cwd,
+      env: process.env,
+      maxBuffer: 10 * 1024 * 1024,
+    })
+  } catch (err) {
+    const formatted = formatExecError(err)
+    const error = new Error(`${opts.label}: ${formatted.message}`)
+    if (formatted.detail) {
+      ;(error as Error & { detail?: string }).detail = formatted.detail
+    }
+    throw error
+  }
+}
+
 export async function compileSquintSource(
   sourcePath: string,
   spec: SquintCompileSpec,
@@ -28,15 +50,14 @@ export async function compileSquintSource(
 
   try {
     const squintCwd = path.dirname(sourcePath)
-    await execFileAsync(
+    await runCommand(
       'npx',
       ['squint', 'compile', sourcePath, '--extension', ext],
-      { cwd, env: process.env },
+      { cwd, label: 'squint compile' },
     )
 
     const compiledName = path.basename(sourcePath, path.extname(sourcePath)) + ext
     const compiledPath = path.join(squintCwd, compiledName)
-    const raw = await fs.readFile(compiledPath)
 
     const externals = spec.externals ?? {}
     const globalNames = [...new Set(Object.values(externals))]
@@ -61,10 +82,7 @@ export async function compileSquintSource(
       `--alias:squint-cljs/src/squint/multi.js=${path.join(squintPkg, 'src/squint/multi.js')}`,
     )
 
-    await execFileAsync('npx', esbuildArgs, {
-      cwd: projectRoot,
-      env: process.env,
-    })
+    await runCommand('npx', esbuildArgs, { cwd: projectRoot, label: 'esbuild bundle' })
     return fs.readFile(bundleOut)
   } finally {
     await fs.rm(tmp, { recursive: true, force: true })

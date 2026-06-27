@@ -1,5 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { getOrCreateImage } from '../db/image.js'
+import { createSessionLogWriter } from '../services/session-logger.js'
+import { resolveSessionIdForInstance } from '../services/resolve-session-for-instance.js'
 import { db } from '../db/index.js'
 import * as schema from '../db/schema.js'
 import { PENDING_INSTANCE_CHECKSUM } from './instance-constants.js'
@@ -146,12 +148,22 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
       return false
     }
 
+    const sessionId = await resolveSessionIdForInstance(instanceId)
+    const sessionLog = sessionId ? createSessionLogWriter(sessionId) : null
+
     console.log(`[instance] resolving image for ${instanceId} directory ${processRow.directory_id}`)
     setInstancePrepareProgress(instanceId, 'resolving-image', 'Resolving app bundle…')
     const image = await getOrCreateImage(processRow.directory_id, {
       onProgress: (message) => {
         setInstancePrepareProgress(instanceId, 'building-snapshot', message)
       },
+      compile:
+        sessionId && sessionLog
+          ? {
+              sessionId,
+              log: sessionLog,
+            }
+          : undefined,
     })
     imageId = image.id
     checksum = image.directory_checksum
@@ -200,10 +212,19 @@ export async function ensureInstanceReady(instanceId: number): Promise<boolean> 
   const inflight = preparing.get(instanceId)
   if (inflight) return inflight
 
-  const work = loadInstanceReady(instanceId).catch((err) => {
+  const work = loadInstanceReady(instanceId).catch(async (err) => {
     const message = err instanceof Error ? err.message : 'Failed to prepare app'
+    const detail =
+      err && typeof err === 'object' && 'detail' in err
+        ? String((err as { detail?: string }).detail ?? '')
+        : undefined
     setInstancePrepareFailed(instanceId, message)
     console.error(`[instance] prepare failed for ${instanceId}:`, err)
+    const sessionId = await resolveSessionIdForInstance(instanceId)
+    if (sessionId) {
+      const log = createSessionLogWriter(sessionId)
+      await log.error('instance', message, detail || undefined)
+    }
     return false
   }).finally(() => {
     preparing.delete(instanceId)
