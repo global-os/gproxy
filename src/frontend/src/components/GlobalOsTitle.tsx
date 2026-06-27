@@ -1,5 +1,5 @@
 export const GlobalOsTitle = ({ children }: React.PropsWithChildren) => (
-  <div className="mt-3 italic text-center text-[1.25em] font-bold tracking-[0.08em] text-white/80">
+  <div className="mt-3 text-center text-xl font-semibold tracking-tight text-blue-900">
     {children}
   </div>
 )

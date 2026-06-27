@@ -9,7 +9,7 @@ const Stamp = createComponent(() => ({
   textAlign: 'center',
   fontSize: '11px',
   lineHeight: 1.4,
-  color: 'rgba(255, 255, 255, 0.22)',
+  color: 'rgba(255, 255, 255, 0.45)',
   pointerEvents: 'none',
   userSelect: 'none',
   zIndex: 9999,

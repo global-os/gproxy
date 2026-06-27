@@ -1,5 +1,5 @@
 export const PageTitle = ({ children }: React.PropsWithChildren) => (
-  <div className="block text-[1.35em] font-bold tracking-[-0.01em] text-white/88 mb-[1em] pb-[0.6em] border-b border-amber/18">
+  <div className="block text-2xl font-semibold tracking-tight text-gray-900 mb-5 pb-3 border-b border-gray-200">
     {children}
   </div>
 )

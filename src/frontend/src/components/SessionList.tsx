@@ -63,11 +63,13 @@ function PrimaryButton({
   onClick,
   children,
   type = 'button',
+  variant = 'primary',
 }: {
   disabled?: boolean
   onClick?: () => void
   children: React.ReactNode
   type?: 'button' | 'submit' | 'reset'
+  variant?: 'primary' | 'secondary'
 }) {
   return (
     <button
@@ -75,10 +77,17 @@ function PrimaryButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        'self-start px-5 py-[0.65em] rounded-[10px] border text-[0.92em] font-semibold transition-colors duration-100',
-        disabled
-          ? 'bg-white/4 border-amber/32 text-white/22 cursor-default'
-          : 'bg-amber/10 border-amber/32 text-[rgb(228,168,55)] hover:bg-amber/20 hover:border-amber/50 cursor-pointer',
+        'self-start px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-100',
+        variant === 'primary' && (
+          disabled
+            ? 'bg-blue-200 text-white cursor-default'
+            : 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
+        ),
+        variant === 'secondary' && (
+          disabled
+            ? 'bg-gray-50 border border-gray-200 text-gray-300 cursor-default'
+            : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 cursor-pointer'
+        ),
       )}
     >
       {children}
@@ -138,26 +147,25 @@ export const SessionList = ({ onLogOut, isLoggingOut }: SessionListProps) => {
   }, [queryClient])
 
   if (isPending) {
-    return <div className="py-8 px-4 text-center text-white/35 text-[0.95em]">Loading your sessions…</div>
+    return <div className="py-8 px-4 text-center text-gray-400 text-sm">Loading your sessions…</div>
   }
 
   if (error) {
-    return <p className="m-0 text-[0.85em] text-[rgba(255,100,100,0.9)]">Error: {`${error}`}</p>
+    return <p className="m-0 text-sm text-red-600">Error: {`${error}`}</p>
   }
 
   const sessions = data ?? []
 
   const tabCls = cn(
-    'flex-1 border-none rounded-[9px] px-3 py-[0.55em] text-[0.88em] font-semibold bg-transparent',
-    'text-white/42 cursor-pointer transition-colors duration-100',
-    'aria-selected:bg-amber/18 aria-selected:text-amber-light',
+    'flex-1 border-none rounded-lg px-3 py-2 text-sm font-medium bg-transparent',
+    'text-gray-500 cursor-pointer transition-colors duration-100',
+    'aria-selected:bg-white aria-selected:text-blue-700 aria-selected:shadow-sm',
   )
 
   return (
     <div className="w-full">
       <Tabs.Root defaultValue="global-pc">
-        {/* Tab bar */}
-        <div className="p-1 rounded-xl bg-black/35 border border-white/7 mb-6">
+        <div className="p-1 rounded-xl bg-gray-100 mb-6">
           <Tabs.List className="flex gap-1">
             <Tabs.Tab value="global-pc" className={tabCls}>My Global PC</Tabs.Tab>
             <Tabs.Tab value="settings" className={tabCls}>Settings</Tabs.Tab>
@@ -166,48 +174,42 @@ export const SessionList = ({ onLogOut, isLoggingOut }: SessionListProps) => {
           </Tabs.List>
         </div>
 
-        {/* My Global PC panel */}
         <Tabs.Panel value="global-pc">
           <div className="flex flex-col gap-4">
             <div>
-              <p className="m-0 text-[0.98em] font-bold tracking-[0.01em] text-white/88">My Sessions</p>
-              <p className="m-0 mt-1 text-[0.83em] text-white/38 leading-normal">
+              <p className="m-0 text-base font-semibold text-gray-900">My Sessions</p>
+              <p className="m-0 mt-1 text-sm text-gray-500 leading-normal">
                 Open a workspace desktop or remove sessions you no longer need.
               </p>
             </div>
 
-            {/* Session list */}
-            <div className="flex flex-col gap-[0.55em]">
+            <div className="flex flex-col gap-2">
               {sessions.length === 0 ? (
-                <div className="px-4 py-6 rounded-[10px] text-center text-white/32 bg-white/2 border border-dashed border-white/10 text-[0.88em] leading-relaxed">
+                <div className="px-4 py-8 rounded-xl text-center text-gray-400 bg-gray-50 border border-dashed border-gray-200 text-sm leading-relaxed">
                   No sessions yet. Create one to launch apps on your Global PC desktop.
                 </div>
               ) : (
                 sessions.map((sess, i) => (
                   <div
                     key={sess.id}
-                    className="flex items-center gap-3 px-4 py-[0.85em] rounded-xl bg-white/4 border border-amber/14 transition-colors duration-100 hover:bg-white/7 hover:border-amber/28"
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 transition-colors duration-100 hover:bg-blue-50/50 hover:border-blue-200"
                   >
-                    {/* Badge */}
-                    <span className="shrink-0 min-w-8 text-center px-2 py-[0.3em] rounded text-[0.74em] font-bold text-amber-light bg-amber/16 border border-amber/28">
+                    <span className="shrink-0 min-w-8 text-center px-2 py-1 rounded-md text-xs font-semibold text-blue-700 bg-blue-100">
                       #{i + 1}
                     </span>
 
-                    {/* Meta */}
-                    <div className="flex-1 min-w-0 flex flex-col gap-[0.15em]">
-                      <span className="text-[0.93em] font-semibold text-white/90 overflow-hidden text-ellipsis whitespace-nowrap">
+                    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                      <span className="text-sm font-medium text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap">
                         {sessionLabel(sess, i)}
                       </span>
-                      <span className="text-[0.74em] text-white/30 tracking-[0.03em]">ID {sess.id}</span>
+                      <span className="text-xs text-gray-400">ID {sess.id}</span>
                     </div>
 
-                    {/* Actions */}
-                    <div className="shrink-0 flex items-center gap-[0.4em]">
+                    <div className="shrink-0 flex items-center gap-2">
                       <Link
                         to="/session/$sessionId"
                         params={{ sessionId: String(sess.id) }}
-                        className="inline-flex items-center px-[0.9em] py-[0.4em] rounded text-[0.82em] font-bold no-underline text-[#0d0020] border border-[rgba(220,155,15,0.5)] shadow-[0_1px_4px_rgba(0,0,0,0.4)] hover:brightness-110 transition-[filter] duration-100"
-                        style={{ background: 'linear-gradient(160deg, rgb(230,155,20) 0%, rgb(200,128,0) 100%)' }}
+                        className="inline-flex items-center px-3.5 py-1.5 rounded-lg text-sm font-semibold no-underline text-white bg-blue-600 hover:bg-blue-700 transition-colors duration-100"
                       >
                         Open
                       </Link>
@@ -217,10 +219,10 @@ export const SessionList = ({ onLogOut, isLoggingOut }: SessionListProps) => {
                         aria-label={`Delete ${sessionLabel(sess, i)}`}
                         onClick={() => void handleDeleteSession(sess.id)}
                         className={cn(
-                          'inline-flex items-center justify-center w-8 h-8 rounded border transition-colors duration-100 text-[1.05em] leading-none',
+                          'inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors duration-100 text-lg leading-none',
                           deletingId === sess.id
-                            ? 'bg-white/2 border-white/8 text-white/18 cursor-default'
-                            : 'bg-white/5 border-white/8 text-[rgba(255,120,120,0.65)] cursor-pointer hover:bg-[rgba(180,0,0,0.18)] hover:border-[rgba(200,50,50,0.35)] hover:text-[rgb(255,120,120)]',
+                            ? 'bg-gray-50 border-gray-200 text-gray-300 cursor-default'
+                            : 'bg-white border-gray-200 text-gray-400 cursor-pointer hover:bg-red-50 hover:border-red-200 hover:text-red-500',
                         )}
                       >
                         ×
@@ -232,26 +234,29 @@ export const SessionList = ({ onLogOut, isLoggingOut }: SessionListProps) => {
             </div>
 
             {createError && (
-              <p role="alert" className="m-0 text-[0.85em] text-[rgba(255,100,100,0.9)]">{createError}</p>
+              <p role="alert" className="m-0 text-sm text-red-600">{createError}</p>
             )}
             {deleteError && (
-              <p role="alert" className="m-0 text-[0.85em] text-[rgba(255,100,100,0.9)]">{deleteError}</p>
+              <p role="alert" className="m-0 text-sm text-red-600">{deleteError}</p>
             )}
 
-            {/* Footer */}
-            <div className="flex flex-col gap-[0.6em] mt-2 pt-4 border-t border-white/7">
+            <div className="flex flex-col gap-2.5 mt-2 pt-5 border-t border-gray-200">
               <PrimaryButton disabled={isCreating} onClick={() => void handleCreateSession()}>
                 {isCreating ? 'Creating…' : 'Create New Session'}
               </PrimaryButton>
               {onLogOut && (
-                <PrimaryButton disabled={isLoggingOut} onClick={() => void onLogOut()}>
+                <PrimaryButton
+                  variant="secondary"
+                  disabled={isLoggingOut}
+                  onClick={() => void onLogOut()}
+                >
                   {isLoggingOut ? 'Logging out…' : 'Log Out'}
                 </PrimaryButton>
               )}
               {isAdmin && (
                 <Link
                   to="/admin"
-                  className="mt-1 text-[0.82em] text-amber/55 no-underline hover:text-amber-light transition-colors duration-100"
+                  className="mt-1 text-sm text-blue-600 no-underline hover:text-blue-800 transition-colors duration-100"
                 >
                   Admin panel
                 </Link>
@@ -262,8 +267,8 @@ export const SessionList = ({ onLogOut, isLoggingOut }: SessionListProps) => {
 
         <Tabs.Panel value="settings">
           <div className="flex flex-col gap-4">
-            <p className="m-0 text-[0.98em] font-bold text-white/88">Settings</p>
-            <p className="m-0 text-[0.83em] text-white/38 leading-normal">
+            <p className="m-0 text-base font-semibold text-gray-900">Settings</p>
+            <p className="m-0 text-sm text-gray-500 leading-normal">
               Personal settings for your Global PC will appear here.
             </p>
           </div>
@@ -271,10 +276,10 @@ export const SessionList = ({ onLogOut, isLoggingOut }: SessionListProps) => {
 
         <Tabs.Panel value="help">
           <div className="flex flex-col gap-4">
-            <p className="m-0 text-[0.98em] font-bold text-white/88">Help</p>
-            <p className="m-0 text-[0.83em] text-white/38 leading-normal">
+            <p className="m-0 text-base font-semibold text-gray-900">Help</p>
+            <p className="m-0 text-sm text-gray-500 leading-normal">
               For support, email{' '}
-              <a href="mailto:coldairnetworks@fastmail.com" className="text-amber-light hover:text-amber-light/80">
+              <a href="mailto:coldairnetworks@fastmail.com" className="text-blue-600 hover:text-blue-800">
                 coldairnetworks@fastmail.com
               </a>{' '}
               and we will assist as soon as possible.

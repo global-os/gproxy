@@ -40,64 +40,64 @@ function AdminPage() {
       <VerticalFrame width="65em">
         <Link
           to="/sessions"
-          className="inline-block mb-5 text-[0.88em] text-white/45 no-underline hover:text-white/70 transition-colors duration-100"
+          className="inline-block mb-5 text-sm text-gray-500 no-underline hover:text-gray-700 transition-colors duration-100"
         >
           ← Back to Sessions
         </Link>
         <PageTitle>Admin</PageTitle>
 
         {isPending && (
-          <p className="py-8 text-center text-white/35 text-[0.9em]">Loading…</p>
+          <p className="py-8 text-center text-gray-400 text-sm">Loading…</p>
         )}
 
         {error && (
-          <p className="text-[0.9em] text-[rgba(255,100,100,0.9)]">
+          <p className="text-sm text-red-600">
             {error instanceof Error ? error.message : 'Something went wrong'}
           </p>
         )}
 
         {data && (
           <>
-            <p className="m-0 mb-5 text-[0.88em] text-white/45">
+            <p className="m-0 mb-5 text-sm text-gray-500">
               {data.count} user{data.count !== 1 ? 's' : ''} signed up
             </p>
 
-            <div className="overflow-hidden rounded-xl border border-amber/14">
-              <table className="w-full text-[0.88em] border-collapse">
+            <div className="overflow-hidden rounded-xl border border-gray-200">
+              <table className="w-full text-sm border-collapse">
                 <thead>
-                  <tr className="border-b border-amber/14">
-                    <th className="text-left px-4 py-3 font-semibold text-white/55 whitespace-nowrap">Name</th>
-                    <th className="text-left px-4 py-3 font-semibold text-white/55 whitespace-nowrap">Email</th>
-                    <th className="text-left px-4 py-3 font-semibold text-white/55 whitespace-nowrap">Verified</th>
-                    <th className="text-left px-4 py-3 font-semibold text-white/55 whitespace-nowrap">Joined</th>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Name</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Email</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Verified</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Joined</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.users.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-white/30 italic">
+                      <td colSpan={4} className="px-4 py-8 text-center text-gray-400">
                         No users yet.
                       </td>
                     </tr>
                   ) : (
                     data.users.map((u) => (
-                      <tr key={u.id} className="border-b border-white/5 last:border-0 hover:bg-white/3 transition-colors duration-75">
-                        <td className="px-4 py-3 text-white/88">
-                          {u.name ?? <span className="text-white/25">—</span>}
+                      <tr key={u.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors duration-75">
+                        <td className="px-4 py-3 text-gray-900">
+                          {u.name ?? <span className="text-gray-300">—</span>}
                         </td>
-                        <td className="px-4 py-3 text-white/70">{u.email}</td>
+                        <td className="px-4 py-3 text-gray-600">{u.email}</td>
                         <td className="px-4 py-3">
                           <span
                             className={
                               u.emailVerified
-                                ? 'inline-block px-2 py-[0.2em] rounded-full text-[0.82em] font-semibold bg-green-900/40 text-green-300 border border-green-700/40'
-                                : 'inline-block px-2 py-[0.2em] rounded-full text-[0.82em] font-semibold bg-amber/10 text-amber-light border border-amber/25'
+                                ? 'inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
+                                : 'inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200'
                             }
                           >
                             {u.emailVerified ? 'Yes' : 'No'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-white/40 whitespace-nowrap">
+                        <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
                           {new Date(u.createdAt).toLocaleDateString('en-US', {
                             month: 'short',
                             day: 'numeric',
