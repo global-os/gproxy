@@ -70,7 +70,15 @@ router.post('/sessions/:sessionId/launch', async (c) => {
       return c.json({ message: err.message }, err.status as 400 | 404)
     }
     console.error('[launch]', err)
-    return c.json({ message: 'Failed to launch program' }, 500)
+    const cause = err && typeof err === 'object' && 'cause' in err
+      ? (err as { cause: unknown }).cause
+      : err
+    const detail = cause instanceof Error ? cause.message : undefined
+    const message =
+      detail?.includes('does not exist') || detail?.includes('column')
+        ? 'Database schema is out of date. Run scripts/apply-pending-migrations.mjs against production.'
+        : 'Failed to launch program'
+    return c.json({ message, ...(detail ? { detail } : {}) }, 500)
   }
 })
 
