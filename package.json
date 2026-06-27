@@ -22,7 +22,7 @@
     "bundle:helloworld-yjs": "node scripts/bundle-helloworld-yjs.mjs",
     "bundle:platform-deps": "node scripts/stage-squint-runtime.mjs && node scripts/bundle-platform-yjs.mjs && node scripts/bundle-platform-rxjs.mjs",
     "build:squint-editor-example": "node --import tsx scripts/build-squint-editor-example-tar.mjs",
-    "vercel-build": "npm install && npm run bundle:platform-deps && (cd src/frontend && npm install --legacy-peer-deps) && (cd src/www && npm install) && node scripts/apply-pending-migrations.mjs && node scripts/write-build-version.mjs && npm run build && node scripts/stage-squint-runtime.mjs && node scripts/stage-platform-deps.mjs && node scripts/verify-frontend-bundle.mjs && node scripts/sync-public-assets.mjs"
+    "vercel-build": "npm install && npm run bundle:platform-deps && (cd src/frontend && npm install --legacy-peer-deps) && (cd src/www && npm install) && node scripts/apply-pending-migrations.mjs && node --import tsx scripts/seed-fixtures.mjs && node scripts/write-build-version.mjs && npm run build && node scripts/stage-squint-runtime.mjs && node scripts/stage-platform-deps.mjs && node scripts/verify-frontend-bundle.mjs && node scripts/sync-public-assets.mjs"
   },
   "version": "1.0.0",
   "description": "",
