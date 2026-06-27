@@ -173,6 +173,14 @@ export function Workspace({ sessionId, children }: WorkspaceProps) {
     },
   })
 
+  useEffect(() => {
+    const refreshDesktop = () => {
+      void queryClient.invalidateQueries({ queryKey: ['desktop'] })
+    }
+    window.addEventListener('globalos:desktop-updated', refreshDesktop)
+    return () => window.removeEventListener('globalos:desktop-updated', refreshDesktop)
+  }, [queryClient])
+
   const openProgram = useCallback(async (item: DesktopItem) => {
     if (!isLaunchableApp(item)) return
 

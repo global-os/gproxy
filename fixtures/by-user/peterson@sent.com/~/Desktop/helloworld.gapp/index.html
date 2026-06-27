@@ -7,11 +7,17 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     font-family: system-ui, sans-serif;
     background: #fff;
     color: #111;
-    padding: 1rem;
+    display: flex;
+    flex-direction: column;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -20,34 +26,61 @@
     button { background: #222; color: #eee; border-color: #444; }
     button:hover:not(:disabled) { background: #333; }
     .banner { background: #3a2e00; color: #fcd34d; border-color: #78580a; }
+    .filename-label { color: #999; }
   }
 
   #waiting {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100vh;
+    flex: 1;
     gap: 8px;
     color: #666;
     font-size: 14px;
   }
 
-  #shell { display: none; }
+  #shell {
+    display: none;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
 
   .toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
+    gap: 0.75rem;
+    flex: 0 0 auto;
+  }
+
+  .filename-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+  }
+
+  .filename-label {
+    font-size: 0.72rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   .filename {
-    font-size: 13px;
-    color: #666;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   button {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
     padding: 6px 14px;
@@ -57,15 +90,17 @@
     background: #fff;
     cursor: pointer;
     transition: opacity 0.15s;
+    flex: 0 0 auto;
   }
 
   button:hover:not(:disabled) { background: #f5f5f5; }
   button:disabled { opacity: 0.45; cursor: not-allowed; }
 
   textarea {
+    flex: 1 1 auto;
+    min-height: 0;
     width: 100%;
-    min-height: calc(100vh - 80px);
-    resize: vertical;
+    resize: none;
     font-family: monospace;
     font-size: 13px;
     line-height: 1.6;
@@ -78,14 +113,16 @@
   textarea:focus { border-color: #888; }
 
   .statusbar {
-    margin-top: 6px;
-    height: 18px;
+    flex: 0 0 auto;
+    min-height: 1.2em;
     font-size: 12px;
     color: #888;
   }
 
+  .statusbar.error { color: #b91c1c; }
+
   .banner {
-    margin-bottom: 10px;
+    flex: 0 0 auto;
     padding: 8px 12px;
     font-size: 13px;
     background: #fefce8;
@@ -108,8 +145,11 @@
 <div id="shell">
   <div id="banner" class="banner" style="display:none"></div>
   <div class="toolbar">
-    <span class="filename" id="filename">untitled</span>
-    <button id="save-btn">
+    <div class="filename-wrap">
+      <span class="filename-label">Desktop file</span>
+      <span class="filename" id="filename">Untitled.txt</span>
+    </div>
+    <button id="save-btn" type="button">
       <span id="save-icon">💾</span>
       <span id="save-label">Save</span>
     </button>
@@ -134,7 +174,7 @@ const observeContent = (fn) => {
   return () => yContent.unobserve(fn);
 };
 
-const state = { status: 'waiting', filename: 'untitled', reason: null };
+const state = { status: 'waiting', filename: 'Untitled.txt', reason: null };
 let lastSavedContent = '';
 
 const toParent = (msg) => window.parent.postMessage(msg, '*');
@@ -168,14 +208,19 @@ const render = () => {
   }
 };
 
+const setStatus = (text, isError = false) => {
+  $statusbar.textContent = text;
+  $statusbar.classList.toggle('error', isError);
+};
+
 const setSaved = () => {
-  $statusbar.textContent = 'Saved ' + new Date().toLocaleTimeString();
-  setTimeout(() => { $statusbar.textContent = ''; }, 3000);
+  setStatus('Saved to desktop ' + new Date().toLocaleTimeString());
+  setTimeout(() => { setStatus(''); }, 3000);
 };
 
 const showEditor = () => {
   $waiting.style.display = 'none';
-  $shell.style.display   = 'block';
+  $shell.style.display = 'flex';
   $editor.focus();
   render();
 };
@@ -185,14 +230,16 @@ const init = ({ filename, content }) => {
   lastSavedContent = content ?? '';
   $editor.value = getContent();
   state.status = 'ready';
-  state.filename = filename ?? 'untitled';
+  state.filename = filename || 'Untitled.txt';
   state.reason = null;
+  $banner.style.display = 'none';
   showEditor();
 };
 
-const initFresh = (reason) => {
+const initFresh = ({ reason, filename } = {}) => {
   state.status = 'ready';
   state.reason = reason ?? 'fresh';
+  state.filename = filename || 'Untitled.txt';
   showEditor();
 };
 
@@ -204,9 +251,22 @@ const onDie = async () => {
 
 const save = () => {
   if (state.status === 'saving') return;
+
+  const suggested = state.filename || 'Untitled.txt';
+  const chosen = window.prompt('Save to your desktop as:', suggested);
+  if (chosen === null) return;
+
+  const filename = chosen.trim();
+  if (!filename) {
+    setStatus('Save cancelled — filename is required', true);
+    return;
+  }
+
+  state.filename = filename;
   state.status = 'saving';
+  setStatus('');
   render();
-  toParent({ type: 'save', filename: state.filename, content: getContent() });
+  toParent({ type: 'save', filename, content: getContent() });
 };
 
 window.addEventListener('message', (event) => {
@@ -218,13 +278,21 @@ window.addEventListener('message', (event) => {
       init(data);
       break;
     case 'init:fresh':
-      initFresh(data.reason);
+      initFresh(data);
       break;
     case 'save:complete':
       lastSavedContent = getContent();
       state.status = 'ready';
+      if (typeof data.filename === 'string' && data.filename) {
+        state.filename = data.filename;
+      }
       render();
       setSaved();
+      break;
+    case 'save:error':
+      state.status = 'ready';
+      render();
+      setStatus(data.message || 'Save failed', true);
       break;
     case 'die':
       void onDie().then((result) => {

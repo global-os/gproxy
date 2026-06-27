@@ -25,6 +25,7 @@ import { getInstancePrepareStatus } from './runtime/instance-prepare-progress.js
 import { instanceSlugFromHostname, stripInstancePrefix } from './runtime/instance-proxy.js'
 import { resolveInstanceIdBySlug } from './runtime/instance-resolve.js'
 import { getBuildVersion } from './build-version.js'
+import { frontendDistRoot, readFrontendFile, resolveFrontendFile } from './frontend-paths.js'
 import { benchmarkScrypt } from './crypto/password.js'
 import { checkAppTables, checkAuthTables, pingDatabase, pingPool, pool, probeDrizzleUserLookup, probeUserLookup } from './db/index.js'
 import { checkConfig, checkFrontendBundle, probeAuthHandler } from './health-checks.js'
@@ -318,8 +319,6 @@ app.delete('/app/api/sessions/:sessionId', async (c) => {
   }
 })
 
-const frontendDist = path.join(process.cwd(), 'src/frontend/dist')
-
 const assetContentTypes: Record<string, string> = {
   '.js': 'application/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -329,9 +328,9 @@ const assetContentTypes: Record<string, string> = {
 
 app.get('/assets/*', async (c) => {
   const relativePath = c.req.path.replace(/^\//, '')
-  const filePath = path.join(frontendDist, relativePath)
+  const filePath = resolveFrontendFile(relativePath)
 
-  if (!filePath.startsWith(frontendDist) || !fs.existsSync(filePath)) {
+  if (!filePath) {
     console.error('Asset not found:', relativePath, 'cwd:', process.cwd())
     return c.notFound()
   }
@@ -348,7 +347,7 @@ app.get('/assets/*', async (c) => {
 app.use(
   '/static/*',
   serveStatic({
-    root: frontendDist,
+    root: frontendDistRoot,
     rewriteRequestPath: (path) => path.replace(/^\/static/, ''),
   })
 )
@@ -411,10 +410,15 @@ app.all('/instance/*', async (c) => {
   app.get(route, async (c) => {
     console.log('app route')
 
-    const htmlPath = path.join(process.cwd(), 'src/frontend/dist/index.html')
-    const html = fs.readFileSync(htmlPath, 'utf-8')
+    const html = readFrontendFile('index.html')
+    if (!html) {
+      console.error('Frontend index.html missing from public/ and dist/')
+      return c.text('Frontend bundle missing', 500)
+    }
 
-    return c.html(html)
+    return c.html(html, 200, {
+      'Cache-Control': 'no-cache',
+    })
   })
 })
 

@@ -50,27 +50,39 @@ export class SessionKernel {
         this.onReady(binding, post)
         break
       case 'save':
-        this.onSave(binding, event.data, post)
+        void this.onSave(binding, event.data, post)
         break
       case 'die:response':
         break
     }
   }
 
+  private defaultFilename(binding: KernelWindowBinding): string {
+    return 'Untitled.txt'
+  }
+
   private onReady(binding: KernelWindowBinding, post: (msg: KernelMessage) => void) {
     const state = this.resolveProcessState(binding.processId)
     if (state === undefined) {
-      post({ type: 'init:fresh', reason: 'fresh' })
+      post({
+        type: 'init:fresh',
+        reason: 'fresh',
+        filename: this.defaultFilename(binding),
+      })
       return
     }
     if (state === null) {
-      post({ type: 'init:fresh', reason: 'corrupted' })
+      post({
+        type: 'init:fresh',
+        reason: 'corrupted',
+        filename: this.defaultFilename(binding),
+      })
       return
     }
     post({ type: 'init', ...state })
   }
 
-  private onSave(
+  private async onSave(
     binding: KernelWindowBinding,
     message: KernelMessage,
     post: (msg: KernelMessage) => void,
@@ -83,11 +95,41 @@ export class SessionKernel {
     this.activeOps.set(binding.processId, { op: 'save', windowId: binding.windowId })
 
     const { type: _type, ...state } = message
-    this.processState.set(binding.processId, state)
-    saveProcessState(this.sessionId, binding.processId, state)
+    const filename = typeof state.filename === 'string' ? state.filename : ''
+    const content = typeof state.content === 'string' ? state.content : ''
 
-    this.activeOps.delete(binding.processId)
-    post({ type: 'save:complete' })
+    try {
+      const r = await fetch('/api/fs/desktop/files', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ filename, content }),
+      })
+
+      if (!r.ok) {
+        let message = `Save failed (${r.status})`
+        try {
+          const body = (await r.json()) as { message?: string }
+          if (body.message) message = body.message
+        } catch {
+          // ignore
+        }
+        throw new Error(message)
+      }
+
+      this.processState.set(binding.processId, state)
+      saveProcessState(this.sessionId, binding.processId, state)
+      window.dispatchEvent(new CustomEvent('globalos:desktop-updated'))
+      post({ type: 'save:complete', filename })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed'
+      post({ type: 'save:error', message })
+    } finally {
+      this.activeOps.delete(binding.processId)
+    }
   }
 
   private resolveProcessState(processId: number): Record<string, unknown> | null | undefined {
