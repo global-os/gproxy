@@ -63,6 +63,7 @@ const TitleBar = createComponent(
     padding: '2px 3px',
     minHeight: '26px',
     userSelect: 'none',
+    cursor: 'default',
     flex: '0 0 auto',
     fontFamily: retroFont,
     background: 'linear-gradient(90deg, #4c1d95 0%, #7c3aed 38%, #6d28d9 62%, #4c1d95 100%)',
@@ -86,6 +87,8 @@ const TitleIcon = createComponent(
     lineHeight: 1,
     color: '#4c1d95',
     fontWeight: 700,
+    cursor: 'default',
+    userSelect: 'none',
   })
 )
 
@@ -97,6 +100,8 @@ const TitleMeta = createComponent(
     flexDirection: 'column',
     gap: 0,
     paddingLeft: '2px',
+    cursor: 'default',
+    userSelect: 'none',
   })
 )
 
@@ -111,6 +116,8 @@ const TitleLabel = createComponent(
     letterSpacing: '0.01em',
     color: '#ffffff',
     textShadow: '1px 1px 0 rgba(0,0,0,0.45)',
+    cursor: 'default',
+    userSelect: 'none',
   }),
   'span'
 )
@@ -124,6 +131,8 @@ const BundleHint = createComponent(
     fontWeight: 400,
     fontFamily: retroFont,
     color: 'rgba(255,255,255,0.72)',
+    cursor: 'default',
+    userSelect: 'none',
   }),
   'span'
 )
