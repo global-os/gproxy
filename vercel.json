@@ -6,7 +6,7 @@
   "functions": {
     "api/index.ts": {
       "maxDuration": 60,
-      "includeFiles": "src/frontend/dist/index.html,src/frontend/dist/assets/**,public/assets/**,src/landing.html,src/build-version.json,src/www/dist/rotating.js,src/gapp/registry/**,node_modules/esbuild/**,node_modules/@esbuild/**"
+      "includeFiles": "src/frontend/dist/index.html,src/frontend/dist/assets/**,public/assets/**,public/storybook/**,src/landing.html,src/build-version.json,src/www/dist/rotating.js,src/gapp/registry/**,node_modules/esbuild/**,node_modules/@esbuild/**"
     }
   },
   "headers": [

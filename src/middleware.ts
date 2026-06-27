@@ -4,6 +4,7 @@ import { db, pool } from './db/index.js'
 import { Env } from './types'
 import * as schema from './db/schema.js'
 import { auth } from './auth.js'
+import { isAdminEmail } from './constants/admin.js'
 
 export const isAuthApiPath = (path: string) =>
   path.startsWith('/app/api/auth') || path.startsWith('/api/auth')
@@ -71,6 +72,17 @@ export const setRlsUser: MiddlewareHandler<Env> = async (c, next) => {
   } finally {
     client.release()
   }
+}
+
+export const requireAdmin: MiddlewareHandler<Env> = async (c, next) => {
+  const user = c.get('user')
+  if (!user) {
+    return c.redirect('/login')
+  }
+  if (!isAdminEmail(user.email)) {
+    return c.text('Forbidden', 403)
+  }
+  await next()
 }
 
 export const betterAuthMiddleware: MiddlewareHandler<Env> = async (c, next) => {

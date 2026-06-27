@@ -28,6 +28,7 @@ import { instanceSlugFromHostname, stripInstancePrefix } from './runtime/instanc
 import { resolveInstanceIdBySlug } from './runtime/instance-resolve.js'
 import { getBuildVersion } from './build-version.js'
 import { frontendDistRoot, readFrontendFile, resolveFrontendFile } from './frontend-paths.js'
+import { resolveStorybookFile } from './storybook-paths.js'
 import { benchmarkScrypt } from './crypto/password.js'
 import { checkAppTables, checkAuthTables, pingDatabase, pingPool, pool, probeDrizzleUserLookup, probeUserLookup } from './db/index.js'
 import { checkConfig, checkFrontendBundle, probeAuthHandler } from './health-checks.js'
@@ -329,6 +330,45 @@ const assetContentTypes: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.json': 'application/json; charset=utf-8',
 }
+
+const storybookContentTypes: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+}
+
+app.use(
+  '/storybook',
+  middleware.provideDb,
+  middleware.parseCookies,
+  middleware.betterAuthMiddleware,
+  middleware.requireAdmin,
+)
+
+app.get('/storybook', (c) => c.redirect('/storybook/'))
+
+app.get('/storybook/*', async (c) => {
+  const relativePath = c.req.path.replace(/^\/storybook\/?/, '') || 'index.html'
+  const filePath = resolveStorybookFile(relativePath)
+
+  if (!filePath) {
+    return c.notFound()
+  }
+
+  const ext = path.extname(filePath)
+  const contentType = storybookContentTypes[ext] ?? 'application/octet-stream'
+
+  return c.body(fs.readFileSync(filePath), 200, {
+    'Content-Type': contentType,
+    'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+  })
+})
 
 app.get('/assets/*', async (c) => {
   const relativePath = c.req.path.replace(/^\//, '')

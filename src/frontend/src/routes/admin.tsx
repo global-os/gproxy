@@ -44,7 +44,17 @@ function AdminPage() {
         >
           ← Back to Sessions
         </Link>
-        <PageTitle>Admin</PageTitle>
+        <div className="flex flex-wrap items-baseline justify-between gap-3 mb-1">
+          <PageTitle>Admin</PageTitle>
+          <a
+            href="/storybook/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-medium text-violet-600 no-underline hover:text-violet-800 transition-colors duration-100"
+          >
+            Storybook ↗
+          </a>
+        </div>
 
         {isPending && (
           <p className="py-8 text-center text-gray-400 text-sm">Loading…</p>

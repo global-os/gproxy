@@ -172,6 +172,18 @@ TanStack Router — regenerate after adding routes:
 cd src/frontend && npm run regenerate
 ```
 
+### Storybook (admin only)
+
+Component stories live in `src/frontend/src/**/*.stories.tsx`.
+
+```bash
+npm run dev:storybook          # local dev server :6006
+cd src/frontend && npm run build-storybook   # static output → storybook-static/
+```
+
+On Vercel, `build-storybook` runs in `vercel-build`; assets sync to `public/storybook/`.  
+**URL:** `https://app.app.onetrueos.com/storybook/` — requires login as `peterson@sent.com` (same gate as `/admin`). Linked from the admin panel.
+
 ## Build & deploy
 
 Vercel project: `global-os` (team `philip-petersons-projects`).

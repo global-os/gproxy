@@ -5,6 +5,8 @@ dist
 .env*
 public/assets
 public/index.html
+public/storybook
+src/frontend/storybook-static
 fixtures/tar-examples/**
 !fixtures/tar-examples/.gitkeep
 src/gapp/registry/*.js

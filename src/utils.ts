@@ -3,7 +3,13 @@ import pm from 'picomatch'
 const removeLeadingSlash = (path: string) => path.replace(/^\/+/, '')
 
 const appPath = (path: string) => {
-  if (path.startsWith('/assets/') || path.startsWith('/static/')) return path
+  if (
+    path.startsWith('/assets/') ||
+    path.startsWith('/static/') ||
+    path.startsWith('/storybook')
+  ) {
+    return path
+  }
   if (path === '/health' || path === '/debug' || path.startsWith('/debug/')) return path
   return path === '/' ? '/app' : '/app/' + removeLeadingSlash(path)
 }

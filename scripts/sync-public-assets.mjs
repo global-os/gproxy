@@ -25,4 +25,13 @@ for (const file of ['vite.svg']) {
   }
 }
 
+const storybookDist = path.join(process.cwd(), 'src/frontend/storybook-static')
+const publicStorybook = path.join(publicDir, 'storybook')
+
+if (fs.existsSync(storybookDist)) {
+  fs.rmSync(publicStorybook, { recursive: true, force: true })
+  fs.cpSync(storybookDist, publicStorybook, { recursive: true })
+  console.log('Synced storybook to public/storybook/')
+}
+
 console.log('Synced browser assets to public/')
