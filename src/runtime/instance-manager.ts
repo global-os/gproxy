@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm'
+import { getOrCreateImage } from '../db/image.js'
 import { db } from '../db/index.js'
 import * as schema from '../db/schema.js'
+import { PENDING_INSTANCE_CHECKSUM } from './instance-constants.js'
 import {
   ensureInstanceContent,
   evictInstanceContent,
@@ -88,6 +90,7 @@ export async function ensureInstanceReady(instanceId: number): Promise<boolean> 
       state: schema.instances.state,
       directory_checksum: schema.instances.directory_checksum,
       image_id: schema.instances.image_id,
+      process_id: schema.instances.process_id,
     })
     .from(schema.instances)
     .where(eq(schema.instances.id, instanceId))
@@ -103,17 +106,42 @@ export async function ensureInstanceReady(instanceId: number): Promise<boolean> 
     return true
   }
 
-  if (!row.image_id) return false
+  let imageId = row.image_id
+  let checksum = row.directory_checksum
+
+  if (!imageId || checksum === PENDING_INSTANCE_CHECKSUM) {
+    const [processRow] = await db
+      .select({ directory_id: schema.process.directory_id })
+      .from(schema.process)
+      .where(eq(schema.process.id, row.process_id))
+      .limit(1)
+
+    if (!processRow) return false
+
+    console.log(`[instance] resolving image for ${instanceId} directory ${processRow.directory_id}`)
+    const image = await getOrCreateImage(processRow.directory_id)
+    imageId = image.id
+    checksum = image.directory_checksum
+    await db
+      .update(schema.instances)
+      .set({
+        image_id: imageId,
+        directory_checksum: checksum,
+      })
+      .where(eq(schema.instances.id, instanceId))
+  }
+
+  if (!imageId) return false
 
   const [imageRow] = await db
     .select({ tar_bytes: schema.image.tar_bytes })
     .from(schema.image)
-    .where(eq(schema.image.id, row.image_id))
+    .where(eq(schema.image.id, imageId))
     .limit(1)
 
   if (!imageRow?.tar_bytes) return false
 
-  await startInstanceRuntime(instanceId, row.directory_checksum, imageRow.tar_bytes)
+  await startInstanceRuntime(instanceId, checksum, imageRow.tar_bytes)
   await persistInstanceReady(instanceId)
   return true
 }

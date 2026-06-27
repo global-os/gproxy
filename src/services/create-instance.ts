@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray } from 'drizzle-orm'
-import { getOrCreateImage } from '../db/image.js'
+import { resolveImageMeta } from '../db/image.js'
 import { db } from '../db/index.js'
 import * as schema from '../db/schema.js'
+import { PENDING_INSTANCE_CHECKSUM } from '../runtime/instance-constants.js'
 import { instancePublicUrl } from '../runtime/constants.js'
 import { LaunchError } from './errors.js'
 
@@ -26,14 +27,14 @@ export async function createInstanceForProcess(processId: number): Promise<Creat
     throw new LaunchError('Process not found', 404)
   }
 
-  const image = await getOrCreateImage(processRow.directory_id)
+  const meta = await resolveImageMeta(processRow.directory_id)
 
   const [instanceRow] = await db
     .insert(schema.instances)
     .values({
       process_id: processId,
-      image_id: image.id,
-      directory_checksum: image.directory_checksum,
+      image_id: meta?.id ?? null,
+      directory_checksum: meta?.directory_checksum ?? PENDING_INSTANCE_CHECKSUM,
       state: 'starting',
     })
     .returning({ id: schema.instances.id })
@@ -66,10 +67,7 @@ export async function ensurePrimaryInstance(processId: number): Promise<CreatedI
   }
 
   const [stopped] = await db
-    .select({
-      id: schema.instances.id,
-      image_id: schema.instances.image_id,
-    })
+    .select({ id: schema.instances.id })
     .from(schema.instances)
     .where(and(
       eq(schema.instances.process_id, processId),
@@ -78,7 +76,7 @@ export async function ensurePrimaryInstance(processId: number): Promise<CreatedI
     .orderBy(desc(schema.instances.last_used_at))
     .limit(1)
 
-  if (stopped?.image_id) {
+  if (stopped) {
     await db
       .update(schema.instances)
       .set({ state: 'starting', last_used_at: new Date() })

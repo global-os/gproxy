@@ -64,30 +64,42 @@ async function buildTar(dirName: string, dirs: DirEntry[], files: FileEntry[]): 
   return Buffer.concat(chunks);
 }
 
-export async function getOrCreateImage(directoryId: number): Promise<{
-  id: number
-  directory_checksum: string
-  tar_checksum: string
-  tar_bytes: Buffer | null
-}> {
-  const [cached] = await db
+export async function resolveImageMeta(
+  directoryId: number,
+): Promise<{ id: number; directory_checksum: string } | null> {
+  const [row] = await db
     .select({
       id: image.id,
       directory_checksum: image.directory_checksum,
-      tar_checksum: image.tar_checksum,
-      tar_bytes: image.tar_bytes,
     })
     .from(image)
     .where(eq(image.directory_id, directoryId))
     .orderBy(desc(image.id))
     .limit(1)
 
-  if (cached?.tar_bytes && cached.directory_checksum && cached.tar_checksum) {
-    return {
-      id: cached.id,
-      directory_checksum: cached.directory_checksum,
-      tar_checksum: cached.tar_checksum,
-      tar_bytes: cached.tar_bytes,
+  if (!row?.directory_checksum) return null
+  return { id: row.id, directory_checksum: row.directory_checksum }
+}
+
+export async function getOrCreateImage(directoryId: number): Promise<{
+  id: number
+  directory_checksum: string
+  tar_checksum: string
+}> {
+  const cached = await resolveImageMeta(directoryId)
+  if (cached) {
+    const [row] = await db
+      .select({ tar_checksum: image.tar_checksum })
+      .from(image)
+      .where(eq(image.id, cached.id))
+      .limit(1)
+
+    if (row?.tar_checksum) {
+      return {
+        id: cached.id,
+        directory_checksum: cached.directory_checksum,
+        tar_checksum: row.tar_checksum,
+      }
     }
   }
 
@@ -97,7 +109,6 @@ export async function getOrCreateImage(directoryId: number): Promise<{
       id: image.id,
       directory_checksum: image.directory_checksum,
       tar_checksum: image.tar_checksum,
-      tar_bytes: image.tar_bytes,
     })
     .from(image)
     .where(and(
@@ -106,12 +117,11 @@ export async function getOrCreateImage(directoryId: number): Promise<{
     ))
     .limit(1)
 
-  if (existing?.tar_bytes) {
+  if (existing?.tar_checksum) {
     return {
       id: existing.id,
       directory_checksum: existing.directory_checksum!,
-      tar_checksum: existing.tar_checksum!,
-      tar_bytes: existing.tar_bytes,
+      tar_checksum: existing.tar_checksum,
     }
   }
 
@@ -121,21 +131,19 @@ export async function getOrCreateImage(directoryId: number): Promise<{
       id: image.id,
       directory_checksum: image.directory_checksum,
       tar_checksum: image.tar_checksum,
-      tar_bytes: image.tar_bytes,
     })
     .from(image)
     .where(eq(image.id, id))
     .limit(1)
 
-  if (!row?.tar_bytes) {
-    throw new Error(`Image ${id} was created without tar bytes`)
+  if (!row?.tar_checksum) {
+    throw new Error(`Image ${id} was created without tar checksum`)
   }
 
   return {
     id: row.id,
     directory_checksum: row.directory_checksum!,
-    tar_checksum: row.tar_checksum!,
-    tar_bytes: row.tar_bytes,
+    tar_checksum: row.tar_checksum,
   }
 }
 

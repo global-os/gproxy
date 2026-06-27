@@ -39,9 +39,11 @@ export async function launchProgram(opts: {
   const { instanceId, url } = await ensurePrimaryInstance(processRow.id)
   log(`instance ${instanceId}`)
 
+  const existingWindows = await listProcessWindows(sessionId, processRow.id)
+  log(`windows ${existingWindows.length}`)
+
   const bundleName = directoryName.endsWith('.gapp') ? directoryName : `${directoryName}.gapp`
   const title = bundleName.replace(/\.gapp$/, '')
-  const existingWindows = await listProcessWindows(sessionId, processRow.id)
 
   if (existingWindows.length > 0) {
     const frontmost = existingWindows[0]
