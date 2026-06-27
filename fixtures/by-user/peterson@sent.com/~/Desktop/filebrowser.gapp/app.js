@@ -18,14 +18,14 @@ function entryKind(entry) {
 
 function isSelected(selected, entry) {
   return (
-    selected &&
+    selected != null &&
     selected.type === entry.type &&
     selected.id === entry.id
   )
 }
 
 function FileBrowserApp() {
-  const [ready, setReady] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [cwd, setCwd] = useState(null)
   const [parentId, setParentId] = useState(null)
@@ -63,11 +63,13 @@ function FileBrowserApp() {
   }, [applyBrowse])
 
   useEffect(() => {
-    void loadDirectory(null).then(() => setReady(true))
+    void loadDirectory(null).finally(() => setInitialLoading(false))
   }, [loadDirectory])
 
+  const hasSelection = selected != null
+
   const goUp = () => {
-    if (!canGoUp || parentId == null) return
+    if (busy || !canGoUp || parentId == null) return
     void loadDirectory(parentId)
   }
 
@@ -95,7 +97,7 @@ function FileBrowserApp() {
   }
 
   const renameSelected = async () => {
-    if (!selected) return
+    if (!hasSelection) return
     const current = selected.name
     const next = window.prompt('Rename to:', current)
     if (next === null) return
@@ -125,7 +127,7 @@ function FileBrowserApp() {
   }
 
   const deleteSelected = async () => {
-    if (!selected) return
+    if (!hasSelection) return
     const label = selected.name
     if (!window.confirm(`Delete “${label}”?`)) return
 
@@ -145,11 +147,8 @@ function FileBrowserApp() {
     }
   }
 
-  if (!ready) {
-    return h('div', { class: 'waiting' }, 'Loading file system…')
-  }
-
-  return h(Fragment, null,
+  return h('div', { class: 'shell' },
+    initialLoading && h('div', { class: 'waiting' }, 'Loading file system…'),
     h('div', { class: 'toolbar' },
       h('button', {
         type: 'button',
@@ -164,12 +163,12 @@ function FileBrowserApp() {
       }, 'New Folder'),
       h('button', {
         type: 'button',
-        disabled: busy || !selected,
+        disabled: busy || !hasSelection,
         onClick: () => void renameSelected(),
       }, 'Rename'),
       h('button', {
         type: 'button',
-        disabled: busy || !selected,
+        disabled: busy || !hasSelection,
         onClick: () => void deleteSelected(),
       }, 'Delete'),
       h('button', {
