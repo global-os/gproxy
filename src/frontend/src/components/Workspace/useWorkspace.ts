@@ -49,6 +49,7 @@ export function useWorkspace(onStartup?: (actions: WorkspaceActions) => void) {
     ) as ResizeHandle | null
 
     if (resizeHandle === 'bottom-left' || resizeHandle === 'bottom-right') {
+      event.preventDefault()
       dispatch({
         type: WorkspaceActionKind.START_RESIZING_WINDOW,
         index,
@@ -58,6 +59,7 @@ export function useWorkspace(onStartup?: (actions: WorkspaceActions) => void) {
       return
     }
 
+    event.preventDefault()
     dispatch({
       type: WorkspaceActionKind.START_DRAGGING_WINDOW,
       index,

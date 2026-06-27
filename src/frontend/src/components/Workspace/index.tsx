@@ -20,17 +20,18 @@ const isLaunchableApp = (item: DesktopItem) =>
   item.type === 'directory' && item.name.endsWith('.gapp')
 
 const Frame = createComponent(
-  ({ dragging }: { dragging?: boolean }) => ({
+  ({ interacting }: { interacting?: boolean }) => ({
     position: 'relative',
     background: '#aca8c3',
     width: '100%',
     height: '100%',
     minHeight: '100%',
     overflow: 'hidden',
-    cursor: dragging ? 'default' : undefined,
+    cursor: interacting ? 'default' : undefined,
+    userSelect: interacting ? 'none' : undefined,
   }),
   'div',
-  ['dragging', 'onMouseMove', 'onMouseUp']
+  ['interacting', 'onMouseMove', 'onMouseUp']
 )
 
 const IconGrid = createComponent(
@@ -255,7 +256,7 @@ export function Workspace({ sessionId, children }: WorkspaceProps) {
 
   return (
     <Frame
-      dragging={!!state.dragOrigin}
+      interacting={!!state.dragOrigin || !!state.resizeOrigin}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
     >

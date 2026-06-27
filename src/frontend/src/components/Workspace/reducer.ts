@@ -164,11 +164,6 @@ export function reducer(state: State, action: WorkspaceAction): State {
     case WorkspaceActionKind.START_RESIZING_WINDOW: {
       return {
         ...state,
-        windows: replaceNth(state.windows, action.index, {
-          ...state.windows[action.index],
-          zIndex: state.zIndexCounter,
-        }),
-        zIndexCounter: state.zIndexCounter + 1,
         resizeOrigin: action.payload,
         resizingWindow: action.index,
         resizeHandle: action.handle,

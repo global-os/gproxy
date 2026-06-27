@@ -30,12 +30,14 @@ const Chrome = createComponent(
     width,
     height,
     zIndex,
+    interacting,
   }: {
     left: string
     top: string
     width: string
     height: string
     zIndex: number
+    interacting?: boolean
   }) => ({
     display: 'flex',
     flexDirection: 'column',
@@ -52,6 +54,7 @@ const Chrome = createComponent(
     boxSizing: 'border-box',
     ...outsetBorder,
     boxShadow: '2px 2px 0 rgba(0,0,0,0.35)',
+    userSelect: interacting ? 'none' : undefined,
   })
 )
 
@@ -256,6 +259,7 @@ export function WorkspaceWindow({
       width={win.width + 'px'}
       height={win.height + 'px'}
       zIndex={win.zIndex}
+      interacting={isInteracting}
     >
       <TitleBar data-window-index={windowIndex} onMouseDown={onMouseDown}>
         <TitleIcon aria-hidden>◆</TitleIcon>
