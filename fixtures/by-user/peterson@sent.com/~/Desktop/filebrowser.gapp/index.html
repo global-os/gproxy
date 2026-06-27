@@ -7,19 +7,30 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  html, body {
+  html, body, #root {
     height: 100%;
     overflow: hidden;
+  }
+
+  body {
     font-family: Tahoma, "MS Sans Serif", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
     font-size: 12px;
     color: #000;
     background: #c0c0c0;
   }
 
-  body {
+  #root {
     display: flex;
     flex-direction: column;
     padding: 4px;
+  }
+
+  .waiting {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #444;
   }
 
   .toolbar {
@@ -146,274 +157,18 @@
     text-align: center;
     color: #666;
   }
-
-  #waiting {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #444;
-  }
 </style>
 </head>
 <body>
-
-<div id="waiting">Loading file system…</div>
-
-<div id="app" hidden>
-  <div class="toolbar">
-    <button id="up-btn" type="button" title="Up">↑ Up</button>
-    <button id="mkdir-btn" type="button">New Folder</button>
-    <button id="rename-btn" type="button">Rename</button>
-    <button id="delete-btn" type="button">Delete</button>
-    <button id="refresh-btn" type="button">Refresh</button>
-    <div class="pathbar" id="pathbar">Desktop</div>
-  </div>
-
-  <div class="panel">
-    <div class="list-head">
-      <span></span>
-      <span>Name</span>
-      <span>Type</span>
-    </div>
-    <div class="list-body" id="list"></div>
-  </div>
-
-  <div class="statusbar" id="status"></div>
-</div>
-
-<script>
-// Parent kernel bridge — postMessage activates platform syscalls (POST /api/syscalls):
-//   fs:browse      -> fs.browse      -> fs:browse:complete | fs:browse:error
-//   fs:mkdir       -> fs.mkdir       -> fs:mkdir:complete  | fs:mkdir:error
-//   fs:rename      -> fs.rename      -> fs:rename:complete | fs:rename:error
-//   fs:delete      -> fs.delete      -> fs:delete:complete | fs:delete:error
-// Generic: { type: 'syscall', op, requestId, ...args } -> syscall:complete | syscall:error
-
-const pending = new Map()
-
-const toParent = (type, payload = {}) => new Promise((resolve, reject) => {
-  pending.set(type, { resolve, reject })
-  window.parent.postMessage({ type, ...payload }, '*')
-})
-
-window.addEventListener('message', (event) => {
-  const data = event.data
-  if (!data || typeof data.type !== 'string') return
-
-  if (!data.type.endsWith(':complete') && !data.type.endsWith(':error')) return
-
-  const op = data.type.slice(0, data.type.lastIndexOf(':'))
-  const handlers = pending.get(op)
-  if (!handlers) return
-
-  pending.delete(op)
-  if (data.type.endsWith(':complete')) {
-    handlers.resolve(data.result ?? data)
-  } else {
-    handlers.reject(new Error(data.message || 'Request failed'))
-  }
-})
-
-const $waiting = document.getElementById('waiting')
-const $app = document.getElementById('app')
-const $list = document.getElementById('list')
-const $pathbar = document.getElementById('pathbar')
-const $status = document.getElementById('status')
-const $upBtn = document.getElementById('up-btn')
-const $mkdirBtn = document.getElementById('mkdir-btn')
-const $renameBtn = document.getElementById('rename-btn')
-const $deleteBtn = document.getElementById('delete-btn')
-const $refreshBtn = document.getElementById('refresh-btn')
-
-const state = {
-  cwd: null,
-  parentId: null,
-  canGoUp: false,
-  name: 'Desktop',
-  entries: [],
-  selected: null,
-  busy: false,
-}
-
-const setStatus = (text, isError = false) => {
-  $status.textContent = text
-  $status.classList.toggle('error', isError)
-}
-
-const setBusy = (busy) => {
-  state.busy = busy
-  $upBtn.disabled = busy || !state.canGoUp
-  $mkdirBtn.disabled = busy
-  $renameBtn.disabled = busy || !state.selected
-  $deleteBtn.disabled = busy || !state.selected
-  $refreshBtn.disabled = busy
-}
-
-const entryIcon = (entry) => entry.type === 'directory'
-  ? (entry.name.endsWith('.gapp') ? '◆' : '📁')
-  : '📄'
-
-const entryKind = (entry) => {
-  if (entry.type === 'directory') {
-    return entry.name.endsWith('.gapp') ? 'App' : 'Folder'
-  }
-  return 'File'
-}
-
-const render = () => {
-  $pathbar.textContent = state.name
-  $upBtn.disabled = state.busy || !state.canGoUp
-
-  if (state.entries.length === 0) {
-    $list.innerHTML = '<div class="empty">This folder is empty.</div>'
-    return
-  }
-
-  $list.innerHTML = ''
-  for (const entry of state.entries) {
-    const row = document.createElement('div')
-    row.className = 'list-row' + (
-      state.selected &&
-      state.selected.type === entry.type &&
-      state.selected.id === entry.id ? ' selected' : ''
-    )
-
-    row.innerHTML = `
-      <span class="icon">${entryIcon(entry)}</span>
-      <span class="name">${escapeHtml(entry.name)}</span>
-      <span class="kind">${entryKind(entry)}</span>
-    `
-
-    row.addEventListener('click', () => {
-      state.selected = entry
-      render()
-    })
-
-    row.addEventListener('dblclick', () => {
-      if (entry.type === 'directory') {
-        void openDirectory(entry.id)
-      }
-    })
-
-    $list.appendChild(row)
+<div id="root"></div>
+<script type="importmap">
+{
+  "imports": {
+    "preact": "https://esm.sh/preact@10.26.4",
+    "preact/hooks": "https://esm.sh/preact@10.26.4/hooks"
   }
 }
-
-const escapeHtml = (value) => value
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-
-const applyBrowse = (result) => {
-  state.cwd = result.directory_id
-  state.parentId = result.parent_id
-  state.canGoUp = result.can_go_up
-  state.name = result.name
-  state.entries = result.entries
-  state.selected = null
-  render()
-}
-
-const loadDirectory = async (directoryId) => {
-  setBusy(true)
-  setStatus('Loading…')
-  try {
-    const payload = directoryId == null ? {} : { directoryId }
-    const result = await toParent('fs:browse', payload)
-    applyBrowse(result)
-    setStatus(`${result.entries.length} item${result.entries.length === 1 ? '' : 's'}`)
-  } catch (err) {
-    setStatus(err.message || 'Failed to load folder', true)
-  } finally {
-    setBusy(false)
-  }
-}
-
-const openDirectory = (directoryId) => loadDirectory(directoryId)
-
-const goUp = () => {
-  if (!state.canGoUp || state.parentId == null) return
-  void loadDirectory(state.parentId)
-}
-
-const createFolder = async () => {
-  const name = window.prompt('New folder name:')
-  if (name === null) return
-  const trimmed = name.trim()
-  if (!trimmed) {
-    setStatus('Folder name is required', true)
-    return
-  }
-
-  setBusy(true)
-  try {
-    await toParent('fs:mkdir', { parentId: state.cwd, name: trimmed })
-    setStatus(`Created folder “${trimmed}”`)
-    await loadDirectory(state.cwd)
-  } catch (err) {
-    setStatus(err.message || 'Failed to create folder', true)
-    setBusy(false)
-  }
-}
-
-const renameSelected = async () => {
-  if (!state.selected) return
-  const current = state.selected.name
-  const next = window.prompt('Rename to:', current)
-  if (next === null) return
-  const trimmed = next.trim()
-  if (!trimmed) {
-    setStatus('Name is required', true)
-    return
-  }
-  if (trimmed === current) return
-
-  setBusy(true)
-  try {
-    await toParent('fs:rename', {
-      entryType: state.selected.type,
-      id: state.selected.id,
-      name: trimmed,
-    })
-    setStatus(`Renamed to “${trimmed}”`)
-    await loadDirectory(state.cwd)
-  } catch (err) {
-    setStatus(err.message || 'Failed to rename', true)
-    setBusy(false)
-  }
-}
-
-const deleteSelected = async () => {
-  if (!state.selected) return
-  const label = state.selected.name
-  if (!window.confirm(`Delete “${label}”?`)) return
-
-  setBusy(true)
-  try {
-    await toParent('fs:delete', {
-      entryType: state.selected.type,
-      id: state.selected.id,
-    })
-    setStatus(`Deleted “${label}”`)
-    await loadDirectory(state.cwd)
-  } catch (err) {
-    setStatus(err.message || 'Failed to delete', true)
-    setBusy(false)
-  }
-}
-
-$upBtn.addEventListener('click', goUp)
-$mkdirBtn.addEventListener('click', () => void createFolder())
-$renameBtn.addEventListener('click', () => void renameSelected())
-$deleteBtn.addEventListener('click', () => void deleteSelected())
-$refreshBtn.addEventListener('click', () => void loadDirectory(state.cwd))
-
-void loadDirectory(null).then(() => {
-  $waiting.hidden = true
-  $app.hidden = false
-})
 </script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

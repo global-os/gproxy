@@ -199,13 +199,16 @@ const ResizeHandle = createComponent(
     side: 'left' | 'right'
   }) => ({
     position: 'absolute',
-    width: '14px',
-    height: '14px',
+    width: '22px',
+    height: '22px',
     bottom: 0,
     left: side === 'left' ? 0 : undefined,
     right: side === 'right' ? 0 : undefined,
     cursor,
-    zIndex: 1,
+    zIndex: 2,
+    background: 'rgba(255, 235, 59, 0.45)',
+    boxSizing: 'border-box',
+    border: '1px solid rgba(218, 165, 32, 0.55)',
   }),
   'div',
   ['data-window-index', 'data-resize-handle', 'onMouseDown']
