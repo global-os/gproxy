@@ -74,18 +74,26 @@ export const setRlsUser: MiddlewareHandler<Env> = async (c, next) => {
 }
 
 export const betterAuthMiddleware: MiddlewareHandler<Env> = async (c, next) => {
-  try {
-    const session = await auth.api.getSession({
-      headers: c.req.raw.headers
-    })
-    
-    c.set('user', session?.user ?? null)
-    c.set('session', session?.session ?? null)
-  } catch (error) {
-    console.error('Auth error:', error)
-    c.set('user', null)
-    c.set('session', null)
+  const headers = c.req.raw.headers
+  let lastError: unknown
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const session = await auth.api.getSession({ headers })
+      c.set('user', session?.user ?? null)
+      c.set('session', session?.session ?? null)
+      await next()
+      return
+    } catch (error) {
+      lastError = error
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)))
+      }
+    }
   }
-  
+
+  console.error('Auth error:', lastError)
+  c.set('user', null)
+  c.set('session', null)
   await next()
 }

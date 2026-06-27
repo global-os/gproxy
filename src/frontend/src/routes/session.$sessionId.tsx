@@ -11,13 +11,34 @@ export const Route = createFileRoute('/session/$sessionId')({
 function RouteComponent() {
   const { sessionId } = Route.useParams()
   const navigate = useNavigate()
-  const { data: session, isPending } = useSession()
+  const { data: session, isPending, error, isRefetching, refetch } = useSession()
 
   useEffect(() => {
-    if (!isPending && !session?.user) {
+    if (isPending || isRefetching || error) return
+    if (!session?.user) {
       navigate({ to: '/login' })
     }
-  }, [isPending, session?.user, navigate])
+  }, [isPending, isRefetching, error, session?.user, navigate])
+
+  useEffect(() => {
+    if (!error) return
+    const id = setInterval(() => {
+      void refetch()
+    }, 3000)
+    return () => clearInterval(id)
+  }, [error, refetch])
+
+  if (isPending || isRefetching) {
+    return <Page>Loading…</Page>
+  }
+
+  if (error) {
+    return <Page>Reconnecting…</Page>
+  }
+
+  if (!session?.user) {
+    return null
+  }
 
   return (
     <Page>

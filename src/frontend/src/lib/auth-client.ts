@@ -3,6 +3,14 @@ import { inferAdditionalFields } from 'better-auth/client/plugins'
 
 export const authClient = createAuthClient({
   basePath: '/api/auth',
+  fetchOptions: {
+    retry: {
+      type: 'exponential',
+      attempts: 3,
+      baseDelay: 500,
+      maxDelay: 4000,
+    },
+  },
   plugins: [
     inferAdditionalFields({
       user: {
