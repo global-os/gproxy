@@ -4,30 +4,34 @@ import { FadingBoxes } from './FadingBoxes'
 import { GlobalOsTitle } from './GlobalOsTitle'
 import { LogoSection } from './LogoSection'
 
-const color = 'rgb(200, 128, 0)'
-
 const BoxContainer = createComponent(() => ({
   display: 'flex',
   flexDirection: 'row',
   justifyContent: 'center',
-  marginTop: '1em',
+  marginTop: '2.5em',
+  marginBottom: '3em',
 }))
 
 const Box = createComponent(({ width }: { width?: string }) => ({
   width,
-  border: '3px double ' + color,
+  maxWidth: '100%',
+  border: '1px solid rgba(200,128,0,0.3)',
+  borderRadius: '20px',
   display: 'flex',
   flexDirection: 'column',
   justifyContent: 'flex-start',
   alignItems: 'center',
   fontSize: '1rem',
-  background: '#ddd',
+  background: 'rgba(18,4,42,0.82)',
   backgroundClip: 'padding-box',
-  color: '#333',
+  color: 'rgba(255,255,255,0.9)',
+  boxShadow: '0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.03) inset',
 }))
 
 const BottomSection = createComponent(() => ({
-  padding: '1em',
+  width: '100%',
+  padding: '1.5em 2.25em 2.25em',
+  boxSizing: 'border-box' as const,
 }))
 
 type Props = {

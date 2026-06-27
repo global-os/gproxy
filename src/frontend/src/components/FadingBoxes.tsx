@@ -25,8 +25,8 @@ const Container = createComponent(() => ({
 const FadingBox = createComponent(({ animations }: { animations: Animations }) => ({
   boxSizing: 'border-box',
 
-  backgroundColor: 'rgba(0,0,0, 0.6)',
-  border: 'calc(var(--scale) * 0.09) solid rgba(0,0,0, 0.3)',
+  backgroundColor: 'rgba(200,128,0,0.1)',
+  border: 'calc(var(--scale) * 0.09) solid rgba(200,128,0,0.22)',
   transform: 'skew(-8deg)',
   width: 'var(--scale)',
   height: 'calc(var(--scale) * 3/4)',

@@ -1,10 +1,13 @@
 import { createComponent } from "react-fela";
 
 export const LogoSection = createComponent(() => ({
-  padding: '1em',
-  display: 'block',
-  color: '#333',
+  padding: '1.75em 1em 1em',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  textDecoration: 'none',
+  color: 'rgba(255,255,255,0.8)',
   ':hover': {
-  color: '#333',
-  }
-}), 'a', [ 'href' ])
+    color: 'rgba(255,255,255,0.8)',
+  },
+}), 'a', ['href'])

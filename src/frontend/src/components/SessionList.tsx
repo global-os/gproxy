@@ -6,6 +6,7 @@ import { Tabs } from '@base-ui/react/tabs'
 import { useSession } from '../lib/auth-client'
 
 const accent = 'rgb(200, 128, 0)'
+const accentLight = 'rgb(240, 178, 60)'
 
 const Shell = createComponent(() => ({
   width: '100%',
@@ -15,30 +16,29 @@ const Shell = createComponent(() => ({
 const TabsChrome = createComponent(() => ({
   '& [role="tablist"]': {
     display: 'flex',
-    gap: '6px',
-    marginBottom: '1.25em',
+    gap: '4px',
+    marginBottom: '1.5em',
     padding: '4px',
-    borderRadius: '10px',
-    background: 'rgba(255,255,255,0.55)',
-    border: '1px solid rgba(0,0,0,0.12)',
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
+    borderRadius: '12px',
+    background: 'rgba(0,0,0,0.35)',
+    border: '1px solid rgba(255,255,255,0.07)',
   },
   '& [role="tab"]': {
     flex: '1 1 0',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '9px',
     padding: '0.55em 0.75em',
-    fontSize: '0.92em',
+    fontSize: '0.88em',
     fontWeight: 600,
-    color: '#444',
+    color: 'rgba(255,255,255,0.42)',
     background: 'transparent',
     cursor: 'pointer',
     transition: 'background 120ms ease, color 120ms ease',
   },
   '& [role="tab"][data-selected], & [role="tab"][aria-selected="true"]': {
-    background: '#fff',
-    color: '#1a1a1a',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+    background: 'rgba(200,128,0,0.18)',
+    color: accentLight,
+    boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
   },
 }))
 
@@ -50,47 +50,51 @@ const Panel = createComponent(() => ({
 
 const SectionTitle = createComponent(() => ({
   margin: 0,
-  fontSize: '1.05em',
+  fontSize: '0.98em',
   fontWeight: 700,
-  letterSpacing: '0.02em',
-  color: '#2a2a2a',
+  letterSpacing: '0.01em',
+  color: 'rgba(255,255,255,0.88)',
 }))
 
 const SectionHint = createComponent(() => ({
   margin: 0,
-  fontSize: '0.85em',
-  color: '#666',
-  lineHeight: 1.45,
+  fontSize: '0.83em',
+  color: 'rgba(255,255,255,0.38)',
+  lineHeight: 1.5,
 }))
 
 const SessionListBox = createComponent(() => ({
   display: 'flex',
   flexDirection: 'column',
-  gap: '0.65em',
+  gap: '0.55em',
 }))
 
 const SessionCard = createComponent(() => ({
   display: 'flex',
   alignItems: 'center',
   gap: '0.75em',
-  padding: '0.75em 0.85em',
-  borderRadius: '10px',
-  background: 'linear-gradient(180deg, #fff 0%, #f7f7f7 100%)',
-  border: '1px solid rgba(0,0,0,0.1)',
-  boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+  padding: '0.85em 1em',
+  borderRadius: '12px',
+  background: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(200,128,0,0.14)',
+  transition: 'background 120ms ease, border-color 120ms ease',
+  ':hover': {
+    background: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(200,128,0,0.28)',
+  },
 }))
 
 const SessionBadge = createComponent(() => ({
   flex: '0 0 auto',
-  minWidth: '2.1em',
+  minWidth: '2em',
   textAlign: 'center',
-  padding: '0.35em 0.5em',
-  borderRadius: '999px',
-  fontSize: '0.78em',
+  padding: '0.3em 0.5em',
+  borderRadius: '8px',
+  fontSize: '0.74em',
   fontWeight: 700,
-  color: '#fff',
-  background: accent,
-  boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.15)',
+  color: accentLight,
+  background: 'rgba(200,128,0,0.16)',
+  border: '1px solid rgba(200,128,0,0.28)',
 }))
 
 const SessionMeta = createComponent(() => ({
@@ -102,17 +106,18 @@ const SessionMeta = createComponent(() => ({
 }))
 
 const SessionName = createComponent(() => ({
-  fontSize: '0.95em',
+  fontSize: '0.93em',
   fontWeight: 600,
-  color: '#222',
+  color: 'rgba(255,255,255,0.9)',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
 }))
 
 const SessionId = createComponent(() => ({
-  fontSize: '0.78em',
-  color: '#777',
+  fontSize: '0.74em',
+  color: 'rgba(255,255,255,0.3)',
+  letterSpacing: '0.03em',
 }))
 
 const CardActions = createComponent(() => ({
@@ -126,18 +131,19 @@ const OpenLinkWrap = createComponent(() => ({
   '& a': {
     display: 'inline-flex',
     alignItems: 'center',
-    padding: '0.4em 0.85em',
+    padding: '0.4em 0.9em',
     borderRadius: '8px',
     fontSize: '0.82em',
-    fontWeight: 600,
+    fontWeight: 700,
     textDecoration: 'none',
-    color: '#fff',
-    background: `linear-gradient(180deg, ${accent} 0%, #b86f00 100%)`,
-    border: '1px solid rgba(0,0,0,0.15)',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
+    color: '#0d0020',
+    background: `linear-gradient(160deg, rgb(230,155,20) 0%, ${accent} 100%)`,
+    border: '1px solid rgba(220,155,15,0.5)',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
+    transition: 'filter 100ms ease',
   },
   '& a:hover': {
-    filter: 'brightness(1.05)',
+    filter: 'brightness(1.12)',
   },
 }))
 
@@ -148,19 +154,20 @@ const DeleteButton = createComponent(
     justifyContent: 'center',
     width: '2em',
     height: '2em',
-    borderRadius: '8px',
-    border: '1px solid rgba(0,0,0,0.14)',
-    background: disabled ? '#eee' : '#fff',
-    color: disabled ? '#aaa' : '#8b1e1e',
+    borderRadius: '7px',
+    border: '1px solid rgba(255,255,255,0.08)',
+    background: disabled ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)',
+    color: disabled ? 'rgba(255,255,255,0.18)' : 'rgba(255,120,120,0.65)',
     fontSize: '1.05em',
     lineHeight: 1,
     cursor: disabled ? 'default' : 'pointer',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+    transition: 'background 100ms ease, border-color 100ms ease, color 100ms ease',
     ':hover': disabled
       ? {}
       : {
-          background: '#fff5f5',
-          borderColor: '#d9a3a3',
+          background: 'rgba(180,0,0,0.18)',
+          borderColor: 'rgba(200,50,50,0.35)',
+          color: 'rgb(255,120,120)',
         },
   }),
   'button',
@@ -170,21 +177,22 @@ const DeleteButton = createComponent(
 const PrimaryButton = createComponent(
   ({ disabled }: { disabled?: boolean }) => ({
     alignSelf: 'flex-start',
-    padding: '0.65em 1.2em',
+    padding: '0.65em 1.25em',
     borderRadius: '10px',
-    border: '1px solid rgba(0,0,0,0.14)',
+    border: '1px solid rgba(200,128,0,0.32)',
     background: disabled
-      ? '#e8e8e8'
-      : `linear-gradient(180deg, #fff 0%, #f2f2f2 100%)`,
-    color: disabled ? '#888' : '#222',
+      ? 'rgba(255,255,255,0.04)'
+      : 'rgba(200,128,0,0.1)',
+    color: disabled ? 'rgba(255,255,255,0.22)' : 'rgb(228,168,55)',
     fontSize: '0.92em',
     fontWeight: 600,
     cursor: disabled ? 'default' : 'pointer',
-    boxShadow: disabled ? 'none' : '0 2px 5px rgba(0,0,0,0.08)',
+    transition: 'background 100ms ease, border-color 100ms ease',
     ':hover': disabled
       ? {}
       : {
-          background: '#fff',
+          background: 'rgba(200,128,0,0.2)',
+          borderColor: 'rgba(200,128,0,0.5)',
         },
   }),
   'button',
@@ -194,45 +202,46 @@ const PrimaryButton = createComponent(
 const FooterActions = createComponent(() => ({
   display: 'flex',
   flexDirection: 'column',
-  gap: '0.65em',
+  gap: '0.6em',
   marginTop: '0.5em',
   paddingTop: '1em',
-  borderTop: '1px solid rgba(0,0,0,0.1)',
+  borderTop: '1px solid rgba(255,255,255,0.07)',
 }))
 
 const AdminLinkWrap = createComponent(
   () => ({
-    marginTop: '0.25em',
+    marginTop: '0.15em',
     fontSize: '0.82em',
     '& a': {
-      color: '#777',
+      color: 'rgba(200,128,0,0.55)',
       textDecoration: 'none',
-      ':hover': { color: '#333' },
+      transition: 'color 100ms ease',
+      ':hover': { color: accentLight },
     },
   }),
 )
 
 const EmptyState = createComponent(() => ({
-  padding: '1.25em 1em',
+  padding: '1.5em 1em',
   borderRadius: '10px',
   textAlign: 'center',
-  color: '#666',
-  background: 'rgba(255,255,255,0.65)',
-  border: '1px dashed rgba(0,0,0,0.15)',
-  fontSize: '0.9em',
-  lineHeight: 1.5,
+  color: 'rgba(255,255,255,0.32)',
+  background: 'rgba(255,255,255,0.02)',
+  border: '1px dashed rgba(255,255,255,0.1)',
+  fontSize: '0.88em',
+  lineHeight: 1.6,
 }))
 
 const StatusMessage = createComponent(({ tone }: { tone: 'error' | 'info' }) => ({
   margin: 0,
   fontSize: '0.85em',
-  color: tone === 'error' ? '#b91c1c' : '#555',
+  color: tone === 'error' ? 'rgba(255,100,100,0.9)' : 'rgba(255,255,255,0.45)',
 }))
 
 const LoadingState = createComponent(() => ({
   padding: '2em 1em',
   textAlign: 'center',
-  color: '#666',
+  color: 'rgba(255,255,255,0.35)',
   fontSize: '0.95em',
 }))
 
