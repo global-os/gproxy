@@ -34,6 +34,78 @@ Browser (app.app.onetrueos.com)
 
 Hostname-based routing lives in `src/utils.ts` — `app.app.*` paths map to `/app/...`; `*.app.*` maps to `/instance/{slug}/...`.
 
+## `.gapp` apps and the session kernel
+
+A **`.gapp`** is a directory on the user's virtual Desktop (e.g. `helloworld.gapp/`) treated as a launchable application. It is stored in Postgres as `directory` / `file` rows under the user's filesystem tree, snapshotted to `image.tar_bytes` when an instance first loads, and served as static files from `{instanceSlug}.app.onetrueos.com`.
+
+### Why postMessage?
+
+The workspace SPA runs on `app.app.onetrueos.com`. Each running app loads in an **iframe on a different origin** (the instance subdomain). Browsers block credentialed `fetch('/api/...')` from the iframe to the workspace origin, so apps **cannot call the API directly**.
+
+Instead, apps talk to the parent page through **`window.postMessage`**. The **session kernel** (`src/frontend/src/kernel/session-kernel.ts`) listens on the workspace, performs authenticated `fetch` on the app's behalf, and posts results back into the iframe.
+
+```
+  ┌─────────────────────────────────────────────┐
+  │  Workspace (app.app.onetrueos.com)          │
+  │  SessionKernel ──fetch──► POST /api/syscalls│
+  │       ▲ postMessage                         │
+  │       │                                     │
+  │  ┌────┴──────────────────────────────┐      │
+  │  │ iframe: {uuid}.app.onetrueos.com  │      │
+  │  │  helloworld.gapp / filebrowser    │      │
+  │  └───────────────────────────────────┘      │
+  └─────────────────────────────────────────────┘
+```
+
+The kernel stays **app-agnostic**: it knows message *types* and syscalls, not per-app UI logic. App-specific behavior lives entirely inside the `.gapp` HTML/JS.
+
+### App lifecycle (example: `helloworld.gapp`)
+
+1. App loads → sends `{ type: 'ready' }` to parent.
+2. Kernel replies with persisted process state or a fresh start:
+   - `{ type: 'init', filename, content, ... }` — restore from `localStorage` (keyed by `sessionId:processId`)
+   - `{ type: 'init:fresh', reason, filename }` — no saved state
+3. On save, app sends `{ type: 'save', filename, content, ... }`.
+4. Kernel calls `fs.saveDesktopFile` via syscalls, persists opaque state, posts `{ type: 'save:complete' }` or `save:error`.
+
+See `fixtures/by-user/peterson@sent.com/~/Desktop/helloworld.gapp/index.html`.
+
+### System calls (platform APIs)
+
+Privileged operations (filesystem, etc.) go through **`POST /api/syscalls`** with `{ op, ...args }`. The kernel is the only caller from iframe apps today.
+
+| Op | Purpose |
+|----|---------|
+| `fs.browse` | List a directory (`directoryId` optional; defaults to Desktop) |
+| `fs.mkdir` | Create folder |
+| `fs.rename` | Rename file or directory |
+| `fs.delete` | Delete file or directory |
+| `fs.saveDesktopFile` | Upsert a file on Desktop |
+
+Apps can use typed shorthand messages (kernel maps them to syscalls):
+
+- `fs:browse` → `fs:browse:complete` / `fs:browse:error`
+- `fs:mkdir`, `fs:rename`, `fs:delete` — same pattern
+
+Or the generic form: `{ type: 'syscall', op, requestId, ...args }` → `syscall:complete` / `syscall:error`.
+
+Implementation: `src/syscalls/`, `src/routes/syscalls.ts`. Handlers use RLS-scoped DB access for the logged-in user.
+
+### Authoring a `.gapp`
+
+| Style | Example | Notes |
+|-------|---------|-------|
+| **Static** | `filebrowser.gapp` | Plain `index.html` + ES modules; third-party libs vendored as `.mjs` files (`preact.mjs`, `hooks.mjs`) + import map — no bundler required |
+| **Squint** | `squint-editor.gapp` | `app.cljs` compiled to `app.js` at instance build; optional platform deps (`yjs`, `rxjs`) from `src/gapp/registry/` |
+
+Minimum contract for workspace integration:
+
+- Send `ready` on load if you need kernel init or syscalls.
+- Use `window.parent.postMessage({ type, ... }, '*')` and listen for replies on `window`.
+- Keep all app UI and state schema inside the `.gapp`; the kernel only stores opaque JSON for `save`/`init`.
+
+Fixture apps for the demo user live under `fixtures/by-user/<email>/` and are synced into the DB on deploy (`npm run db:seed` / `vercel-build`). Edit fixtures, seed, then relaunch the app so a new instance tar is built.
+
 ## Requirements
 
 - Node 24.x, npm ≥ 10
@@ -122,6 +194,7 @@ Paths below are as seen by the browser; internally they are prefixed with `/app`
 | GET | `/debug` | no | Deep diagnostics (tables, migrations, scrypt, auth probe) |
 | POST | `/api/auth/*` | — | better-auth (sign-in, sign-up, session) |
 | GET | `/api/fs/desktop` | yes | Desktop items for workspace |
+| POST | `/api/syscalls` | yes | Platform syscalls (`fs.*`, etc.) |
 | GET | `/api/sessions/:id/windows` | yes | Restore window layout |
 | POST | `/api/sessions/:id/launch` | yes | Launch or focus a `.gapp` |
 | GET | `/{instanceSlug}.app.../` | no | Serve extracted app static files |
@@ -149,7 +222,9 @@ src/services/             launch-program, window-service, create-instance
 src/runtime/              tar extract, instance cache, subdomain helpers
 src/db/                   Drizzle schema, pool, image/file helpers
 src/frontend/             React SPA (TanStack Router, Fela, workspace UI)
-src/frontend/src/kernel/  postMessage bridge to iframe apps (opaque per-process state)
+src/frontend/src/kernel/  postMessage bridge to iframe apps (see “.gapp apps” above)
+src/syscalls/             syscall handlers invoked by POST /api/syscalls
+fixtures/by-user/         demo .gapp trees seeded into Postgres
 drizzle/                  SQL migrations
 scripts/                  build, migrations, asset sync
 ```

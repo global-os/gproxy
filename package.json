@@ -49,6 +49,7 @@
     "kysely": "^0.28.9",
     "pg": "^8.16.3",
     "postmark": "^4.0.7",
+    "preact": "^10.29.3",
     "prettier": "^3.7.4",
     "squint-cljs": "^0.14.196",
     "styled-components": "^6.1.19",
