@@ -21,6 +21,7 @@ import { scheduleInstancePrepare } from './runtime/instance-background.js'
 import { ensureInstanceReady, touchInstance } from './runtime/instance-manager.js'
 import { INSTANCE_MIME, isInstanceContentCached, resolveCachedInstanceFile } from './runtime/instance-content.js'
 import { instanceLoadingPage } from './runtime/instance-loading-page.js'
+import { getInstancePrepareStatus } from './runtime/instance-prepare-progress.js'
 import { instanceSlugFromHostname, stripInstancePrefix } from './runtime/instance-proxy.js'
 import { resolveInstanceIdBySlug } from './runtime/instance-resolve.js'
 import { getBuildVersion } from './build-version.js'
@@ -363,6 +364,11 @@ app.all('/instance/*', async (c) => {
 
   const upstreamPath = stripInstancePrefix(url.pathname, slug)
 
+  if (upstreamPath === '/_status') {
+    scheduleInstancePrepare(instanceId)
+    return c.json(getInstancePrepareStatus(instanceId, isInstanceContentCached(instanceId)))
+  }
+
   const wantsHtml =
     upstreamPath === '/' ||
     upstreamPath === '/index.html' ||
@@ -370,13 +376,10 @@ app.all('/instance/*', async (c) => {
 
   if (!isInstanceContentCached(instanceId)) {
     scheduleInstancePrepare(instanceId)
-    const ready = await Promise.race([
-      ensureInstanceReady(instanceId),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 8_000)),
-    ])
+    if (wantsHtml) return c.html(instanceLoadingPage())
 
+    const ready = await ensureInstanceReady(instanceId)
     if (!ready) {
-      if (wantsHtml) return c.html(instanceLoadingPage())
       return c.json({ message: 'Instance starting' }, 503, { 'Retry-After': '2' })
     }
   } else {

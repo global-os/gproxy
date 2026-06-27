@@ -9,6 +9,11 @@ import {
   isInstanceContentCached,
 } from './instance-content.js'
 import { INSTANCE_IDLE_MS, CLEANUP_INTERVAL_MS } from './constants.js'
+import {
+  setInstancePrepareFailed,
+  setInstancePrepareProgress,
+  setInstancePrepareReady,
+} from './instance-prepare-progress.js'
 
 const activeInstances = new Map<number, number>()
 const preparing = new Map<number, Promise<boolean>>()
@@ -94,6 +99,8 @@ export async function isInstanceDbReady(instanceId: number): Promise<boolean> {
 }
 
 async function loadInstanceReady(instanceId: number): Promise<boolean> {
+  setInstancePrepareProgress(instanceId, 'starting', 'Preparing app…')
+
   const [row] = await db
     .select({
       id: schema.instances.id,
@@ -106,13 +113,17 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
     .where(eq(schema.instances.id, instanceId))
     .limit(1)
 
-  if (!row) return false
+  if (!row) {
+    setInstancePrepareFailed(instanceId, 'Instance not found')
+    return false
+  }
 
   if (isInstanceContentCached(instanceId)) {
     await touchInstance(instanceId)
     if (row.state !== 'running') {
       await persistInstanceReady(instanceId)
     }
+    setInstancePrepareReady(instanceId)
     return true
   }
 
@@ -126,10 +137,18 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
       .where(eq(schema.process.id, row.process_id))
       .limit(1)
 
-    if (!processRow) return false
+    if (!processRow) {
+      setInstancePrepareFailed(instanceId, 'App process not found')
+      return false
+    }
 
     console.log(`[instance] resolving image for ${instanceId} directory ${processRow.directory_id}`)
-    const image = await getOrCreateImage(processRow.directory_id)
+    setInstancePrepareProgress(instanceId, 'resolving-image', 'Resolving app bundle…')
+    const image = await getOrCreateImage(processRow.directory_id, {
+      onProgress: (message) => {
+        setInstancePrepareProgress(instanceId, 'building-snapshot', message)
+      },
+    })
     imageId = image.id
     checksum = image.directory_checksum
     await db
@@ -141,8 +160,12 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
       .where(eq(schema.instances.id, instanceId))
   }
 
-  if (!imageId) return false
+  if (!imageId) {
+    setInstancePrepareFailed(instanceId, 'App bundle image not found')
+    return false
+  }
 
+  setInstancePrepareProgress(instanceId, 'loading-tar', 'Loading bundle from database…')
   const loadStart = Date.now()
   const [imageRow] = await db
     .select({ tar_bytes: schema.image.tar_bytes })
@@ -150,16 +173,21 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
     .where(eq(schema.image.id, imageId))
     .limit(1)
 
-  if (!imageRow?.tar_bytes) return false
+  if (!imageRow?.tar_bytes) {
+    setInstancePrepareFailed(instanceId, 'App bundle archive is missing')
+    return false
+  }
 
   console.log(
     `[instance] loaded tar for ${instanceId} (${imageRow.tar_bytes.length} bytes) +${Date.now() - loadStart}ms`,
   )
 
+  setInstancePrepareProgress(instanceId, 'extracting-tar', 'Extracting tar…')
   const extractStart = Date.now()
   await startInstanceRuntime(instanceId, checksum, imageRow.tar_bytes)
   console.log(`[instance] parsed tar for ${instanceId} +${Date.now() - extractStart}ms`)
   await persistInstanceReady(instanceId)
+  setInstancePrepareReady(instanceId)
   return true
 }
 
@@ -168,7 +196,12 @@ export async function ensureInstanceReady(instanceId: number): Promise<boolean> 
   const inflight = preparing.get(instanceId)
   if (inflight) return inflight
 
-  const work = loadInstanceReady(instanceId).finally(() => {
+  const work = loadInstanceReady(instanceId).catch((err) => {
+    const message = err instanceof Error ? err.message : 'Failed to prepare app'
+    setInstancePrepareFailed(instanceId, message)
+    console.error(`[instance] prepare failed for ${instanceId}:`, err)
+    return false
+  }).finally(() => {
     preparing.delete(instanceId)
   })
   preparing.set(instanceId, work)

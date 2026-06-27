@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { and, desc, eq } from "drizzle-orm";
 import * as tar from "tar";
-import { PassThrough, Readable } from "stream";
+import { PassThrough } from "stream";
 import { db } from "./index.js";
 import { directory, image } from "./schema.js";
 import { hashDir, hashTree, collectTree, type DirEntry, type FileEntry } from "./file.js";
@@ -38,6 +38,19 @@ export async function access<T>(
 }
 
 
+function addTarDirectory(pack: tar.Pack, entryPath: string): void {
+  const entry = new tar.ReadEntry(new tar.Header({ path: entryPath, type: "Directory", size: 0 }));
+  entry.end();
+  pack.add(entry);
+}
+
+function addTarFile(pack: tar.Pack, entryPath: string, content: Buffer): void {
+  const entry = new tar.ReadEntry(new tar.Header({ path: entryPath, type: "File", size: content.length }));
+  entry.write(content);
+  entry.end();
+  pack.add(entry);
+}
+
 async function buildTar(dirName: string, dirs: DirEntry[], files: FileEntry[]): Promise<Buffer> {
   const pack = new tar.Pack();
   const chunks: Buffer[] = [];
@@ -46,21 +59,23 @@ async function buildTar(dirName: string, dirs: DirEntry[], files: FileEntry[]): 
 
   pack.pipe(out);
 
-  // root dir entry
-  pack.add(new tar.ReadEntry(new tar.Header({ path: `${dirName}/`, type: "Directory", size: 0 })));
+  addTarDirectory(pack, `${dirName}/`);
 
   for (const d of dirs) {
-    pack.add(new tar.ReadEntry(new tar.Header({ path: `${d.path}/`, type: "Directory", size: 0 })));
+    addTarDirectory(pack, `${d.path}/`);
   }
 
   for (const f of files) {
-    const readable = Readable.from(f.content);
-    pack.add(new tar.ReadEntry(new tar.Header({ path: f.path, type: "File", size: f.content.length }), readable as any));
+    addTarFile(pack, f.path, f.content);
   }
 
   pack.end();
 
-  await new Promise<void>((resolve, reject) => out.on("finish", resolve).on("error", reject));
+  await new Promise<void>((resolve, reject) => {
+    out.on("finish", resolve);
+    out.on("error", reject);
+    pack.on("error", reject);
+  });
   return Buffer.concat(chunks);
 }
 
@@ -81,7 +96,10 @@ export async function resolveImageMeta(
   return { id: row.id, directory_checksum: row.directory_checksum }
 }
 
-export async function getOrCreateImage(directoryId: number): Promise<{
+export async function getOrCreateImage(
+  directoryId: number,
+  opts?: { onProgress?: (message: string) => void },
+): Promise<{
   id: number
   directory_checksum: string
   tar_checksum: string
@@ -103,6 +121,7 @@ export async function getOrCreateImage(directoryId: number): Promise<{
     }
   }
 
+  opts?.onProgress?.('Building snapshot…')
   const directory_checksum = await hashDir(directoryId)
   const [existing] = await db
     .select({
@@ -125,6 +144,7 @@ export async function getOrCreateImage(directoryId: number): Promise<{
     }
   }
 
+  opts?.onProgress?.('Building snapshot…')
   const id = await createImage(directoryId)
   const [row] = await db
     .select({
