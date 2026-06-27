@@ -1,249 +1,12 @@
-import { createComponent } from 'react-fela'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useCallback, useState } from 'react'
 import { Tabs } from '@base-ui/react/tabs'
 import { useSession } from '../lib/auth-client'
 
-const accent = 'rgb(200, 128, 0)'
-const accentLight = 'rgb(240, 178, 60)'
-
-const Shell = createComponent(() => ({
-  width: '100%',
-  maxWidth: '36em',
-}))
-
-const TabsChrome = createComponent(() => ({
-  '& [role="tablist"]': {
-    display: 'flex',
-    gap: '4px',
-    marginBottom: '1.5em',
-    padding: '4px',
-    borderRadius: '12px',
-    background: 'rgba(0,0,0,0.35)',
-    border: '1px solid rgba(255,255,255,0.07)',
-  },
-  '& [role="tab"]': {
-    flex: '1 1 0',
-    border: 'none',
-    borderRadius: '9px',
-    padding: '0.55em 0.75em',
-    fontSize: '0.88em',
-    fontWeight: 600,
-    color: 'rgba(255,255,255,0.42)',
-    background: 'transparent',
-    cursor: 'pointer',
-    transition: 'background 120ms ease, color 120ms ease',
-  },
-  '& [role="tab"][data-selected], & [role="tab"][aria-selected="true"]': {
-    background: 'rgba(200,128,0,0.18)',
-    color: accentLight,
-    boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
-  },
-}))
-
-const Panel = createComponent(() => ({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '1em',
-}))
-
-const SectionTitle = createComponent(() => ({
-  margin: 0,
-  fontSize: '0.98em',
-  fontWeight: 700,
-  letterSpacing: '0.01em',
-  color: 'rgba(255,255,255,0.88)',
-}))
-
-const SectionHint = createComponent(() => ({
-  margin: 0,
-  fontSize: '0.83em',
-  color: 'rgba(255,255,255,0.38)',
-  lineHeight: 1.5,
-}))
-
-const SessionListBox = createComponent(() => ({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.55em',
-}))
-
-const SessionCard = createComponent(() => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.75em',
-  padding: '0.85em 1em',
-  borderRadius: '12px',
-  background: 'rgba(255,255,255,0.04)',
-  border: '1px solid rgba(200,128,0,0.14)',
-  transition: 'background 120ms ease, border-color 120ms ease',
-  ':hover': {
-    background: 'rgba(255,255,255,0.07)',
-    borderColor: 'rgba(200,128,0,0.28)',
-  },
-}))
-
-const SessionBadge = createComponent(() => ({
-  flex: '0 0 auto',
-  minWidth: '2em',
-  textAlign: 'center',
-  padding: '0.3em 0.5em',
-  borderRadius: '8px',
-  fontSize: '0.74em',
-  fontWeight: 700,
-  color: accentLight,
-  background: 'rgba(200,128,0,0.16)',
-  border: '1px solid rgba(200,128,0,0.28)',
-}))
-
-const SessionMeta = createComponent(() => ({
-  flex: '1 1 auto',
-  minWidth: 0,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.15em',
-}))
-
-const SessionName = createComponent(() => ({
-  fontSize: '0.93em',
-  fontWeight: 600,
-  color: 'rgba(255,255,255,0.9)',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-}))
-
-const SessionId = createComponent(() => ({
-  fontSize: '0.74em',
-  color: 'rgba(255,255,255,0.3)',
-  letterSpacing: '0.03em',
-}))
-
-const CardActions = createComponent(() => ({
-  flex: '0 0 auto',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.4em',
-}))
-
-const OpenLinkWrap = createComponent(() => ({
-  '& a': {
-    display: 'inline-flex',
-    alignItems: 'center',
-    padding: '0.4em 0.9em',
-    borderRadius: '8px',
-    fontSize: '0.82em',
-    fontWeight: 700,
-    textDecoration: 'none',
-    color: '#0d0020',
-    background: `linear-gradient(160deg, rgb(230,155,20) 0%, ${accent} 100%)`,
-    border: '1px solid rgba(220,155,15,0.5)',
-    boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
-    transition: 'filter 100ms ease',
-  },
-  '& a:hover': {
-    filter: 'brightness(1.12)',
-  },
-}))
-
-const DeleteButton = createComponent(
-  ({ disabled }: { disabled?: boolean }) => ({
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '2em',
-    height: '2em',
-    borderRadius: '7px',
-    border: '1px solid rgba(255,255,255,0.08)',
-    background: disabled ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)',
-    color: disabled ? 'rgba(255,255,255,0.18)' : 'rgba(255,120,120,0.65)',
-    fontSize: '1.05em',
-    lineHeight: 1,
-    cursor: disabled ? 'default' : 'pointer',
-    transition: 'background 100ms ease, border-color 100ms ease, color 100ms ease',
-    ':hover': disabled
-      ? {}
-      : {
-          background: 'rgba(180,0,0,0.18)',
-          borderColor: 'rgba(200,50,50,0.35)',
-          color: 'rgb(255,120,120)',
-        },
-  }),
-  'button',
-  ['type', 'onClick', 'disabled', 'aria-label'],
-)
-
-const PrimaryButton = createComponent(
-  ({ disabled }: { disabled?: boolean }) => ({
-    alignSelf: 'flex-start',
-    padding: '0.65em 1.25em',
-    borderRadius: '10px',
-    border: '1px solid rgba(200,128,0,0.32)',
-    background: disabled
-      ? 'rgba(255,255,255,0.04)'
-      : 'rgba(200,128,0,0.1)',
-    color: disabled ? 'rgba(255,255,255,0.22)' : 'rgb(228,168,55)',
-    fontSize: '0.92em',
-    fontWeight: 600,
-    cursor: disabled ? 'default' : 'pointer',
-    transition: 'background 100ms ease, border-color 100ms ease',
-    ':hover': disabled
-      ? {}
-      : {
-          background: 'rgba(200,128,0,0.2)',
-          borderColor: 'rgba(200,128,0,0.5)',
-        },
-  }),
-  'button',
-  ['type', 'onClick', 'disabled'],
-)
-
-const FooterActions = createComponent(() => ({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.6em',
-  marginTop: '0.5em',
-  paddingTop: '1em',
-  borderTop: '1px solid rgba(255,255,255,0.07)',
-}))
-
-const AdminLinkWrap = createComponent(
-  () => ({
-    marginTop: '0.15em',
-    fontSize: '0.82em',
-    '& a': {
-      color: 'rgba(200,128,0,0.55)',
-      textDecoration: 'none',
-      transition: 'color 100ms ease',
-      ':hover': { color: accentLight },
-    },
-  }),
-)
-
-const EmptyState = createComponent(() => ({
-  padding: '1.5em 1em',
-  borderRadius: '10px',
-  textAlign: 'center',
-  color: 'rgba(255,255,255,0.32)',
-  background: 'rgba(255,255,255,0.02)',
-  border: '1px dashed rgba(255,255,255,0.1)',
-  fontSize: '0.88em',
-  lineHeight: 1.6,
-}))
-
-const StatusMessage = createComponent(({ tone }: { tone: 'error' | 'info' }) => ({
-  margin: 0,
-  fontSize: '0.85em',
-  color: tone === 'error' ? 'rgba(255,100,100,0.9)' : 'rgba(255,255,255,0.45)',
-}))
-
-const LoadingState = createComponent(() => ({
-  padding: '2em 1em',
-  textAlign: 'center',
-  color: 'rgba(255,255,255,0.35)',
-  fontSize: '0.95em',
-}))
+function cn(...parts: (string | false | null | undefined)[]) {
+  return parts.filter(Boolean).join(' ')
+}
 
 type Session = {
   id: number
@@ -253,9 +16,7 @@ type Session = {
 
 async function fetchSessions(): Promise<Session[]> {
   const r = await fetch('/api/sessions', { credentials: 'include' })
-  if (!r.ok) {
-    throw new Error(`Failed to load sessions (${r.status})`)
-  }
+  if (!r.ok) throw new Error(`Failed to load sessions (${r.status})`)
   return r.json()
 }
 
@@ -263,10 +24,7 @@ async function createSession(): Promise<Session[]> {
   const r = await fetch('/api/sessions', {
     method: 'POST',
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({}),
   })
   if (!r.ok) {
@@ -274,9 +32,7 @@ async function createSession(): Promise<Session[]> {
     try {
       const body = (await r.json()) as { message?: string }
       if (body.message) message = body.message
-    } catch {
-      // ignore non-JSON error bodies
-    }
+    } catch { /* ignore */ }
     throw new Error(message)
   }
   return r.json()
@@ -292,9 +48,7 @@ async function deleteSession(sessionId: number): Promise<void> {
     try {
       const body = (await r.json()) as { message?: string }
       if (body.message) message = body.message
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
     throw new Error(message)
   }
 }
@@ -302,6 +56,34 @@ async function deleteSession(sessionId: number): Promise<void> {
 function sessionLabel(sess: Session, index: number): string {
   if (sess.name && sess.name !== 'bar') return sess.name
   return `Session ${index + 1}`
+}
+
+function PrimaryButton({
+  disabled,
+  onClick,
+  children,
+  type = 'button',
+}: {
+  disabled?: boolean
+  onClick?: () => void
+  children: React.ReactNode
+  type?: 'button' | 'submit' | 'reset'
+}) {
+  return (
+    <button
+      type={type}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'self-start px-5 py-[0.65em] rounded-[10px] border text-[0.92em] font-semibold transition-colors duration-100',
+        disabled
+          ? 'bg-white/4 border-amber/32 text-white/22 cursor-default'
+          : 'bg-amber/10 border-amber/32 text-[rgb(228,168,55)] hover:bg-amber/20 hover:border-amber/50 cursor-pointer',
+      )}
+    >
+      {children}
+    </button>
+  )
 }
 
 type SessionListProps = {
@@ -356,127 +138,150 @@ export const SessionList = ({ onLogOut, isLoggingOut }: SessionListProps) => {
   }, [queryClient])
 
   if (isPending) {
-    return <LoadingState>Loading your sessions…</LoadingState>
+    return <div className="py-8 px-4 text-center text-white/35 text-[0.95em]">Loading your sessions…</div>
   }
 
   if (error) {
-    return <StatusMessage tone="error">Error: {`${error}`}</StatusMessage>
+    return <p className="m-0 text-[0.85em] text-[rgba(255,100,100,0.9)]">Error: {`${error}`}</p>
   }
 
   const sessions = data ?? []
 
+  const tabCls = cn(
+    'flex-1 border-none rounded-[9px] px-3 py-[0.55em] text-[0.88em] font-semibold bg-transparent',
+    'text-white/42 cursor-pointer transition-colors duration-100',
+    'data-[selected]:bg-amber/18 data-[selected]:text-amber-light',
+  )
+
   return (
-    <Shell>
+    <div className="w-full max-w-[36em]">
       <Tabs.Root defaultValue="global-pc">
-        <TabsChrome>
-          <Tabs.List>
-            <Tabs.Tab value="global-pc">My Global PC</Tabs.Tab>
-            <Tabs.Tab value="settings">Settings</Tabs.Tab>
-            <Tabs.Tab value="help">Help</Tabs.Tab>
+        {/* Tab bar */}
+        <div className="p-1 rounded-xl bg-black/35 border border-white/7 mb-6">
+          <Tabs.List className="flex gap-1">
+            <Tabs.Tab value="global-pc" className={tabCls}>My Global PC</Tabs.Tab>
+            <Tabs.Tab value="settings" className={tabCls}>Settings</Tabs.Tab>
+            <Tabs.Tab value="help" className={tabCls}>Help</Tabs.Tab>
             <Tabs.Indicator hidden />
           </Tabs.List>
+        </div>
 
+        {/* My Global PC panel */}
         <Tabs.Panel value="global-pc">
-          <Panel>
-          <div>
-            <SectionTitle>My Sessions</SectionTitle>
-            <SectionHint>
-              Open a workspace desktop or remove sessions you no longer need.
-            </SectionHint>
-          </div>
+          <div className="flex flex-col gap-4">
+            <div>
+              <p className="m-0 text-[0.98em] font-bold tracking-[0.01em] text-white/88">My Sessions</p>
+              <p className="m-0 mt-1 text-[0.83em] text-white/38 leading-normal">
+                Open a workspace desktop or remove sessions you no longer need.
+              </p>
+            </div>
 
-          <SessionListBox>
-            {sessions.length === 0 ? (
-              <EmptyState>
-                No sessions yet. Create one to launch apps on your Global PC desktop.
-              </EmptyState>
-            ) : (
-              sessions.map((sess, i) => (
-                <SessionCard key={sess.id}>
-                  <SessionBadge>#{i + 1}</SessionBadge>
-                  <SessionMeta>
-                    <SessionName>{sessionLabel(sess, i)}</SessionName>
-                    <SessionId>ID {sess.id}</SessionId>
-                  </SessionMeta>
-                  <CardActions>
-                    <OpenLinkWrap>
+            {/* Session list */}
+            <div className="flex flex-col gap-[0.55em]">
+              {sessions.length === 0 ? (
+                <div className="px-4 py-6 rounded-[10px] text-center text-white/32 bg-white/2 border border-dashed border-white/10 text-[0.88em] leading-relaxed">
+                  No sessions yet. Create one to launch apps on your Global PC desktop.
+                </div>
+              ) : (
+                sessions.map((sess, i) => (
+                  <div
+                    key={sess.id}
+                    className="flex items-center gap-3 px-4 py-[0.85em] rounded-xl bg-white/4 border border-amber/14 transition-colors duration-100 hover:bg-white/7 hover:border-amber/28"
+                  >
+                    {/* Badge */}
+                    <span className="shrink-0 min-w-8 text-center px-2 py-[0.3em] rounded text-[0.74em] font-bold text-amber-light bg-amber/16 border border-amber/28">
+                      #{i + 1}
+                    </span>
+
+                    {/* Meta */}
+                    <div className="flex-1 min-w-0 flex flex-col gap-[0.15em]">
+                      <span className="text-[0.93em] font-semibold text-white/90 overflow-hidden text-ellipsis whitespace-nowrap">
+                        {sessionLabel(sess, i)}
+                      </span>
+                      <span className="text-[0.74em] text-white/30 tracking-[0.03em]">ID {sess.id}</span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="shrink-0 flex items-center gap-[0.4em]">
                       <Link
                         to="/session/$sessionId"
                         params={{ sessionId: String(sess.id) }}
+                        className="inline-flex items-center px-[0.9em] py-[0.4em] rounded text-[0.82em] font-bold no-underline text-[#0d0020] border border-[rgba(220,155,15,0.5)] shadow-[0_1px_4px_rgba(0,0,0,0.4)] hover:brightness-110 transition-[filter] duration-100"
+                        style={{ background: 'linear-gradient(160deg, rgb(230,155,20) 0%, rgb(200,128,0) 100%)' }}
                       >
                         Open
                       </Link>
-                    </OpenLinkWrap>
-                    <DeleteButton
-                      type="button"
-                      disabled={deletingId === sess.id}
-                      aria-label={`Delete ${sessionLabel(sess, i)}`}
-                      onClick={() => void handleDeleteSession(sess.id)}
-                    >
-                      ×
-                    </DeleteButton>
-                  </CardActions>
-                </SessionCard>
-              ))
+                      <button
+                        type="button"
+                        disabled={deletingId === sess.id}
+                        aria-label={`Delete ${sessionLabel(sess, i)}`}
+                        onClick={() => void handleDeleteSession(sess.id)}
+                        className={cn(
+                          'inline-flex items-center justify-center w-8 h-8 rounded border transition-colors duration-100 text-[1.05em] leading-none',
+                          deletingId === sess.id
+                            ? 'bg-white/2 border-white/8 text-white/18 cursor-default'
+                            : 'bg-white/5 border-white/8 text-[rgba(255,120,120,0.65)] cursor-pointer hover:bg-[rgba(180,0,0,0.18)] hover:border-[rgba(200,50,50,0.35)] hover:text-[rgb(255,120,120)]',
+                        )}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {createError && (
+              <p role="alert" className="m-0 text-[0.85em] text-[rgba(255,100,100,0.9)]">{createError}</p>
             )}
-          </SessionListBox>
+            {deleteError && (
+              <p role="alert" className="m-0 text-[0.85em] text-[rgba(255,100,100,0.9)]">{deleteError}</p>
+            )}
 
-          {createError && (
-            <StatusMessage tone="error" role="alert">
-              {createError}
-            </StatusMessage>
-          )}
-          {deleteError && (
-            <StatusMessage tone="error" role="alert">
-              {deleteError}
-            </StatusMessage>
-          )}
-
-          <FooterActions>
-            <PrimaryButton
-              type="button"
-              disabled={isCreating}
-              onClick={() => void handleCreateSession()}
-            >
-              {isCreating ? 'Creating…' : 'Create New Session'}
-            </PrimaryButton>
-            {onLogOut && (
-              <PrimaryButton
-                type="button"
-                disabled={isLoggingOut}
-                onClick={() => void onLogOut()}
-              >
-                {isLoggingOut ? 'Logging out…' : 'Log Out'}
+            {/* Footer */}
+            <div className="flex flex-col gap-[0.6em] mt-2 pt-4 border-t border-white/7">
+              <PrimaryButton disabled={isCreating} onClick={() => void handleCreateSession()}>
+                {isCreating ? 'Creating…' : 'Create New Session'}
               </PrimaryButton>
-            )}
-            {isAdmin && (
-              <AdminLinkWrap>
-                <Link to="/admin">Admin panel</Link>
-              </AdminLinkWrap>
-            )}
-          </FooterActions>
-          </Panel>
+              {onLogOut && (
+                <PrimaryButton disabled={isLoggingOut} onClick={() => void onLogOut()}>
+                  {isLoggingOut ? 'Logging out…' : 'Log Out'}
+                </PrimaryButton>
+              )}
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  className="mt-1 text-[0.82em] text-amber/55 no-underline hover:text-amber-light transition-colors duration-100"
+                >
+                  Admin panel
+                </Link>
+              )}
+            </div>
+          </div>
         </Tabs.Panel>
 
         <Tabs.Panel value="settings">
-          <Panel>
-            <SectionTitle>Settings</SectionTitle>
-            <SectionHint>Personal settings for your Global PC will appear here.</SectionHint>
-          </Panel>
+          <div className="flex flex-col gap-4">
+            <p className="m-0 text-[0.98em] font-bold text-white/88">Settings</p>
+            <p className="m-0 text-[0.83em] text-white/38 leading-normal">
+              Personal settings for your Global PC will appear here.
+            </p>
+          </div>
         </Tabs.Panel>
 
         <Tabs.Panel value="help">
-          <Panel>
-            <SectionTitle>Help</SectionTitle>
-            <SectionHint>
+          <div className="flex flex-col gap-4">
+            <p className="m-0 text-[0.98em] font-bold text-white/88">Help</p>
+            <p className="m-0 text-[0.83em] text-white/38 leading-normal">
               For support, email{' '}
-              <a href="mailto:coldairnetworks@fastmail.com">coldairnetworks@fastmail.com</a>
-              {' '}and we will assist as soon as possible.
-            </SectionHint>
-          </Panel>
+              <a href="mailto:coldairnetworks@fastmail.com" className="text-amber-light hover:text-amber-light/80">
+                coldairnetworks@fastmail.com
+              </a>{' '}
+              and we will assist as soon as possible.
+            </p>
+          </div>
         </Tabs.Panel>
-        </TabsChrome>
       </Tabs.Root>
-    </Shell>
+    </div>
   )
 }

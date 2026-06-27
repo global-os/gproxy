@@ -1,12 +1,5 @@
-import { createComponent } from 'react-fela'
-
-export const GlobalOsTitle = createComponent(() => ({
-  marginTop: '0.75em',
-  fontFamily: 'sans-serif',
-  fontStyle: 'italic',
-  textAlign: 'center',
-  fontSize: '1.25em',
-  fontWeight: 700,
-  letterSpacing: '0.08em',
-  color: 'rgba(255,255,255,0.8)',
-}))
+export const GlobalOsTitle = ({ children }: React.PropsWithChildren) => (
+  <div className="mt-3 italic text-center text-[1.25em] font-bold tracking-[0.08em] text-white/80">
+    {children}
+  </div>
+)

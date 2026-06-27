@@ -1,14 +1,5 @@
-import { createComponent } from 'react-fela'
-
-const Frame = createComponent(() => ({
-  width: '100%',
-  height: '100%',
-  display: 'block',
-  background: '#14002d', // purple
-  overflow: 'auto',
-  fontFamily: 'sans-serif',
-}))
-
-export const Page = ({ children }: React.PropsWithChildren) => {
-  return <Frame>{children}</Frame>
-}
+export const Page = ({ children }: React.PropsWithChildren) => (
+  <div className="w-full min-h-screen overflow-auto" style={{ background: '#14002d' }}>
+    {children}
+  </div>
+)

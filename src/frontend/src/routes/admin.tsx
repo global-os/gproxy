@@ -1,5 +1,4 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { createComponent } from 'react-fela'
 import { useQuery } from '@tanstack/react-query'
 import { Page } from '../components/Page'
 import { VerticalFrame } from '../components/VerticalFrame'
@@ -8,88 +7,6 @@ import { PageTitle } from '../components/PageTitle'
 export const Route = createFileRoute('/admin')({
   component: AdminPage,
 })
-
-const BackLink = createComponent(
-  () => ({
-    display: 'inline-block',
-    marginBottom: '1.25em',
-    fontSize: '0.88em',
-    color: '#555',
-    textDecoration: 'none',
-    ':hover': { color: '#111' },
-  }),
-  Link,
-  ['to'],
-)
-
-const Subtitle = createComponent(() => ({
-  margin: '0 0 1.5em',
-  fontSize: '0.88em',
-  color: '#666',
-}))
-
-const Table = createComponent(
-  () => ({
-    width: '100%',
-    borderCollapse: 'collapse' as const,
-    fontSize: '0.88em',
-  }),
-  'table',
-)
-
-const Th = createComponent(
-  () => ({
-    textAlign: 'left' as const,
-    padding: '0.6em 0.85em',
-    borderBottom: '2px solid rgba(0,0,0,0.12)',
-    fontWeight: 700,
-    color: '#333',
-    whiteSpace: 'nowrap' as const,
-  }),
-  'th',
-)
-
-const Td = createComponent(
-  ({ muted }: { muted?: boolean }) => ({
-    padding: '0.65em 0.85em',
-    borderBottom: '1px solid rgba(0,0,0,0.07)',
-    color: muted ? '#777' : '#222',
-    whiteSpace: 'nowrap' as const,
-  }),
-  'td',
-  ['colSpan'],
-)
-
-const Chip = createComponent(
-  ({ ok }: { ok: boolean }) => ({
-    display: 'inline-block',
-    padding: '0.2em 0.55em',
-    borderRadius: '999px',
-    fontSize: '0.82em',
-    fontWeight: 600,
-    color: ok ? '#166534' : '#92400e',
-    background: ok ? '#dcfce7' : '#fef3c7',
-  }),
-  'span',
-)
-
-const EmptyRow = createComponent(
-  () => ({
-    padding: '2em 0.85em',
-    color: '#888',
-    fontStyle: 'italic',
-  }),
-  'td',
-  ['colSpan'],
-)
-
-const StatusMsg = createComponent(
-  ({ tone }: { tone: 'error' | 'loading' }) => ({
-    padding: '2em 0',
-    color: tone === 'error' ? '#b91c1c' : '#555',
-    fontSize: '0.9em',
-  }),
-)
 
 type AdminUser = {
   id: string
@@ -121,58 +38,78 @@ function AdminPage() {
   return (
     <Page>
       <VerticalFrame width="65em">
-        <BackLink to="/sessions">← Back to Sessions</BackLink>
+        <Link
+          to="/sessions"
+          className="inline-block mb-5 text-[0.88em] text-white/45 no-underline hover:text-white/70 transition-colors duration-100"
+        >
+          ← Back to Sessions
+        </Link>
         <PageTitle>Admin</PageTitle>
 
-        {isPending && <StatusMsg tone="loading">Loading…</StatusMsg>}
+        {isPending && (
+          <p className="py-8 text-center text-white/35 text-[0.9em]">Loading…</p>
+        )}
 
         {error && (
-          <StatusMsg tone="error">
+          <p className="text-[0.9em] text-[rgba(255,100,100,0.9)]">
             {error instanceof Error ? error.message : 'Something went wrong'}
-          </StatusMsg>
+          </p>
         )}
 
         {data && (
           <>
-            <Subtitle>
+            <p className="m-0 mb-5 text-[0.88em] text-white/45">
               {data.count} user{data.count !== 1 ? 's' : ''} signed up
-            </Subtitle>
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Name</Th>
-                  <Th>Email</Th>
-                  <Th>Verified</Th>
-                  <Th>Joined</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.users.length === 0 ? (
-                  <tr>
-                    <EmptyRow colSpan={4}>No users yet.</EmptyRow>
+            </p>
+
+            <div className="overflow-hidden rounded-xl border border-amber/14">
+              <table className="w-full text-[0.88em] border-collapse">
+                <thead>
+                  <tr className="border-b border-amber/14">
+                    <th className="text-left px-4 py-3 font-semibold text-white/55 whitespace-nowrap">Name</th>
+                    <th className="text-left px-4 py-3 font-semibold text-white/55 whitespace-nowrap">Email</th>
+                    <th className="text-left px-4 py-3 font-semibold text-white/55 whitespace-nowrap">Verified</th>
+                    <th className="text-left px-4 py-3 font-semibold text-white/55 whitespace-nowrap">Joined</th>
                   </tr>
-                ) : (
-                  data.users.map((u) => (
-                    <tr key={u.id}>
-                      <Td>{u.name ?? <span style={{ color: '#aaa' }}>—</span>}</Td>
-                      <Td>{u.email}</Td>
-                      <Td>
-                        <Chip ok={u.emailVerified}>
-                          {u.emailVerified ? 'Yes' : 'No'}
-                        </Chip>
-                      </Td>
-                      <Td muted>
-                        {new Date(u.createdAt).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </Td>
+                </thead>
+                <tbody>
+                  {data.users.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-white/30 italic">
+                        No users yet.
+                      </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </Table>
+                  ) : (
+                    data.users.map((u) => (
+                      <tr key={u.id} className="border-b border-white/5 last:border-0 hover:bg-white/3 transition-colors duration-75">
+                        <td className="px-4 py-3 text-white/88">
+                          {u.name ?? <span className="text-white/25">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-white/70">{u.email}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={
+                              u.emailVerified
+                                ? 'inline-block px-2 py-[0.2em] rounded-full text-[0.82em] font-semibold bg-green-900/40 text-green-300 border border-green-700/40'
+                                : 'inline-block px-2 py-[0.2em] rounded-full text-[0.82em] font-semibold bg-amber/10 text-amber-light border border-amber/25'
+                            }
+                          >
+                            {u.emailVerified ? 'Yes' : 'No'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-white/40 whitespace-nowrap">
+                          {new Date(u.createdAt).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </VerticalFrame>

@@ -1,53 +1,24 @@
-import { PropsWithChildren } from 'react'
-import { createComponent } from 'react-fela'
+import type { PropsWithChildren } from 'react'
 import { FadingBoxes } from './FadingBoxes'
 import { GlobalOsTitle } from './GlobalOsTitle'
 import { LogoSection } from './LogoSection'
 
-const BoxContainer = createComponent(() => ({
-  display: 'flex',
-  flexDirection: 'row',
-  justifyContent: 'center',
-  marginTop: '2.5em',
-  marginBottom: '3em',
-}))
+type Props = { width?: string }
 
-const Box = createComponent(({ width }: { width?: string }) => ({
-  width,
-  maxWidth: '100%',
-  border: '1px solid rgba(200,128,0,0.3)',
-  borderRadius: '20px',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'flex-start',
-  alignItems: 'center',
-  fontSize: '1rem',
-  background: 'rgba(18,4,42,0.82)',
-  backgroundClip: 'padding-box',
-  color: 'rgba(255,255,255,0.9)',
-  boxShadow: '0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.03) inset',
-}))
-
-const BottomSection = createComponent(() => ({
-  width: '100%',
-  padding: '1.5em 2.25em 2.25em',
-  boxSizing: 'border-box' as const,
-}))
-
-type Props = {
-  width?: string
-}
-
-export const VerticalFrame = ({ children, width }: PropsWithChildren & Props) => {
-  return (
-    <BoxContainer>
-      <Box width={width}>
-        <LogoSection href="/">
-          <FadingBoxes />
-          <GlobalOsTitle>GlobalOS</GlobalOsTitle>
-        </LogoSection>
-        <BottomSection>{children}</BottomSection>
-      </Box>
-    </BoxContainer>
-  )
-}
+export const VerticalFrame = ({ children, width }: PropsWithChildren<Props>) => (
+  <div className="flex justify-center mt-10 mb-12">
+    <div
+      style={{ background: 'rgba(18,4,42,0.82)', width }}
+      className="max-w-full flex flex-col items-center rounded-[20px] border border-amber/30 text-white/90
+        shadow-[0_32px_80px_rgba(0,0,0,0.65),inset_0_0_0_1px_rgba(255,255,255,0.03)]"
+    >
+      <LogoSection href="/">
+        <FadingBoxes />
+        <GlobalOsTitle>GlobalOS</GlobalOsTitle>
+      </LogoSection>
+      <div className="w-full px-9 pb-9 pt-6 box-border">
+        {children}
+      </div>
+    </div>
+  </div>
+)
