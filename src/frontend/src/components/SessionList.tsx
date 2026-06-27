@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useCallback, useState } from 'react'
 import { Tabs } from '@base-ui/react/tabs'
+import { useSession } from '../lib/auth-client'
 
 const accent = 'rgb(200, 128, 0)'
 
@@ -199,6 +200,18 @@ const FooterActions = createComponent(() => ({
   borderTop: '1px solid rgba(0,0,0,0.1)',
 }))
 
+const AdminLinkWrap = createComponent(
+  () => ({
+    marginTop: '0.25em',
+    fontSize: '0.82em',
+    '& a': {
+      color: '#777',
+      textDecoration: 'none',
+      ':hover': { color: '#333' },
+    },
+  }),
+)
+
 const EmptyState = createComponent(() => ({
   padding: '1.25em 1em',
   borderRadius: '10px',
@@ -292,6 +305,8 @@ export const SessionList = ({ onLogOut, isLoggingOut }: SessionListProps) => {
   const [createError, setCreateError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const { data: sessionData } = useSession()
+  const isAdmin = sessionData?.user?.email === 'peterson@sent.com'
 
   const { data, isPending, error } = useQuery<Session[]>({
     queryKey: ['sessions'],
@@ -424,6 +439,11 @@ export const SessionList = ({ onLogOut, isLoggingOut }: SessionListProps) => {
               >
                 {isLoggingOut ? 'Logging out…' : 'Log Out'}
               </PrimaryButton>
+            )}
+            {isAdmin && (
+              <AdminLinkWrap>
+                <Link to="/admin">Admin panel</Link>
+              </AdminLinkWrap>
             )}
           </FooterActions>
           </Panel>

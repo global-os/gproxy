@@ -17,6 +17,7 @@ import { auth } from './auth.js'
 import authRoutes from './routes/auth.js'
 import fsRoutes from './routes/fs.js'
 import programsRoutes from './routes/programs.js'
+import adminRoutes from './routes/admin.js'
 import { scheduleInstancePrepare } from './runtime/instance-background.js'
 import { ensureInstanceReady, touchInstance } from './runtime/instance-manager.js'
 import { INSTANCE_MIME, isInstanceContentCached, resolveCachedInstanceFile } from './runtime/instance-content.js'
@@ -251,6 +252,7 @@ app.use(
 )
 
 app.basePath('/app/api/fs').route('/', fsRoutes)
+app.basePath('/app/api/admin').route('/', adminRoutes)
 app.basePath('/app/api').route('/', programsRoutes)
 
 app.get('/app/api/sessions', async (c) => {
