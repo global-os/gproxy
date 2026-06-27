@@ -30,6 +30,10 @@ export async function deleteWorkspaceSession(userId: string, sessionId: number):
 
   const processIds = processes.map((row) => row.id)
 
+  await db
+    .delete(schema.workspaceWindow)
+    .where(eq(schema.workspaceWindow.session_id, sessionId))
+
   if (processIds.length > 0) {
     await db
       .delete(schema.instances)
@@ -38,10 +42,6 @@ export async function deleteWorkspaceSession(userId: string, sessionId: number):
       .delete(schema.process)
       .where(eq(schema.process.session_id, sessionId))
   }
-
-  await db
-    .delete(schema.workspaceWindow)
-    .where(eq(schema.workspaceWindow.session_id, sessionId))
 
   await db
     .delete(schema.sessions)

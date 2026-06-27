@@ -140,47 +140,55 @@ const OpenLinkWrap = createComponent(() => ({
   },
 }))
 
-const DeleteButton = createComponent(({ disabled }: { disabled?: boolean }) => ({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '2em',
-  height: '2em',
-  borderRadius: '8px',
-  border: '1px solid rgba(0,0,0,0.14)',
-  background: disabled ? '#eee' : '#fff',
-  color: disabled ? '#aaa' : '#8b1e1e',
-  fontSize: '1.05em',
-  lineHeight: 1,
-  cursor: disabled ? 'default' : 'pointer',
-  boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
-  ':hover': disabled
-    ? {}
-    : {
-        background: '#fff5f5',
-        borderColor: '#d9a3a3',
-      },
-}))
+const DeleteButton = createComponent(
+  ({ disabled }: { disabled?: boolean }) => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '2em',
+    height: '2em',
+    borderRadius: '8px',
+    border: '1px solid rgba(0,0,0,0.14)',
+    background: disabled ? '#eee' : '#fff',
+    color: disabled ? '#aaa' : '#8b1e1e',
+    fontSize: '1.05em',
+    lineHeight: 1,
+    cursor: disabled ? 'default' : 'pointer',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+    ':hover': disabled
+      ? {}
+      : {
+          background: '#fff5f5',
+          borderColor: '#d9a3a3',
+        },
+  }),
+  'button',
+  ['type', 'onClick', 'disabled', 'aria-label'],
+)
 
-const PrimaryButton = createComponent(({ disabled }: { disabled?: boolean }) => ({
-  alignSelf: 'flex-start',
-  padding: '0.65em 1.2em',
-  borderRadius: '10px',
-  border: '1px solid rgba(0,0,0,0.14)',
-  background: disabled
-    ? '#e8e8e8'
-    : `linear-gradient(180deg, #fff 0%, #f2f2f2 100%)`,
-  color: disabled ? '#888' : '#222',
-  fontSize: '0.92em',
-  fontWeight: 600,
-  cursor: disabled ? 'default' : 'pointer',
-  boxShadow: disabled ? 'none' : '0 2px 5px rgba(0,0,0,0.08)',
-  ':hover': disabled
-    ? {}
-    : {
-        background: '#fff',
-      },
-}))
+const PrimaryButton = createComponent(
+  ({ disabled }: { disabled?: boolean }) => ({
+    alignSelf: 'flex-start',
+    padding: '0.65em 1.2em',
+    borderRadius: '10px',
+    border: '1px solid rgba(0,0,0,0.14)',
+    background: disabled
+      ? '#e8e8e8'
+      : `linear-gradient(180deg, #fff 0%, #f2f2f2 100%)`,
+    color: disabled ? '#888' : '#222',
+    fontSize: '0.92em',
+    fontWeight: 600,
+    cursor: disabled ? 'default' : 'pointer',
+    boxShadow: disabled ? 'none' : '0 2px 5px rgba(0,0,0,0.08)',
+    ':hover': disabled
+      ? {}
+      : {
+          background: '#fff',
+        },
+  }),
+  'button',
+  ['type', 'onClick', 'disabled'],
+)
 
 const FooterActions = createComponent(() => ({
   display: 'flex',
