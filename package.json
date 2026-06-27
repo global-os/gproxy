@@ -18,6 +18,7 @@
     "test:tbundle": "npm run test",
     "format": "prettier -w src/frontend/src/**/*.{ts,tsx} **/*.{ts,tsx} ./drizzle.config.ts",
     "db:migrate": "node scripts/apply-pending-migrations.mjs",
+    "db:seed": "node --import tsx scripts/seed-fixtures.mjs",
     "bundle:helloworld-yjs": "node scripts/bundle-helloworld-yjs.mjs",
     "bundle:platform-deps": "node scripts/bundle-platform-yjs.mjs && node scripts/bundle-platform-rxjs.mjs",
     "build:squint-editor-example": "node --import tsx scripts/build-squint-editor-example-tar.mjs",

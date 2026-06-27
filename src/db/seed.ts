@@ -1,8 +1,16 @@
 import fs from 'fs'
 import path from 'path'
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { db } from './index.js'
-import { user, directory, file } from './schema.js'
+import {
+  user,
+  directory,
+  file,
+  image,
+  instances,
+  process as processTable,
+  workspaceWindow,
+} from './schema.js'
 
 const FIXTURE_EMAIL = 'peterson@sent.com'
 
@@ -13,14 +21,34 @@ export async function seedUserFixtures() {
     return
   }
 
-  // Files first — no self-referential FK
   await db.delete(file).where(eq(file.user_id, userRow.id))
 
-  // Directories leaf-first from roots
   const roots = await db
     .select({ id: directory.id })
     .from(directory)
     .where(and(eq(directory.user_id, userRow.id), isNull(directory.parent_id)))
+
+  const allDirIds: number[] = []
+  for (const root of roots) {
+    allDirIds.push(...(await collectDirTreeIds(root.id)))
+  }
+
+  if (allDirIds.length > 0) {
+    const processRows = await db
+      .select({ id: processTable.id })
+      .from(processTable)
+      .where(inArray(processTable.directory_id, allDirIds))
+    const processIds = processRows.map((row) => row.id)
+
+    if (processIds.length > 0) {
+      await db.delete(workspaceWindow).where(inArray(workspaceWindow.process_id, processIds))
+      await db.delete(instances).where(inArray(instances.process_id, processIds))
+      await db.delete(processTable).where(inArray(processTable.id, processIds))
+    }
+
+    await db.delete(image).where(inArray(image.directory_id, allDirIds))
+  }
+
   for (const root of roots) {
     await deleteDirTree(root.id)
   }
@@ -30,6 +58,18 @@ export async function seedUserFixtures() {
 
   await walkAndCreate(fixtureBase, null, userRow.id)
   console.log(`Seed: fixtures created for ${FIXTURE_EMAIL}`)
+}
+
+async function collectDirTreeIds(dirId: number): Promise<number[]> {
+  const ids = [dirId]
+  const children = await db
+    .select({ id: directory.id })
+    .from(directory)
+    .where(eq(directory.parent_id, dirId))
+  for (const child of children) {
+    ids.push(...(await collectDirTreeIds(child.id)))
+  }
+  return ids
 }
 
 async function deleteDirTree(dirId: number) {
@@ -79,6 +119,7 @@ function mimeFor(ext: string): string {
     '.jpeg': 'image/jpeg',
     '.svg': 'image/svg+xml',
     '.txt': 'text/plain',
+    '.cljs': 'text/plain',
   }
   return map[ext.toLowerCase()] ?? 'application/octet-stream'
 }
