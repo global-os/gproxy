@@ -4,8 +4,48 @@ import { db } from '../db/index.js'
 import * as schema from '../db/schema.js'
 import { PENDING_INSTANCE_CHECKSUM } from '../runtime/instance-constants.js'
 import { instancePublicUrl } from '../runtime/constants.js'
-import { generateInstanceSlug } from '../runtime/instance-slug.js'
+import { generateInstanceSlug, isLegacyUuidSlug } from '../runtime/instance-slug.js'
 import { LaunchError } from './errors.js'
+
+const SLUG_COLLISION = '23505'
+
+export async function upgradeLegacySlug(instanceId: number, slug: string): Promise<string> {
+  if (!isLegacyUuidSlug(slug)) return slug
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const nextSlug = generateInstanceSlug()
+    try {
+      const [row] = await db
+        .update(schema.instances)
+        .set({ slug: nextSlug })
+        .where(eq(schema.instances.id, instanceId))
+        .returning({ slug: schema.instances.slug })
+
+      if (row) {
+        console.log(`[instance] upgraded slug ${instanceId}: ${slug} -> ${row.slug}`)
+        return row.slug
+      }
+    } catch (err) {
+      const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : ''
+      if (code !== SLUG_COLLISION) throw err
+    }
+  }
+
+  throw new LaunchError('Failed to assign instance slug', 500)
+}
+
+function toCreatedInstance(
+  instanceId: number,
+  instanceSlug: string,
+  restarted: boolean,
+): CreatedInstance {
+  return {
+    instanceId,
+    instanceSlug,
+    url: instancePublicUrl(instanceSlug),
+    restarted,
+  }
+}
 
 export type CreatedInstance = {
   instanceId: number
@@ -46,12 +86,7 @@ export async function createInstanceForProcess(processId: number): Promise<Creat
       slug: schema.instances.slug,
     })
 
-  return {
-    instanceId: instanceRow.id,
-    instanceSlug: instanceRow.slug,
-    url: instancePublicUrl(instanceRow.slug),
-    restarted: false,
-  }
+  return toCreatedInstance(instanceRow.id, instanceRow.slug, false)
 }
 
 /** Ensure the process has a live primary instance, restarting a stopped one when possible. */
@@ -70,12 +105,8 @@ export async function ensurePrimaryInstance(processId: number): Promise<CreatedI
     .limit(1)
 
   if (live) {
-    return {
-      instanceId: live.id,
-      instanceSlug: live.slug,
-      url: instancePublicUrl(live.slug),
-      restarted: false,
-    }
+    const slug = await upgradeLegacySlug(live.id, live.slug)
+    return toCreatedInstance(live.id, slug, false)
   }
 
   const [stopped] = await db
@@ -97,12 +128,8 @@ export async function ensurePrimaryInstance(processId: number): Promise<CreatedI
       .set({ state: 'starting', last_used_at: new Date() })
       .where(eq(schema.instances.id, stopped.id))
 
-    return {
-      instanceId: stopped.id,
-      instanceSlug: stopped.slug,
-      url: instancePublicUrl(stopped.slug),
-      restarted: true,
-    }
+    const slug = await upgradeLegacySlug(stopped.id, stopped.slug)
+    return toCreatedInstance(stopped.id, slug, true)
   }
 
   return createInstanceForProcess(processId)

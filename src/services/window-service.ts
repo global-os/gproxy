@@ -2,6 +2,8 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import * as schema from '../db/schema.js'
 import { instancePublicUrl } from '../runtime/constants.js'
+import { isLegacyUuidSlug } from '../runtime/instance-slug.js'
+import { upgradeLegacySlug } from './create-instance.js'
 
 export type WorkspaceWindowDto = {
   id: number
@@ -32,6 +34,22 @@ type WindowJoinedRow = {
   width: number
   height: number
   z_index: number
+}
+
+async function resolveWindowRows(rows: WindowJoinedRow[]): Promise<WindowJoinedRow[]> {
+  const slugByInstance = new Map<number, string>()
+  const resolved: WindowJoinedRow[] = []
+
+  for (const row of rows) {
+    let slug = slugByInstance.get(row.instance_id) ?? row.instance_slug
+    if (!slugByInstance.has(row.instance_id) && isLegacyUuidSlug(slug)) {
+      slug = await upgradeLegacySlug(row.instance_id, slug)
+    }
+    slugByInstance.set(row.instance_id, slug)
+    resolved.push({ ...row, instance_slug: slug })
+  }
+
+  return resolved
 }
 
 function toDto(row: WindowJoinedRow): WorkspaceWindowDto {
@@ -77,7 +95,7 @@ export async function listSessionWindows(sessionId: number): Promise<WorkspaceWi
     .where(eq(schema.workspaceWindow.session_id, sessionId))
     .orderBy(schema.workspaceWindow.z_index)
 
-  return rows.map(toDto)
+  return (await resolveWindowRows(rows)).map(toDto)
 }
 
 export async function listProcessWindows(
@@ -91,7 +109,7 @@ export async function listProcessWindows(
     ))
     .orderBy(desc(schema.workspaceWindow.z_index))
 
-  return rows.map(toDto)
+  return (await resolveWindowRows(rows)).map(toDto)
 }
 
 async function nextZIndex(sessionId: number): Promise<number> {
@@ -172,7 +190,9 @@ export async function focusWindow(sessionId: number, windowId: number): Promise<
     ))
     .limit(1)
 
-  return row ? toDto(row) : null
+  if (!row) return null
+  const [resolved] = await resolveWindowRows([row])
+  return toDto(resolved)
 }
 
 export async function updateWindowGeometry(
