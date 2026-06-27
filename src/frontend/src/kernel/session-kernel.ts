@@ -52,8 +52,110 @@ export class SessionKernel {
       case 'save':
         void this.onSave(binding, event.data, post)
         break
+      case 'syscall':
+        void this.onSyscall(event.data, post)
+        break
+      case 'fs:browse':
+        void this.onFsOp('fs.browse', event.data, post, 'fs:browse')
+        break
+      case 'fs:mkdir':
+        void this.onFsOp('fs.mkdir', event.data, post, 'fs:mkdir', { notifyDesktop: true })
+        break
+      case 'fs:rename':
+        void this.onFsOp('fs.rename', event.data, post, 'fs:rename', { notifyDesktop: true })
+        break
+      case 'fs:delete':
+        void this.onFsOp('fs.delete', event.data, post, 'fs:delete', { notifyDesktop: true })
+        break
       case 'die:response':
         break
+    }
+  }
+
+  private async readSyscallError(r: Response, fallback: string): Promise<string> {
+    let message = fallback
+    try {
+      const body = (await r.json()) as { message?: string }
+      if (body.message) message = body.message
+    } catch {
+      // ignore
+    }
+    return message
+  }
+
+  private async invokeSyscall(
+    op: string,
+    args: Record<string, unknown>,
+  ): Promise<unknown> {
+    const r = await fetch('/api/syscalls', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ op, ...args }),
+    })
+
+    if (!r.ok) {
+      throw new Error(await this.readSyscallError(r, `Syscall failed (${r.status})`))
+    }
+
+    if (r.status === 204) return undefined
+
+    const text = await r.text()
+    if (!text) return undefined
+
+    return JSON.parse(text) as unknown
+  }
+
+  private notifyDesktopUpdated() {
+    window.dispatchEvent(new CustomEvent('globalos:desktop-updated'))
+  }
+
+  private async onSyscall(
+    message: KernelMessage,
+    post: (msg: KernelMessage) => void,
+  ) {
+    const op = message.op
+    const requestId = message.requestId
+
+    if (typeof op !== 'string' || !op.trim()) {
+      post({
+        type: 'syscall:error',
+        requestId,
+        message: 'Invalid syscall request',
+      })
+      return
+    }
+
+    const { type: _type, op: _op, requestId: _requestId, ...args } = message
+
+    try {
+      const result = await this.invokeSyscall(op, args)
+      post({ type: 'syscall:complete', requestId, result })
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : 'Syscall failed'
+      post({ type: 'syscall:error', requestId, message: errMessage })
+    }
+  }
+
+  private async onFsOp(
+    op: string,
+    message: KernelMessage,
+    post: (msg: KernelMessage) => void,
+    replyPrefix: string,
+    options?: { notifyDesktop?: boolean },
+  ) {
+    const { type: _type, ...args } = message
+
+    try {
+      const result = await this.invokeSyscall(op, args)
+      if (options?.notifyDesktop) this.notifyDesktopUpdated()
+      post({ type: `${replyPrefix}:complete`, result })
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : 'Request failed'
+      post({ type: `${replyPrefix}:error`, message: errMessage })
     }
   }
 
@@ -99,30 +201,11 @@ export class SessionKernel {
     const content = typeof state.content === 'string' ? state.content : ''
 
     try {
-      const r = await fetch('/api/fs/desktop/files', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ filename, content }),
-      })
-
-      if (!r.ok) {
-        let message = `Save failed (${r.status})`
-        try {
-          const body = (await r.json()) as { message?: string }
-          if (body.message) message = body.message
-        } catch {
-          // ignore
-        }
-        throw new Error(message)
-      }
+      await this.invokeSyscall('fs.saveDesktopFile', { filename, content })
 
       this.processState.set(binding.processId, state)
       saveProcessState(this.sessionId, binding.processId, state)
-      window.dispatchEvent(new CustomEvent('globalos:desktop-updated'))
+      this.notifyDesktopUpdated()
       post({ type: 'save:complete', filename })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Save failed'

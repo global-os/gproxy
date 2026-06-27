@@ -16,6 +16,7 @@ import { pathFromHostnameAndPath } from './utils.js'
 import { auth } from './auth.js'
 import authRoutes from './routes/auth.js'
 import fsRoutes from './routes/fs.js'
+import syscallsRoutes from './routes/syscalls.js'
 import programsRoutes from './routes/programs.js'
 import adminRoutes from './routes/admin.js'
 import { scheduleInstancePrepare } from './runtime/instance-background.js'
@@ -252,6 +253,7 @@ app.use(
 )
 
 app.basePath('/app/api/fs').route('/', fsRoutes)
+app.basePath('/app/api/syscalls').route('/', syscallsRoutes)
 app.basePath('/app/api/admin').route('/', adminRoutes)
 app.basePath('/app/api').route('/', programsRoutes)
 
