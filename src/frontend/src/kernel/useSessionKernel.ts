@@ -13,7 +13,6 @@ export function useSessionKernel(sessionId: string) {
   const windowsRef = useRef(new Map<number, AppWindow>())
   /** One ref callback per window id; identity must stay stable across parent re-renders. */
   const iframeRefFns = useRef(new Map<number, (el: HTMLIFrameElement | null) => void>())
-  const detachIframeRef = useRef(new Map<number, () => void>())
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => kernel.handleMessage(event)
@@ -28,24 +27,11 @@ export function useSessionKernel(sessionId: string) {
   }, [kernel])
 
   const bindWindow = useCallback((win: AppWindow, iframe: HTMLIFrameElement | null) => {
-    detachIframeRef.current.get(win.id)?.()
-    detachIframeRef.current.delete(win.id)
-
     if (!iframe) {
       bindingsRef.current.delete(win.id)
       kernel.unregister(win.id)
       return
     }
-
-    const notifyAttached = () => {
-      iframe.contentWindow?.postMessage({ type: 'kernel:attached' }, '*')
-    }
-    iframe.addEventListener('load', notifyAttached)
-    // Cached cross-origin loads may complete before load fires; nudge after register.
-    requestAnimationFrame(notifyAttached)
-    detachIframeRef.current.set(win.id, () => {
-      iframe.removeEventListener('load', notifyAttached)
-    })
 
     const binding: KernelWindowBinding = {
       sessionId,
@@ -91,7 +77,6 @@ export function useSessionKernel(sessionId: string) {
     if (win) bindWindow(win, null)
     windowsRef.current.delete(windowId)
     iframeRefFns.current.delete(windowId)
-    detachIframeRef.current.delete(windowId)
   }, [bindWindow])
 
   /**

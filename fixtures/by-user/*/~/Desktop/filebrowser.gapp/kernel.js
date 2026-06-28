@@ -3,8 +3,6 @@
 //   fs:mkdir   -> fs.mkdir   -> fs:mkdir:complete   | fs:mkdir:error
 //   fs:rename  -> fs.rename  -> fs:rename:complete  | fs:rename:error
 //   fs:delete  -> fs.delete  -> fs:delete:complete  | fs:delete:error
-//
-// Wait for kernel:attached from the workspace before syscalls (iframe registration race).
 
 const pending = new Map()
 let nextRequestId = 0
@@ -51,30 +49,3 @@ window.addEventListener('message', (event) => {
     handlers.reject(new Error(data.message || 'Request failed'))
   }
 })
-
-export function whenKernelAttached({ timeoutMs = 10_000 } = {}) {
-  return new Promise((resolve, reject) => {
-    const onMessage = (event) => {
-      if (event.data?.type === 'kernel:attached') {
-        cleanup()
-        resolve()
-      }
-    }
-
-    const timer = timeoutMs > 0
-      ? window.setTimeout(() => {
-          cleanup()
-          reject(new Error('Timed out waiting for kernel'))
-        }, timeoutMs)
-      : null
-
-    const cleanup = () => {
-      if (timer != null) window.clearTimeout(timer)
-      window.removeEventListener('message', onMessage)
-    }
-
-    window.addEventListener('message', onMessage)
-    // Re-request attach if the iframe loaded after the parent's first ping.
-    window.parent.postMessage({ type: 'kernel:ping' }, '*')
-  })
-}

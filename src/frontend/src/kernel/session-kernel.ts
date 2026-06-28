@@ -20,8 +20,19 @@ type TraceEvent = {
   message: KernelMessage
 }
 
+type PendingInbound = {
+  source: MessageEventSource
+  data: KernelMessage
+  receivedAt: number
+}
+
+const PENDING_MAX_PER_WINDOW = 32
+const PENDING_TTL_MS = 30_000
+
 export class SessionKernel {
   private readonly bindings = new Map<number, KernelWindowBinding>()
+  /** Inbound messages received before the iframe binding exists, keyed by windowId. */
+  private readonly pendingByWindowId = new Map<number, PendingInbound[]>()
   /** Per-process opaque state (schema owned by the app). */
   private readonly processState = new Map<number, Record<string, unknown>>()
   /** In-flight operation per process (e.g. which window is saving). */
@@ -37,6 +48,7 @@ export class SessionKernel {
       const persisted = loadProcessState(this.sessionId, binding.processId)
       if (persisted) this.processState.set(binding.processId, persisted)
     }
+    this.drainPending(binding)
   }
 
   unregister(windowId: number) {
@@ -49,6 +61,7 @@ export class SessionKernel {
     }
     this.bindings.delete(windowId)
     this.tracers.delete(windowId)
+    this.pendingByWindowId.delete(windowId)
   }
 
   private emitTrace(
@@ -76,37 +89,105 @@ export class SessionKernel {
   }
 
   handleMessage(event: MessageEvent) {
-    const binding = this.findBinding(event.source)
-    if (!binding || !isKernelMessage(event.data)) return
+    if (!isKernelMessage(event.data)) return
 
-    this.emitTrace(binding, 'in', event.data)
+    const binding = this.findBinding(event.source)
+    if (binding) {
+      this.processMessage(binding, event.data)
+      return
+    }
+
+    const source = event.source
+    const windowId = this.resolveWindowIdForSource(source)
+    if (windowId === undefined || !source) return
+
+    this.enqueuePending(windowId, {
+      source,
+      data: event.data,
+      receivedAt: Date.now(),
+    })
+  }
+
+  private enqueuePending(windowId: number, item: PendingInbound) {
+    this.pruneExpired(windowId)
+
+    let queue = this.pendingByWindowId.get(windowId)
+    if (!queue) {
+      queue = []
+      this.pendingByWindowId.set(windowId, queue)
+    }
+
+    if (queue.length >= PENDING_MAX_PER_WINDOW) {
+      queue.shift()
+    }
+
+    const last = queue[queue.length - 1]
+    if (item.data.type === 'ready' && last?.data.type === 'ready') {
+      queue[queue.length - 1] = item
+      return
+    }
+
+    queue.push(item)
+  }
+
+  private pruneExpired(windowId: number) {
+    const queue = this.pendingByWindowId.get(windowId)
+    if (!queue) return
+
+    const now = Date.now()
+    const fresh = queue.filter((item) => now - item.receivedAt <= PENDING_TTL_MS)
+    if (fresh.length) {
+      this.pendingByWindowId.set(windowId, fresh)
+    } else {
+      this.pendingByWindowId.delete(windowId)
+    }
+  }
+
+  private drainPending(binding: KernelWindowBinding) {
+    const queue = this.pendingByWindowId.get(binding.windowId)
+    if (!queue?.length) return
+
+    this.pendingByWindowId.delete(binding.windowId)
+
+    const frame = binding.iframe.contentWindow
+    const now = Date.now()
+
+    for (const item of queue) {
+      if (item.source !== frame) continue
+      if (now - item.receivedAt > PENDING_TTL_MS) continue
+      this.processMessage(binding, item.data)
+    }
+  }
+
+  private processMessage(binding: KernelWindowBinding, message: KernelMessage) {
+    this.emitTrace(binding, 'in', message)
 
     const post = (msg: KernelMessage) => {
       binding.iframe.contentWindow?.postMessage(msg, '*')
       this.emitTrace(binding, 'out', msg)
     }
 
-    switch (event.data.type) {
+    switch (message.type) {
       case 'ready':
         this.onReady(binding, post)
         break
       case 'save':
-        void this.onSave(binding, event.data, post)
+        void this.onSave(binding, message, post)
         break
       case 'syscall':
-        void this.onSyscall(event.data, post)
+        void this.onSyscall(message, post)
         break
       case 'fs:browse':
-        void this.onFsOp('fs.browse', event.data, post, 'fs:browse')
+        void this.onFsOp('fs.browse', message, post, 'fs:browse')
         break
       case 'fs:mkdir':
-        void this.onFsOp('fs.mkdir', event.data, post, 'fs:mkdir', { notifyDesktop: true })
+        void this.onFsOp('fs.mkdir', message, post, 'fs:mkdir', { notifyDesktop: true })
         break
       case 'fs:rename':
-        void this.onFsOp('fs.rename', event.data, post, 'fs:rename', { notifyDesktop: true })
+        void this.onFsOp('fs.rename', message, post, 'fs:rename', { notifyDesktop: true })
         break
       case 'fs:delete':
-        void this.onFsOp('fs.delete', event.data, post, 'fs:delete', { notifyDesktop: true })
+        void this.onFsOp('fs.delete', message, post, 'fs:delete', { notifyDesktop: true })
         break
       case 'die:response':
         break
@@ -285,6 +366,25 @@ export class SessionKernel {
     for (const binding of this.bindings.values()) {
       if (binding.iframe.contentWindow === source) return binding
     }
+    return undefined
+  }
+
+  /** Match an unbound iframe message to a workspace window via data-window-id on the iframe. */
+  private resolveWindowIdForSource(source: MessageEventSource | null): number | undefined {
+    if (!source) return undefined
+
+    for (const binding of this.bindings.values()) {
+      if (binding.iframe.contentWindow === source) return binding.windowId
+    }
+
+    const frames = document.querySelectorAll('iframe[data-window-id]')
+    for (const frame of frames) {
+      if (!(frame instanceof HTMLIFrameElement)) continue
+      if (frame.contentWindow !== source) continue
+      const id = Number(frame.dataset.windowId)
+      if (Number.isInteger(id) && id > 0) return id
+    }
+
     return undefined
   }
 }

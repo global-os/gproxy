@@ -1,6 +1,6 @@
 import { h, render } from 'preact'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
-import { toParent, whenKernelAttached } from './kernel.js'
+import { toParent } from './kernel.js'
 
 function entryIcon(entry) {
   if (entry.type === 'directory') {
@@ -56,9 +56,6 @@ function FileBrowserApp() {
         setStatus(attempt > 0 ? 'Retrying…' : 'Loading…')
 
         try {
-          await whenKernelAttached()
-          if (generation !== loadGeneration.current) return
-
           const payload = directoryId == null ? {} : { directoryId }
           const result = await toParent('fs:browse', payload)
           if (generation !== loadGeneration.current) return
