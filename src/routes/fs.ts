@@ -6,6 +6,7 @@ import * as schema from '../db/schema.js'
 import { resolveDesktopDirectoryId } from '../services/desktop-files.js'
 import { resolveDesktopEntryIcon } from '../services/global-pc-icons.js'
 import { ensureGlobalPcForUser, resolveGlobalPcIdForWorkspace } from '../services/global-pc.js'
+import { buildUserFileIndex } from '../services/file-index.js'
 import { readResourceIconBmp } from '../services/local-icons.js'
 
 const router = new Hono<Env>()
@@ -70,6 +71,15 @@ router.get('/desktop', async (c) => {
       ...files.map(f => ({ type: 'file' as const, id: f.id, name: f.name, mime_type: f.mime_type })),
     ],
   })
+})
+
+router.get('/index', async (c) => {
+  const user = c.get('user')
+  if (!user) return c.json({ error: 'Unauthorized' }, 401)
+
+  const db = c.get('db')
+  const entries = await buildUserFileIndex(db, user.id)
+  return c.json({ entries })
 })
 
 router.get('/icons', async (c) => {

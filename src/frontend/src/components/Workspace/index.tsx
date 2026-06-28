@@ -6,6 +6,7 @@ import { useWorkspace } from './useWorkspace'
 import { WorkspaceWindow } from './WorkspaceWindow'
 import { useWorkspaceKernel } from '../../kernel/useWorkspaceKernel'
 import { WorkspaceLogger } from '../WorkspaceLogger'
+import { Taskbar, TASKBAR_HEIGHT, type FileIndexEntry } from './Taskbar'
 import {
   iconsService,
   installIconsConsoleApi,
@@ -33,6 +34,8 @@ const Frame = createComponent(
     width: '100%',
     height: '100%',
     minHeight: '100%',
+    paddingBottom: `${TASKBAR_HEIGHT}px`,
+    boxSizing: 'border-box',
     overflow: 'hidden',
     cursor: interacting ? 'default' : undefined,
     userSelect: interacting ? 'none' : undefined,
@@ -122,7 +125,7 @@ const LaunchStatus = createComponent(
   () => ({
     position: 'absolute',
     left: '16px',
-    bottom: '16px',
+    bottom: `${TASKBAR_HEIGHT + 16}px`,
     padding: '8px 12px',
     borderRadius: '6px',
     background: 'rgba(0,0,0,0.45)',
@@ -137,7 +140,7 @@ const computeX = (x: number, width: number) =>
   (window as any).innerWidth / 2 - width / 2 + x
 
 const computeY = (y: number, height: number) =>
-  (window as any).innerHeight / 2 - height / 2 + y
+  ((window as any).innerHeight - TASKBAR_HEIGHT) / 2 - height / 2 + y
 
 type ServerWindow = {
   id: number
@@ -238,6 +241,7 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
   useEffect(() => {
     const refreshDesktop = () => {
       void queryClient.invalidateQueries({ queryKey: ['desktop', workspaceId] })
+      void queryClient.invalidateQueries({ queryKey: ['file-index'] })
     }
     window.addEventListener('globalos:desktop-updated', refreshDesktop)
     return () => window.removeEventListener('globalos:desktop-updated', refreshDesktop)
@@ -305,6 +309,15 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
     }
   }, [actions, queryClient, workspaceId])
 
+  const launchFromIndex = useCallback((entry: FileIndexEntry) => {
+    if (!entry.launchable) return
+    void openProgram({
+      type: 'directory',
+      id: entry.id,
+      name: entry.name,
+    })
+  }, [openProgram])
+
   return (
     <Frame
       interacting={!!state.dragOrigin || !!state.resizeOrigin}
@@ -329,6 +342,7 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
         })}
       </IconGrid>
       {launchMessage && <LaunchStatus>{launchMessage}</LaunchStatus>}
+      <Taskbar onLaunchApp={launchFromIndex} />
       <WorkspaceLogger workspaceId={workspaceId} />
       {state.windows.map((win, i) => {
         const topZIndex = state.windows.reduce(
