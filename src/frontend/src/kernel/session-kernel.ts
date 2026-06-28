@@ -47,8 +47,8 @@ export class SessionKernel {
     if (active?.windowId === windowId) {
       this.activeOps.delete(binding.processId)
     }
-    this.tracers.delete(windowId)
     this.bindings.delete(windowId)
+    this.tracers.delete(windowId)
   }
 
   private emitTrace(

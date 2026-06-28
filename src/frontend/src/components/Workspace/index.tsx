@@ -150,7 +150,7 @@ export function Workspace({ sessionId, children }: WorkspaceProps) {
   )
   const [launchMessage, setLaunchMessage] = useState<string | null>(null)
   const queryClient = useQueryClient()
-  const { bindWindow } = useSessionKernel(sessionId)
+  const { syncWindow, iframeRef, releaseWindow } = useSessionKernel(sessionId)
 
   const hydratedSession = useRef<string | null>(null)
 
@@ -174,6 +174,21 @@ export function Workspace({ sessionId, children }: WorkspaceProps) {
     hydratedSession.current = sessionId
     actions.setWindows(sessionWindows.map(serverWindowToAppWindow))
   }, [sessionId, sessionWindows, actions])
+
+  // Stable iframe refs read win from a ref map; sync each render so mount + trace see current metadata.
+  for (const win of state.windows) {
+    syncWindow(win)
+  }
+
+  // Closing a window removes it from state but may not remount other iframes — release explicitly.
+  const openWindowIdsRef = useRef<Set<number>>(new Set())
+  useEffect(() => {
+    const openIds = new Set(state.windows.map((w) => w.id))
+    for (const id of openWindowIdsRef.current) {
+      if (!openIds.has(id)) releaseWindow(id)
+    }
+    openWindowIdsRef.current = openIds
+  }, [state.windows, releaseWindow])
 
   const { data: desktopItems = [] } = useQuery<DesktopItem[]>({
     queryKey: ['desktop'],
@@ -293,7 +308,7 @@ export function Workspace({ sessionId, children }: WorkspaceProps) {
             top={computeY(win.y, win.height) + 'px'}
             onMouseDown={onMouseDown}
             onClose={() => void closeWindow(win.id)}
-            onIframeRef={el => bindWindow(win, el)}
+            onIframeRef={iframeRef(win.id)}
           />
         )
       })}
