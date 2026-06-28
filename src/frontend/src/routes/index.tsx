@@ -7,6 +7,25 @@ export const Route = createFileRoute('/')({
   component: Index,
 })
 
+function AuthLoading() {
+  return (
+    <AuthLayout>
+      <div
+        className="flex flex-col items-center gap-3 text-sm text-gray-500"
+        role="status"
+        aria-live="polite"
+        aria-label="Checking sign-in status"
+      >
+        <div
+          className="h-8 w-8 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin"
+          aria-hidden
+        />
+        <span>Loading…</span>
+      </div>
+    </AuthLayout>
+  )
+}
+
 function Index() {
   const navigate = useNavigate()
   const { data: session, isPending, error } = useSession()
@@ -17,6 +36,10 @@ function Index() {
       navigate({ to: '/workspaces' })
     }
   }, [isPending, error, userId, navigate])
+
+  if (isPending || userId !== undefined) {
+    return <AuthLoading />
+  }
 
   return (
     <AuthLayout>
