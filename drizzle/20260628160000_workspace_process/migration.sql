@@ -85,6 +85,6 @@ ALTER TABLE "workspace_window" ALTER COLUMN "process_id" SET NOT NULL;
 CREATE INDEX IF NOT EXISTS "workspace_window_process_id_idx" ON "workspace_window" ("process_id");
 
 -- Workspace process instances no longer reference task
-UPDATE "instances" SET "task_id" = NULL WHERE "process_id" IS NOT NULL;
-
 ALTER TABLE "instances" ALTER COLUMN "task_id" DROP NOT NULL;
+
+UPDATE "instances" SET "task_id" = NULL WHERE "process_id" IS NOT NULL;
