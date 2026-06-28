@@ -407,7 +407,8 @@ app.all('/instance/*', async (c) => {
 
   if (upstreamPath === '/_status') {
     scheduleInstancePrepare(instanceId)
-    return c.json(getInstancePrepareStatus(instanceId, isInstanceContentCached(instanceId)))
+    const cached = await isInstanceContentCached(instanceId)
+    return c.json(getInstancePrepareStatus(instanceId, cached))
   }
 
   const wantsHtml =
@@ -417,7 +418,8 @@ app.all('/instance/*', async (c) => {
 
   scheduleInstancePrepare(instanceId)
 
-  if (!isInstanceContentCached(instanceId) && wantsHtml) {
+  const cached = await isInstanceContentCached(instanceId)
+  if (!cached && wantsHtml) {
     return c.html(instanceLoadingPage())
   }
 
@@ -429,7 +431,7 @@ app.all('/instance/*', async (c) => {
 
   void touchInstance(instanceId).catch(() => {})
 
-  const file = resolveCachedInstanceFile(instanceId, upstreamPath)
+  const file = await resolveCachedInstanceFile(instanceId, upstreamPath)
   if (!file) {
     return c.notFound()
   }

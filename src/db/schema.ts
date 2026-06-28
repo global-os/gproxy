@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, index, serial, integer, pgEnum, customType, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, serial, integer, pgEnum, customType, uniqueIndex, primaryKey } from "drizzle-orm/pg-core";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() { return 'bytea' },
@@ -80,7 +80,6 @@ export const verification = pgTable(
 export const instanceStateEnum = pgEnum('instance_state', [
   'starting',
   'running',
-  'stopped',
 ]);
 
 export const directory = pgTable('directory', {
@@ -188,6 +187,26 @@ export const instances = pgTable('instances', {
 }, (table) => [
   index('instances_process_id_idx').on(table.process_id),
   index('instances_task_id_idx').on(table.task_id),
+]);
+
+/** LRU metadata for extracted instance bundles served from Postgres. */
+export const instanceBundleCache = pgTable('instance_bundle_cache', {
+  instance_id: integer('instance_id').primaryKey().references(() => instances.id, { onDelete: 'cascade' }),
+  directory_checksum: text('directory_checksum').notNull(),
+  last_used_at: timestamp('last_used_at').defaultNow().notNull(),
+  byte_size: integer('byte_size').notNull(),
+}, (table) => [
+  index('instance_bundle_cache_last_used_at_idx').on(table.last_used_at),
+]);
+
+/** Extracted files for a cached instance bundle. */
+export const instanceBundleFile = pgTable('instance_bundle_file', {
+  instance_id: integer('instance_id').notNull().references(() => instances.id, { onDelete: 'cascade' }),
+  path: text('path').notNull(),
+  content: bytea('content').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.instance_id, table.path] }),
+  index('instance_bundle_file_instance_id_idx').on(table.instance_id),
 ]);
 
 /** UI chrome for a process on a desk. Grouped via process → workspace. */

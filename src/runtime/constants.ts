@@ -1,5 +1,7 @@
-/** Evict extracted bundle after this idle period (instance record kept). */
-export const INSTANCE_IDLE_MS = Number(process.env.INSTANCE_IDLE_MS ?? process.env.CONTAINER_IDLE_MS ?? 15 * 60 * 1000)
+/** Max total bytes of extracted instance bundles kept in Postgres LRU cache. */
+export const INSTANCE_CACHE_MAX_BYTES = Number(
+  process.env.INSTANCE_CACHE_MAX_BYTES ?? 512 * 1024 * 1024,
+)
 
 export const CLEANUP_INTERVAL_MS = Number(process.env.RUNTIME_CLEANUP_INTERVAL_MS ?? 60 * 1000)
 

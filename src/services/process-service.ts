@@ -7,7 +7,7 @@ import { requireWorkspace } from './workspace-access.js'
 export type WorkspaceProcessInstanceDto = {
   id: number
   slug: string
-  state: 'starting' | 'running' | 'stopped'
+  state: 'starting' | 'running'
 }
 
 export type WorkspaceProcessDto = {

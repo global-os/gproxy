@@ -13,7 +13,7 @@ type WorkspaceProcess = {
   instances: Array<{
     id: number
     slug: string
-    state: 'starting' | 'running' | 'stopped'
+    state: 'starting' | 'running'
   }>
 }
 
@@ -98,8 +98,6 @@ function instanceStateLabel(state: WorkspaceProcess['instances'][number]['state'
       return 'running'
     case 'starting':
       return 'starting'
-    case 'stopped':
-      return 'stopped'
   }
 }
 
@@ -109,8 +107,6 @@ function instanceStateCls(state: WorkspaceProcess['instances'][number]['state'])
       return 'text-emerald-700 bg-emerald-50 border-emerald-200'
     case 'starting':
       return 'text-amber-700 bg-amber-50 border-amber-200'
-    case 'stopped':
-      return 'text-gray-500 bg-gray-50 border-gray-200'
   }
 }
 

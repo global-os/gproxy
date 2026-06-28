@@ -9,23 +9,27 @@ import {
   ensureInstanceContent,
   evictInstanceContent,
   isInstanceContentCached,
+  runInstanceBundleCacheEviction,
+  touchInstanceBundleCache,
 } from './instance-content.js'
-import { INSTANCE_IDLE_MS, CLEANUP_INTERVAL_MS } from './constants.js'
+import { CLEANUP_INTERVAL_MS } from './constants.js'
 import {
   setInstancePrepareFailed,
   setInstancePrepareProgress,
   setInstancePrepareReady,
 } from './instance-prepare-progress.js'
 
-const activeInstances = new Map<number, number>()
 const preparing = new Map<number, Promise<boolean>>()
 
 export async function touchInstance(instanceId: number): Promise<void> {
-  activeInstances.set(instanceId, Date.now())
   await db
     .update(schema.instances)
     .set({ last_used_at: new Date() })
     .where(eq(schema.instances.id, instanceId))
+
+  if (await isInstanceContentCached(instanceId)) {
+    await touchInstanceBundleCache(instanceId)
+  }
 }
 
 export async function startInstanceRuntime(
@@ -37,44 +41,14 @@ export async function startInstanceRuntime(
   await ensureInstanceContent(instanceId, tarBytes, checksum)
 }
 
-export async function stopInstanceRuntime(instanceId: number): Promise<void> {
-  activeInstances.delete(instanceId)
-  await evictInstanceContent(instanceId)
-}
-
-export async function runRuntimeCleanup(): Promise<void> {
-  const now = Date.now()
-  const rows = await db
-    .select({
-      id: schema.instances.id,
-      state: schema.instances.state,
-      last_used_at: schema.instances.last_used_at,
-    })
-    .from(schema.instances)
-    .where(eq(schema.instances.state, 'running'))
-
-  for (const row of rows) {
-    const lastUsed = row.last_used_at?.getTime() ?? 0
-    const lastActive = Math.max(lastUsed, activeInstances.get(row.id) ?? 0)
-    if (now - lastActive < INSTANCE_IDLE_MS) continue
-
-    await stopInstanceRuntime(row.id)
-    await db
-      .update(schema.instances)
-      .set({ state: 'stopped' })
-      .where(eq(schema.instances.id, row.id))
-    console.log(`[runtime] evicted idle instance ${row.id}`)
-  }
-}
-
 let cleanupTimer: NodeJS.Timeout | undefined
 
 export function startRuntimeMaintenance(): void {
   if (cleanupTimer) return
-  void runRuntimeCleanup()
+  void runInstanceBundleCacheEviction()
   cleanupTimer = setInterval(() => {
-    void runRuntimeCleanup().catch((err) => {
-      console.error('[runtime] cleanup failed:', err)
+    void runInstanceBundleCacheEviction().catch((err) => {
+      console.error('[runtime] cache eviction failed:', err)
     })
   }, CLEANUP_INTERVAL_MS)
   cleanupTimer.unref?.()
@@ -120,7 +94,7 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
     return false
   }
 
-  if (isInstanceContentCached(instanceId, row.directory_checksum)) {
+  if (await isInstanceContentCached(instanceId, row.directory_checksum)) {
     await touchInstance(instanceId)
     if (row.state !== 'running') {
       await persistInstanceReady(instanceId)
@@ -129,7 +103,7 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
     return true
   }
 
-  if (isInstanceContentCached(instanceId)) {
+  if (await isInstanceContentCached(instanceId)) {
     await evictInstanceContent(instanceId)
   }
 
@@ -237,4 +211,3 @@ export async function ensureInstanceReady(instanceId: number): Promise<boolean> 
   preparing.set(instanceId, work)
   return work
 }
-

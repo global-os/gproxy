@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { resolveImageMeta } from '../db/image.js'
 import { db } from '../db/index.js'
 import * as schema from '../db/schema.js'
@@ -89,45 +89,27 @@ export async function createInstanceForProcess(processId: number): Promise<Creat
 }
 
 export async function ensurePrimaryInstance(processId: number): Promise<CreatedInstance> {
-  const [live] = await db
+  const [existing] = await db
     .select({
       id: schema.instances.id,
       slug: schema.instances.slug,
+      state: schema.instances.state,
     })
     .from(schema.instances)
-    .where(and(
-      eq(schema.instances.process_id, processId),
-      inArray(schema.instances.state, ['running', 'starting']),
-    ))
-    .orderBy(schema.instances.id)
-    .limit(1)
-
-  if (live) {
-    const slug = await upgradeLegacySlug(live.id, live.slug)
-    return toCreatedInstance(live.id, slug, false)
-  }
-
-  const [stopped] = await db
-    .select({
-      id: schema.instances.id,
-      slug: schema.instances.slug,
-    })
-    .from(schema.instances)
-    .where(and(
-      eq(schema.instances.process_id, processId),
-      eq(schema.instances.state, 'stopped'),
-    ))
+    .where(eq(schema.instances.process_id, processId))
     .orderBy(desc(schema.instances.last_used_at))
     .limit(1)
 
-  if (stopped) {
-    await db
-      .update(schema.instances)
-      .set({ state: 'starting', last_used_at: new Date() })
-      .where(eq(schema.instances.id, stopped.id))
-
-    const slug = await upgradeLegacySlug(stopped.id, stopped.slug)
-    return toCreatedInstance(stopped.id, slug, true)
+  if (existing) {
+    const slug = await upgradeLegacySlug(existing.id, existing.slug)
+    const restarted = existing.state === 'running'
+    if (existing.state !== 'starting') {
+      await db
+        .update(schema.instances)
+        .set({ state: 'starting', last_used_at: new Date() })
+        .where(eq(schema.instances.id, existing.id))
+    }
+    return toCreatedInstance(existing.id, slug, restarted)
   }
 
   return createInstanceForProcess(processId)
