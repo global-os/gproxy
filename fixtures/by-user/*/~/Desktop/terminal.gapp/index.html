@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terminal</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    background: #0f1117;
+    color: #d6deeb;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    gap: 10px;
+  }
+  #output {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding: 10px;
+    border: 1px solid #2a3142;
+    border-radius: 6px;
+    background: #151922;
+  }
+  .line-prompt { color: #7fdbca; }
+  .line-error { color: #ff6b6b; }
+  .line-muted { color: #6b7a99; }
+  #form {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+  #prompt-label {
+    color: #7fdbca;
+    padding-top: 7px;
+    flex: 0 0 auto;
+  }
+  #command {
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
+    color: #d6deeb;
+    background: #151922;
+    border: 1px solid #2a3142;
+    border-radius: 6px;
+    padding: 6px 10px;
+    outline: none;
+  }
+  #command:focus { border-color: #5c7cfa; }
+</style>
+</head>
+<body>
+
+<div id="output" aria-live="polite"></div>
+<form id="form" autocomplete="off">
+  <span id="prompt-label"></span>
+  <input id="command" type="text" spellcheck="false" autocomplete="off" aria-label="Command">
+</form>
+
+<script type="module">
+import { toParent } from './kernel.js'
+
+/** @typedef {{ type: 'directory' | 'file', id: number, name: string }} FsEntry */
+/** @typedef {{
+ *   directory_id: number,
+ *   parent_id: number | null,
+ *   can_go_up: boolean,
+ *   name: string,
+ *   entries: FsEntry[],
+ * }} BrowseResult */
+
+const $output = document.getElementById('output')
+const $form = document.getElementById('form')
+const $command = document.getElementById('command')
+const $promptLabel = document.getElementById('prompt-label')
+
+const shell = {
+  cwdId: null,
+  cwdPath: '/',
+  cwdName: 'Desktop',
+  ready: false,
+}
+
+function appendLine(text, className = '') {
+  const line = document.createElement('div')
+  if (className) line.className = className
+  line.textContent = text
+  $output.appendChild(line)
+  $output.scrollTop = $output.scrollHeight
+}
+
+function appendBlock(text, className = '') {
+  if (!text) return
+  for (const part of text.split('\n')) {
+    appendLine(part, className)
+  }
+}
+
+function updatePrompt() {
+  $promptLabel.textContent = `${shell.cwdPath}$ `
+}
+
+async function browse(directoryId = null) {
+  const payload = directoryId == null ? {} : { directoryId }
+  return /** @type {BrowseResult} */ (await toParent('fs:browse', payload))
+}
+
+async function deleteEntry(entryType, id) {
+  await toParent('fs:delete', { entryType, id })
+}
+
+async function initCwd() {
+  const root = await browse(null)
+  shell.cwdId = root.directory_id
+  shell.cwdPath = '/'
+  shell.cwdName = root.name
+  shell.ready = true
+  updatePrompt()
+}
+
+function splitPath(path) {
+  return path.split('/').filter(Boolean)
+}
+
+function joinPath(parts) {
+  if (!parts.length) return '/'
+  return `/${parts.join('/')}`
+}
+
+function resolvePathParts(baseParts, rawPath) {
+  const absolute = rawPath.startsWith('/')
+  const parts = absolute ? [] : [...baseParts]
+  for (const segment of splitPath(rawPath)) {
+    if (segment === '.') continue
+    if (segment === '..') {
+      if (parts.length > 0) parts.pop()
+      continue
+    }
+    parts.push(segment)
+  }
+  return parts
+}
+
+async function browseByParts(parts) {
+  let listing = await browse(null)
+  for (const segment of parts) {
+    const entry = listing.entries.find(
+      (e) => e.type === 'directory' && e.name === segment,
+    )
+    if (!entry) throw new Error(`No such directory: ${segment}`)
+    listing = await browse(entry.id)
+  }
+  return {
+    directoryId: listing.directory_id,
+    parentId: listing.parent_id,
+    name: listing.name,
+    path: joinPath(parts),
+    entries: listing.entries,
+  }
+}
+
+async function browseByPath(path) {
+  const raw = path.trim()
+  if (!raw || raw === '.' || raw === '/') {
+    const root = await browse(null)
+    return {
+      directoryId: root.directory_id,
+      parentId: root.parent_id,
+      name: root.name,
+      path: '/',
+      entries: root.entries,
+    }
+  }
+
+  const baseParts = shell.cwdPath === '/' ? [] : splitPath(shell.cwdPath)
+  const parts = resolvePathParts(baseParts, raw)
+  return browseByParts(parts)
+}
+
+async function resolvePathArg(arg, { directoriesOnly = false } = {}) {
+  if (!arg) throw new Error('Path required')
+
+  const baseParts = shell.cwdPath === '/' ? [] : splitPath(shell.cwdPath)
+  const parts = resolvePathParts(baseParts, arg)
+  if (!parts.length) throw new Error(`Not a file: ${arg}`)
+
+  const parentParts = parts.slice(0, -1)
+  const name = parts[parts.length - 1]
+  const parent = await browseByParts(parentParts)
+  const entry = parent.entries.find((e) => e.name === name)
+  if (!entry) throw new Error(`No such file or directory: ${arg}`)
+  if (directoriesOnly && entry.type !== 'directory') {
+    throw new Error(`Not a directory: ${arg}`)
+  }
+  return { entry, parent }
+}
+
+async function cmdLs(args) {
+  const target = args[0]
+  const loc = target ? await browseByPath(target) : await browse(shell.cwdId)
+
+  if (!loc.entries.length) {
+    return ''
+  }
+
+  const lines = loc.entries.map((e) => {
+    const suffix = e.type === 'directory' ? '/' : ''
+    return `${e.name}${suffix}`
+  })
+  return lines.join('\n')
+}
+
+async function cmdCd(args) {
+  const target = args[0]
+  if (!target || target === '~') {
+    const root = await browse(null)
+    shell.cwdId = root.directory_id
+    shell.cwdPath = '/'
+    shell.cwdName = root.name
+    updatePrompt()
+    return ''
+  }
+
+  const loc = await browseByPath(target)
+  shell.cwdId = loc.directoryId
+  shell.cwdPath = loc.path
+  shell.cwdName = loc.name
+  updatePrompt()
+  return ''
+}
+
+async function cmdRm(args) {
+  if (!args.length) throw new Error('Usage: rm <file>')
+  const lines = []
+  for (const arg of args) {
+    const { entry } = await resolvePathArg(arg)
+    if (entry.type !== 'file') {
+      throw new Error(`Not a file: ${arg}`)
+    }
+    await deleteEntry('file', entry.id)
+    lines.push(`removed ${arg}`)
+  }
+  return lines.join('\n')
+}
+
+async function deleteDirectoryRecursive(directoryId) {
+  const listing = await browse(directoryId)
+  for (const entry of listing.entries) {
+    if (entry.type === 'file') {
+      await deleteEntry('file', entry.id)
+      continue
+    }
+    await deleteDirectoryRecursive(entry.id)
+  }
+  await deleteEntry('directory', directoryId)
+}
+
+async function cmdRmdir(args) {
+  if (!args.length) throw new Error('Usage: rmdir <directory>')
+  const lines = []
+  for (const arg of args) {
+    const { entry } = await resolvePathArg(arg, { directoriesOnly: true })
+    await deleteDirectoryRecursive(entry.id)
+    lines.push(`removed ${arg}`)
+  }
+  return lines.join('\n')
+}
+
+async function cmdHelp() {
+  return [
+    'Commands:',
+    '  ls [path]       list directory',
+    '  cd <path>       change directory (/ Desktop, .. parent)',
+    '  rm <file>       remove file',
+    '  rmdir <dir>     remove directory (recursive)',
+    '  pwd             print working directory',
+    '  clear           clear screen',
+    '  help            show this help',
+  ].join('\n')
+}
+
+async function runCommand(line) {
+  const trimmed = line.trim()
+  if (!trimmed) return ''
+
+  const parts = trimmed.split(/\s+/)
+  const cmd = parts[0]
+  const args = parts.slice(1)
+
+  switch (cmd) {
+    case 'ls':
+      return await cmdLs(args)
+    case 'cd':
+      return await cmdCd(args)
+    case 'rm':
+      return await cmdRm(args)
+    case 'rmdir':
+      return await cmdRmdir(args)
+    case 'pwd':
+      return shell.cwdPath
+    case 'clear':
+      $output.replaceChildren()
+      return ''
+    case 'help':
+      return await cmdHelp()
+    default:
+      throw new Error(`Unknown command: ${cmd}`)
+  }
+}
+
+$form.addEventListener('submit', async (event) => {
+  event.preventDefault()
+  const line = $command.value
+  $command.value = ''
+
+  appendLine(`${shell.cwdPath}$ ${line}`, 'line-prompt')
+
+  if (!shell.ready) {
+    appendLine('Shell not ready yet', 'line-error')
+    return
+  }
+
+  try {
+    const result = await runCommand(line)
+    appendBlock(result)
+  } catch (err) {
+    appendLine(err instanceof Error ? err.message : 'Command failed', 'line-error')
+  }
+})
+
+function resetShell(message = 'GlobalOS shell — type help for commands') {
+  $output.replaceChildren()
+  appendLine(message, 'line-muted')
+}
+
+async function bootShell() {
+  try {
+    await initCwd()
+    appendLine(`cwd: ${shell.cwdPath} (${shell.cwdName})`, 'line-muted')
+    $command.focus()
+  } catch (err) {
+    appendLine(err instanceof Error ? err.message : 'Failed to initialize', 'line-error')
+  }
+}
+
+window.addEventListener('message', (event) => {
+  const type = event.data?.type
+  if (type === 'init' || type === 'init:fresh') {
+    resetShell()
+    void bootShell()
+  }
+})
+
+resetShell()
+void bootShell()
+window.parent.postMessage({ type: 'ready' }, '*')
+</script>
+</body>
+</html>

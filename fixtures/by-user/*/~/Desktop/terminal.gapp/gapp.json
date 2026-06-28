@@ -1,0 +1,6 @@
+{
+  "name": "terminal",
+  "icon": "robot",
+  "entry": "index.html",
+  "type": "module"
+}
