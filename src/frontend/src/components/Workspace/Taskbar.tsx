@@ -112,12 +112,12 @@ const SearchField = createComponent(() => ({
   fontFamily: retroFont,
   fontSize: '12px',
   padding: '5px 6px',
-  marginBottom: '4px',
+  marginTop: '4px',
   background: '#ffffff',
   color: '#000000',
   outline: 'none',
   ...insetBorder,
-}), 'input')
+}), 'input', ['type', 'value', 'onChange', 'onKeyDown', 'placeholder', 'spellCheck', 'autoComplete', 'aria-label'])
 
 const Results = createComponent(() => ({
   maxHeight: '280px',
@@ -291,19 +291,8 @@ export function Taskbar({ onLaunchApp }: Props) {
   return (
     <>
       {menuOpen && (
-        <MenuPanel ref={panelRef}>
+        <MenuPanel innerRef={panelRef}>
           <MenuHeader>Find a file or app</MenuHeader>
-          <SearchField
-            ref={inputRef}
-            type="text"
-            placeholder="Type to search…"
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-            onKeyDown={onSearchKeyDown}
-            spellCheck={false}
-            autoComplete="off"
-            aria-label="Search files"
-          />
           <Results>
             {isLoading && <Hint>Loading file index…</Hint>}
             {!isLoading && results.length === 0 && (
@@ -328,6 +317,17 @@ export function Taskbar({ onLaunchApp }: Props) {
               )
             })}
           </Results>
+          <SearchField
+            innerRef={inputRef}
+            type="text"
+            placeholder="Type to search…"
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            onKeyDown={onSearchKeyDown}
+            spellCheck={false}
+            autoComplete="off"
+            aria-label="Search files"
+          />
         </MenuPanel>
       )}
       <Bar>
