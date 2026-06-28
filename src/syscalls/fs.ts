@@ -1,6 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '../db/schema.js'
+import { cleanupDirectoryAppRefs } from '../services/directory-cleanup.js'
 import { resolveDesktopDirectoryId, upsertDesktopFile } from '../services/desktop-files.js'
 import type { SyscallContext, SyscallHandler, SyscallResult } from './types.js'
 
@@ -284,6 +285,7 @@ export const fsDelete: SyscallHandler = async ({ db, userId }, args) => {
 
       if (childDir || childFile) throw new FsError('Folder is not empty', 409)
 
+      await cleanupDirectoryAppRefs(db, userId, dir.id, dir.name)
       await db.delete(schema.directory).where(eq(schema.directory.id, dir.id))
       return { ok: true }
     }
