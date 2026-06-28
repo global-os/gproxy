@@ -4,6 +4,7 @@ import { ServerClient } from 'postmark'
 import { optionalNameSignUpPlugin } from './auth/plugins/optional-name-signup.js'
 import { hashPassword, verifyPassword } from './crypto/password.js'
 import { db } from './db/index.js'
+import { seedFixturesForUser } from './db/seed.js'
 import * as schema from './db/schema.js'
 
 export const auth = betterAuth({
@@ -21,6 +22,33 @@ export const auth = betterAuth({
       verification: schema.verification,
     },
   }),
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (createdUser) => {
+          try {
+            const stats = await seedFixturesForUser(createdUser.id, createdUser.email)
+            if (!stats) return
+
+            const changes =
+              stats.directoriesCreated + stats.filesCreated + stats.filesUpdated
+            if (changes === 0) return
+
+            console.log(
+              `Seed: synced fixtures for new user ${createdUser.email} `
+              + `(+${stats.directoriesCreated} dirs, +${stats.filesCreated} files, `
+              + `~${stats.filesUpdated} updated)`,
+            )
+          } catch (err) {
+            console.error(
+              `[seed] failed to sync fixtures for new user ${createdUser.email}:`,
+              err,
+            )
+          }
+        },
+      },
+    },
+  },
   rateLimit: {
     customRules: {
       '/sign-in/email': { window: 60, max: 10 },

@@ -26,6 +26,45 @@ function hasFixtureSourcesOnDisk(): boolean {
     .some((entry) => entry.isDirectory() && entry.name !== FIXTURE_WILDCARD)
 }
 
+function logFixtureSync(email: string, stats: SyncStats) {
+  const changes =
+    stats.directoriesCreated + stats.filesCreated + stats.filesUpdated
+
+  if (changes === 0) {
+    console.log(`Seed: fixtures already up to date for ${email}`)
+    return
+  }
+
+  console.log(
+    `Seed: synced fixtures for ${email} `
+    + `(+${stats.directoriesCreated} dirs, +${stats.filesCreated} files, `
+    + `~${stats.filesUpdated} updated)`,
+  )
+}
+
+/** Upsert shared `*` and per-email fixture trees for one user (idempotent). */
+export async function seedFixturesForUser(
+  userId: string,
+  email: string,
+): Promise<SyncStats | null> {
+  if (!hasFixtureSourcesOnDisk()) return null
+
+  const fixtureBases = fixtureBasesForUser(email)
+  if (fixtureBases.length === 0) return null
+
+  const stats: SyncStats = {
+    directoriesCreated: 0,
+    filesCreated: 0,
+    filesUpdated: 0,
+  }
+
+  for (const fixtureBase of fixtureBases) {
+    await syncWalk(fixtureBase, null, userId, stats)
+  }
+
+  return stats
+}
+
 export async function seedUserFixtures() {
   if (!hasFixtureSourcesOnDisk()) {
     console.log('Seed: no fixture sources on disk, skipping')
@@ -44,33 +83,11 @@ export async function seedUserFixtures() {
   let seededUsers = 0
 
   for (const userRow of users) {
-    const fixtureBases = fixtureBasesForUser(userRow.email)
-    if (fixtureBases.length === 0) continue
-
-    const stats: SyncStats = {
-      directoriesCreated: 0,
-      filesCreated: 0,
-      filesUpdated: 0,
-    }
-
-    for (const fixtureBase of fixtureBases) {
-      await syncWalk(fixtureBase, null, userRow.id, stats)
-    }
+    const stats = await seedFixturesForUser(userRow.id, userRow.email)
+    if (!stats) continue
 
     seededUsers += 1
-    const changes =
-      stats.directoriesCreated + stats.filesCreated + stats.filesUpdated
-
-    if (changes === 0) {
-      console.log(`Seed: fixtures already up to date for ${userRow.email}`)
-      continue
-    }
-
-    console.log(
-      `Seed: synced fixtures for ${userRow.email} `
-      + `(+${stats.directoriesCreated} dirs, +${stats.filesCreated} files, `
-      + `~${stats.filesUpdated} updated)`,
-    )
+    logFixtureSync(userRow.email, stats)
   }
 
   if (seededUsers === 0) {
