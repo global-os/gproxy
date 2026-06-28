@@ -57,6 +57,21 @@ async function fetchWorkspaceProcesses(workspaceId: number): Promise<WorkspacePr
   return r.json()
 }
 
+async function killWorkspaceProcess(workspaceId: number, processId: number): Promise<void> {
+  const r = await fetch(`/api/workspaces/${workspaceId}/processes/${processId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  if (!r.ok) {
+    let message = `Failed to kill process (${r.status})`
+    try {
+      const body = (await r.json()) as { message?: string }
+      if (body.message) message = body.message
+    } catch { /* ignore */ }
+    throw new Error(message)
+  }
+}
+
 async function deleteWorkspace(workspaceId: number): Promise<void> {
   const r = await fetch(`/api/workspaces/${workspaceId}`, {
     method: 'DELETE',
@@ -102,9 +117,15 @@ function instanceStateCls(state: WorkspaceProcess['instances'][number]['state'])
 function WorkspaceProcessPanel({
   workspaceId,
   expanded,
+  killingProcessId,
+  killError,
+  onKill,
 }: {
   workspaceId: number
   expanded: boolean
+  killingProcessId: number | null
+  killError: string | null
+  onKill: (processId: number) => void
 }) {
   const { data, isPending, error } = useQuery<WorkspaceProcess[]>({
     queryKey: ['workspace-processes', workspaceId],
@@ -141,55 +162,81 @@ function WorkspaceProcessPanel({
   }
 
   return (
-    <ul className="m-0 p-0 list-none border-t border-gray-200 bg-white/60 divide-y divide-gray-100">
-      {processes.map((proc) => (
-        <li key={proc.id} className="px-4 py-3 flex flex-col gap-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="m-0 text-sm font-medium text-gray-900 truncate">{proc.bundleName}</p>
-              <p className="m-0 mt-0.5 text-xs text-gray-400">
-                Process {proc.id} · {proc.windowCount} window{proc.windowCount === 1 ? '' : 's'}
-              </p>
+    <div className="border-t border-gray-200 bg-white/60">
+      {killError && (
+        <p role="alert" className="m-0 px-4 py-2 text-xs text-red-600 border-b border-red-100">
+          {killError}
+        </p>
+      )}
+      <ul className="m-0 p-0 list-none divide-y divide-gray-100">
+        {processes.map((proc) => (
+          <li key={proc.id} className="px-4 py-3 flex flex-col gap-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="m-0 text-sm font-medium text-gray-900 truncate">{proc.bundleName}</p>
+                <p className="m-0 mt-0.5 text-xs text-gray-400">
+                  Process {proc.id} · {proc.windowCount} window{proc.windowCount === 1 ? '' : 's'}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={killingProcessId === proc.id}
+                onClick={() => onKill(proc.id)}
+                className={cn(
+                  'shrink-0 inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors duration-100',
+                  killingProcessId === proc.id
+                    ? 'bg-gray-50 border-gray-200 text-gray-300 cursor-default'
+                    : 'bg-white border-red-200 text-red-600 cursor-pointer hover:bg-red-50 hover:border-red-300',
+                )}
+              >
+                {killingProcessId === proc.id ? 'Killing…' : 'Kill'}
+              </button>
             </div>
-          </div>
-          {proc.instances.length === 0 ? (
-            <p className="m-0 text-xs text-gray-400">No instances</p>
-          ) : (
-            <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
-              {proc.instances.map((inst) => (
-                <li
-                  key={inst.id}
-                  className="flex items-center justify-between gap-2 text-xs text-gray-600"
-                >
-                  <span className="font-mono truncate">{inst.slug}</span>
-                  <span
-                    className={cn(
-                      'shrink-0 px-2 py-0.5 rounded-full border text-[11px] font-medium capitalize',
-                      instanceStateCls(inst.state),
-                    )}
+            {proc.instances.length === 0 ? (
+              <p className="m-0 text-xs text-gray-400">No instances</p>
+            ) : (
+              <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
+                {proc.instances.map((inst) => (
+                  <li
+                    key={inst.id}
+                    className="flex items-center justify-between gap-2 text-xs text-gray-600"
                   >
-                    {instanceStateLabel(inst.state)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </li>
-      ))}
-    </ul>
+                    <span className="font-mono truncate">{inst.slug}</span>
+                    <span
+                      className={cn(
+                        'shrink-0 px-2 py-0.5 rounded-full border text-[11px] font-medium capitalize',
+                        instanceStateCls(inst.state),
+                      )}
+                    >
+                      {instanceStateLabel(inst.state)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
-function WorkspacePreviewCard({
+function WorkspaceManageCard({
   ws,
   index,
   expanded,
   onToggle,
+  killingProcessId,
+  killError,
+  onKill,
 }: {
   ws: Workspace
   index: number
   expanded: boolean
   onToggle: () => void
+  killingProcessId: number | null
+  killError: string | null
+  onKill: (processId: number) => void
 }) {
   const label = workspaceLabel(ws, index)
 
@@ -228,7 +275,13 @@ function WorkspacePreviewCard({
           Open
         </Link>
       </button>
-      <WorkspaceProcessPanel workspaceId={ws.id} expanded={expanded} />
+      <WorkspaceProcessPanel
+        workspaceId={ws.id}
+        expanded={expanded}
+        killingProcessId={killingProcessId}
+        killError={killError}
+        onKill={onKill}
+      />
     </div>
   )
 }
@@ -277,10 +330,13 @@ type WorkspaceListProps = {
 
 export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) => {
   const queryClient = useQueryClient()
+  const [screen, setScreen] = useState<'global-pc' | 'manage'>('global-pc')
   const [createError, setCreateError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [expandedPreviewIds, setExpandedPreviewIds] = useState<Set<number>>(() => new Set())
+  const [expandedManageIds, setExpandedManageIds] = useState<Set<number>>(() => new Set())
+  const [killingProcessId, setKillingProcessId] = useState<number | null>(null)
+  const [killError, setKillError] = useState<string | null>(null)
   const { data: authSession } = useSession()
   const isAdmin = authSession?.user?.email === 'peterson@sent.com'
 
@@ -307,14 +363,33 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
     }
   }, [createMutate])
 
-  const togglePreview = useCallback((workspaceId: number) => {
-    setExpandedPreviewIds((current) => {
+  const openManage = useCallback((workspaceId: number) => {
+    setKillError(null)
+    setExpandedManageIds(new Set([workspaceId]))
+    setScreen('manage')
+  }, [])
+
+  const toggleManage = useCallback((workspaceId: number) => {
+    setExpandedManageIds((current) => {
       const next = new Set(current)
       if (next.has(workspaceId)) next.delete(workspaceId)
       else next.add(workspaceId)
       return next
     })
   }, [])
+
+  const handleKillProcess = useCallback(async (workspaceId: number, processId: number) => {
+    setKillError(null)
+    setKillingProcessId(processId)
+    try {
+      await killWorkspaceProcess(workspaceId, processId)
+      await queryClient.invalidateQueries({ queryKey: ['workspace-processes', workspaceId] })
+    } catch (err) {
+      setKillError(err instanceof Error ? err.message : 'Failed to kill process')
+    } finally {
+      setKillingProcessId(null)
+    }
+  }, [queryClient])
 
   const handleDeleteWorkspace = useCallback(async (workspaceId: number) => {
     setDeleteError(null)
@@ -347,13 +422,56 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
     'aria-selected:bg-white aria-selected:text-violet-700 aria-selected:shadow-sm',
   )
 
+  if (screen === 'manage') {
+    return (
+      <div className="w-full">
+        <div className="flex flex-col gap-4">
+          <button
+            type="button"
+            onClick={() => setScreen('global-pc')}
+            className="self-start text-sm text-gray-500 bg-transparent border-none p-0 cursor-pointer hover:text-gray-700 transition-colors duration-100"
+          >
+            ← Back to My Global PC
+          </button>
+
+          <div>
+            <p className="m-0 text-base font-semibold text-gray-900">Manage</p>
+            <p className="m-0 mt-1 text-sm text-gray-500 leading-normal">
+              Task manager for workspace processes — kill a process to close its windows and stop its instances.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {workspaces.length === 0 ? (
+              <div className="px-4 py-8 rounded-xl text-center text-gray-400 bg-gray-50 border border-dashed border-gray-200 text-sm leading-relaxed">
+                No workspaces yet. Create one on My Global PC to manage processes here.
+              </div>
+            ) : (
+              workspaces.map((ws, i) => (
+                <WorkspaceManageCard
+                  key={ws.id}
+                  ws={ws}
+                  index={i}
+                  expanded={expandedManageIds.has(ws.id)}
+                  onToggle={() => toggleManage(ws.id)}
+                  killingProcessId={killingProcessId}
+                  killError={killError}
+                  onKill={(processId) => void handleKillProcess(ws.id, processId)}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="w-full">
       <Tabs.Root defaultValue="global-pc">
         <div className="p-1 rounded-xl bg-gray-100 mb-6">
           <Tabs.List className="flex gap-1">
             <Tabs.Tab value="global-pc" className={tabCls}>My Global PC</Tabs.Tab>
-            <Tabs.Tab value="preview" className={tabCls}>Preview</Tabs.Tab>
             <Tabs.Tab value="settings" className={tabCls}>Settings</Tabs.Tab>
             <Tabs.Tab value="help" className={tabCls}>Help</Tabs.Tab>
             <Tabs.Indicator hidden />
@@ -401,6 +519,13 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
                       </Link>
                       <button
                         type="button"
+                        onClick={() => openManage(ws.id)}
+                        className="inline-flex items-center px-3.5 py-1.5 rounded-lg text-sm font-semibold border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors duration-100 cursor-pointer"
+                      >
+                        Manage
+                      </button>
+                      <button
+                        type="button"
                         disabled={deletingId === ws.id}
                         aria-label={`Delete ${workspaceLabel(ws, i)}`}
                         onClick={() => void handleDeleteWorkspace(ws.id)}
@@ -446,35 +571,6 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
                 >
                   Admin panel
                 </Link>
-              )}
-            </div>
-          </div>
-        </Tabs.Panel>
-
-        <Tabs.Panel value="preview">
-          <div className="flex flex-col gap-4">
-            <div>
-              <p className="m-0 text-base font-semibold text-gray-900">Preview</p>
-              <p className="m-0 mt-1 text-sm text-gray-500 leading-normal">
-                Expand a workspace to see its processes — each launched .gapp on that desk.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {workspaces.length === 0 ? (
-                <div className="px-4 py-8 rounded-xl text-center text-gray-400 bg-gray-50 border border-dashed border-gray-200 text-sm leading-relaxed">
-                  No workspaces yet. Create one on My Global PC to preview processes here.
-                </div>
-              ) : (
-                workspaces.map((ws, i) => (
-                  <WorkspacePreviewCard
-                    key={ws.id}
-                    ws={ws}
-                    index={i}
-                    expanded={expandedPreviewIds.has(ws.id)}
-                    onToggle={() => togglePreview(ws.id)}
-                  />
-                ))
               )}
             </div>
           </div>

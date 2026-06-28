@@ -1,6 +1,8 @@
-import { eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import * as schema from '../db/schema.js'
+import { LaunchError } from './errors.js'
+import { requireWorkspace } from './workspace-access.js'
 
 export type WorkspaceProcessInstanceDto = {
   id: number
@@ -80,4 +82,29 @@ export async function listWorkspaceProcesses(
     windowCount: windowCountByProcess.get(row.id) ?? 0,
     instances: instancesByProcess.get(row.id) ?? [],
   }))
+}
+
+export async function killWorkspaceProcess(
+  userId: string,
+  workspaceId: number,
+  processId: number,
+): Promise<void> {
+  await requireWorkspace(userId, workspaceId)
+
+  const [proc] = await db
+    .select({ id: schema.process.id })
+    .from(schema.process)
+    .where(and(
+      eq(schema.process.id, processId),
+      eq(schema.process.workspace_id, workspaceId),
+    ))
+    .limit(1)
+
+  if (!proc) {
+    throw new LaunchError('Process not found', 404)
+  }
+
+  await db
+    .delete(schema.process)
+    .where(eq(schema.process.id, processId))
 }

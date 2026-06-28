@@ -3,7 +3,7 @@ import * as middleware from '../middleware.js'
 import { LaunchError, launchProgram } from '../services/launch-program.js'
 import { requireWorkspace } from '../services/workspace-access.js'
 import { clearWorkspaceLogs, listWorkspaceLogs } from '../services/workspace-logger.js'
-import { listWorkspaceProcesses } from '../services/process-service.js'
+import { killWorkspaceProcess, listWorkspaceProcesses } from '../services/process-service.js'
 import { deleteWindow, listWorkspaceWindows } from '../services/window-service.js'
 import { Env } from '../types.js'
 
@@ -79,6 +79,28 @@ router.get('/workspaces/:workspaceId/processes', async (c) => {
     }
     console.error('[workspace-processes]', err)
     return c.json({ message: 'Failed to load processes' }, 500)
+  }
+})
+
+router.delete('/workspaces/:workspaceId/processes/:processId', async (c) => {
+  const user = c.get('user')
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  const workspaceId = Number.parseInt(c.req.param('workspaceId'), 10)
+  const processId = Number.parseInt(c.req.param('processId'), 10)
+  if (!Number.isFinite(workspaceId) || !Number.isFinite(processId)) {
+    return c.json({ message: 'Invalid workspace or process id' }, 400)
+  }
+
+  try {
+    await killWorkspaceProcess(user.id, workspaceId, processId)
+    return c.json({ ok: true })
+  } catch (err) {
+    if (err instanceof LaunchError) {
+      return c.json({ message: err.message }, err.status as 404)
+    }
+    console.error('[kill-process]', err)
+    return c.json({ message: 'Failed to kill process' }, 500)
   }
 })
 
