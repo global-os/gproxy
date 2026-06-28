@@ -153,6 +153,20 @@ function cwdParts() {
   return shell.cwdPath === '/' ? [] : splitPath(shell.cwdPath)
 }
 
+function isUnderUsersTree() {
+  return shell.cwdPath === '/Users' || shell.cwdPath.startsWith('/Users/')
+}
+
+async function tryBrowseUsersChild(name) {
+  if (!shell.usersRootId || !isUnderUsersTree()) return null
+  if (name === '.' || name === '..') return null
+  try {
+    return await browseByParts(['Users', name])
+  } catch {
+    return null
+  }
+}
+
 function resolvePathParts(baseParts, rawPath) {
   const absolute = rawPath.startsWith('/')
   const parts = absolute ? [] : [...baseParts]
@@ -262,6 +276,20 @@ async function cmdLs(args) {
   return lines.join('\n')
 }
 
+async function resolveCdTarget(target) {
+  try {
+    return await browseByPath(target)
+  } catch (err) {
+    const raw = expandTilde(target.trim())
+    const singleSegment = raw && !raw.startsWith('/') && !raw.includes('/')
+    if (singleSegment) {
+      const usersChild = await tryBrowseUsersChild(raw)
+      if (usersChild) return usersChild
+    }
+    throw err
+  }
+}
+
 async function cmdCd(args) {
   const target = args[0]
   if (!target || target === '~') {
@@ -273,7 +301,7 @@ async function cmdCd(args) {
     return ''
   }
 
-  const loc = await browseByPath(target)
+  const loc = await resolveCdTarget(target)
   shell.cwdId = loc.directoryId
   shell.cwdPath = loc.path
   shell.cwdName = loc.name
@@ -322,7 +350,7 @@ async function cmdHelp() {
   return [
     'Commands:',
     '  ls [path]       list directory',
-    '  cd <path>       change directory (~ Desktop, / Users root, .. parent)',
+    '  cd <path>       change directory (~ Desktop, / Users, ../Documents, etc.)',
     '  rm <file>       remove file',
     '  rmdir <dir>     remove directory (recursive)',
     '  pwd             print working directory',
