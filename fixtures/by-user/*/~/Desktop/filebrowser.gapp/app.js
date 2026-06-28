@@ -1,6 +1,20 @@
+// @ts-check
+/// <reference path="./preact-gapp.d.ts" />
+
 import { h, render } from 'preact'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { toParent } from './kernel.js'
+
+/**
+ * @typedef {{ type: 'directory' | 'file', id: number, name: string }} FsEntry
+ * @typedef {{
+ *   directory_id: number,
+ *   parent_id: number | null,
+ *   can_go_up: boolean,
+ *   name: string,
+ *   entries: FsEntry[],
+ * }} BrowseResult
+ */
 
 function entryIcon(entry) {
   if (entry.type === 'directory') {
@@ -25,18 +39,18 @@ function isSelected(selected, entry) {
 }
 
 function FileBrowserApp() {
-  const [busy, setBusy] = useState(false)
-  const [cwd, setCwd] = useState(null)
-  const [parentId, setParentId] = useState(null)
-  const [canGoUp, setCanGoUp] = useState(false)
-  const [folderName, setFolderName] = useState('Desktop')
-  const [entries, setEntries] = useState([])
-  const [selected, setSelected] = useState(null)
-  const [status, setStatus] = useState('Loading…')
-  const [statusError, setStatusError] = useState(false)
+  const [busy, setBusy] = useState(/** @type {boolean} */ (false))
+  const [cwd, setCwd] = useState(/** @type {number | null} */ (null))
+  const [parentId, setParentId] = useState(/** @type {number | null} */ (null))
+  const [canGoUp, setCanGoUp] = useState(/** @type {boolean} */ (false))
+  const [folderName, setFolderName] = useState(/** @type {string} */ ('Desktop'))
+  const [entries, setEntries] = useState(/** @type {FsEntry[]} */ ([]))
+  const [selected, setSelected] = useState(/** @type {FsEntry | null} */ (null))
+  const [status, setStatus] = useState(/** @type {string} */ ('Loading…'))
+  const [statusError, setStatusError] = useState(/** @type {boolean} */ (false))
   const loadGeneration = useRef(0)
 
-  const applyBrowse = useCallback((result) => {
+  const applyBrowse = useCallback(/** @param {BrowseResult} result */ (result) => {
     setCwd(result.directory_id)
     setParentId(result.parent_id)
     setCanGoUp(result.can_go_up)
@@ -45,7 +59,7 @@ function FileBrowserApp() {
     setSelected(null)
   }, [])
 
-  const loadDirectory = useCallback(async (directoryId) => {
+  const loadDirectory = useCallback(/** @param {number | null} directoryId */ async (directoryId) => {
     const generation = ++loadGeneration.current
     setBusy(true)
     setStatus('Loading…')
@@ -168,8 +182,12 @@ function FileBrowserApp() {
       : entries.map((entry) => h('div', {
           key: `${entry.type}-${entry.id}`,
           class: `list-row${isSelected(selected, entry) ? ' selected' : ''}`,
-          onClick: () => setSelected(entry),
+          onClick: () => {
+            debugger;
+            setSelected(entry)
+          },
           onDblClick: async () => {
+            debugger;
             if (entry.type === 'directory') await loadDirectory(entry.id)
           },
         },
