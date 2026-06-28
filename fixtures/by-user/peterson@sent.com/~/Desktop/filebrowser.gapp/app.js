@@ -25,7 +25,6 @@ function isSelected(selected, entry) {
 }
 
 function FileBrowserApp() {
-  const [initialLoading, setInitialLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [cwd, setCwd] = useState(null)
   const [parentId, setParentId] = useState(null)
@@ -33,7 +32,7 @@ function FileBrowserApp() {
   const [folderName, setFolderName] = useState('Desktop')
   const [entries, setEntries] = useState([])
   const [selected, setSelected] = useState(null)
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState('Loading…')
   const [statusError, setStatusError] = useState(false)
   const loadGeneration = useRef(0)
 
@@ -67,15 +66,12 @@ function FileBrowserApp() {
   }, [applyBrowse])
 
   useEffect(() => {
-    let active = true
-    void loadDirectory(null).finally(() => {
-      if (active) setInitialLoading(false)
-    })
+    void loadDirectory(null)
     return () => {
-      active = false
       loadGeneration.current += 1
     }
-  }, [loadDirectory])
+    // Mount once; generation bump cancels stale browse on Strict Mode remount.
+  }, [])
 
   const hasSelection = selected != null
 
@@ -158,8 +154,24 @@ function FileBrowserApp() {
     }
   }
 
+  const listBody = busy && entries.length === 0
+    ? h('div', { class: 'empty' }, 'Loading…')
+    : entries.length === 0
+      ? h('div', { class: 'empty' }, 'This folder is empty.')
+      : entries.map((entry) => h('div', {
+          key: `${entry.type}-${entry.id}`,
+          class: `list-row${isSelected(selected, entry) ? ' selected' : ''}`,
+          onClick: () => setSelected(entry),
+          onDblClick: () => {
+            if (entry.type === 'directory') void loadDirectory(entry.id)
+          },
+        },
+        h('span', { class: 'icon' }, entryIcon(entry)),
+        h('span', { class: 'name' }, entry.name),
+        h('span', { class: 'kind' }, entryKind(entry)),
+      ))
+
   return h('div', { class: 'shell' },
-    initialLoading && h('div', { class: 'waiting' }, 'Loading file system…'),
     h('div', { class: 'toolbar' },
       h('button', {
         type: 'button',
@@ -195,22 +207,7 @@ function FileBrowserApp() {
         h('span', null, 'Name'),
         h('span', null, 'Type'),
       ),
-      h('div', { class: 'list-body' },
-        entries.length === 0
-          ? h('div', { class: 'empty' }, 'This folder is empty.')
-          : entries.map((entry) => h('div', {
-              key: `${entry.type}-${entry.id}`,
-              class: `list-row${isSelected(selected, entry) ? ' selected' : ''}`,
-              onClick: () => setSelected(entry),
-              onDblClick: () => {
-                if (entry.type === 'directory') void loadDirectory(entry.id)
-              },
-            },
-            h('span', { class: 'icon' }, entryIcon(entry)),
-            h('span', { class: 'name' }, entry.name),
-            h('span', { class: 'kind' }, entryKind(entry)),
-          )),
-      ),
+      h('div', { class: 'list-body' }, listBody),
     ),
     h('div', { class: `statusbar${statusError ? ' error' : ''}` }, status),
   )
