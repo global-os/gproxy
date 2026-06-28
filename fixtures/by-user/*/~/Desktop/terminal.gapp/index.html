@@ -73,6 +73,7 @@ import { toParent } from './kernel.js'
  *   parent_id: number | null,
  *   can_go_up: boolean,
  *   name: string,
+ *   path: string,
  *   entries: FsEntry[],
  * }} BrowseResult */
 
@@ -83,8 +84,11 @@ const $promptLabel = document.getElementById('prompt-label')
 
 const shell = {
   cwdId: null,
-  cwdPath: '/',
-  cwdName: 'Desktop',
+  cwdPath: '',
+  cwdName: '',
+  usersRootId: null,
+  desktopId: null,
+  homePath: '',
   ready: false,
 }
 
@@ -117,10 +121,13 @@ async function deleteEntry(entryType, id) {
 }
 
 async function initCwd() {
-  const root = await browse(null)
-  shell.cwdId = root.directory_id
-  shell.cwdPath = '/'
-  shell.cwdName = root.name
+  const desktop = await browse(null)
+  shell.usersRootId = desktop.parent_id
+  shell.desktopId = desktop.directory_id
+  shell.cwdId = desktop.directory_id
+  shell.cwdPath = desktop.path
+  shell.cwdName = desktop.name
+  shell.homePath = desktop.path
   shell.ready = true
   updatePrompt()
 }
@@ -130,8 +137,20 @@ function splitPath(path) {
 }
 
 function joinPath(parts) {
-  if (!parts.length) return '/'
+  if (!parts.length) return '/Users'
   return `/${parts.join('/')}`
+}
+
+function expandTilde(rawPath) {
+  if (rawPath === '~') return shell.homePath
+  if (rawPath.startsWith('~/')) {
+    return `${shell.homePath}/${rawPath.slice(2)}`
+  }
+  return rawPath
+}
+
+function cwdParts() {
+  return shell.cwdPath === '/' ? [] : splitPath(shell.cwdPath)
 }
 
 function resolvePathParts(baseParts, rawPath) {
@@ -149,37 +168,64 @@ function resolvePathParts(baseParts, rawPath) {
 }
 
 async function browseByParts(parts) {
-  let listing = await browse(null)
-  for (const segment of parts) {
+  if (!parts.length) {
+    const users = await browse(shell.usersRootId)
+    return {
+      directoryId: users.directory_id,
+      parentId: users.parent_id,
+      name: users.name,
+      path: users.path,
+      entries: users.entries,
+    }
+  }
+
+  let listing
+  let index = 0
+
+  if (parts[0] === 'Users' && shell.usersRootId != null) {
+    listing = await browse(shell.usersRootId)
+    index = 1
+  } else {
+    throw new Error(`No such directory: /${parts.join('/')}`)
+  }
+
+  for (; index < parts.length; index += 1) {
+    const segment = parts[index]
     const entry = listing.entries.find(
       (e) => e.type === 'directory' && e.name === segment,
     )
     if (!entry) throw new Error(`No such directory: ${segment}`)
     listing = await browse(entry.id)
   }
+
   return {
     directoryId: listing.directory_id,
     parentId: listing.parent_id,
     name: listing.name,
-    path: joinPath(parts),
+    path: listing.path,
     entries: listing.entries,
   }
 }
 
 async function browseByPath(path) {
-  const raw = path.trim()
-  if (!raw || raw === '.' || raw === '/') {
-    const root = await browse(null)
+  const raw = expandTilde(path.trim())
+  if (!raw || raw === '.') {
+    const listing = await browse(shell.cwdId)
     return {
-      directoryId: root.directory_id,
-      parentId: root.parent_id,
-      name: root.name,
-      path: '/',
-      entries: root.entries,
+      directoryId: listing.directory_id,
+      parentId: listing.parent_id,
+      name: listing.name,
+      path: listing.path,
+      entries: listing.entries,
     }
   }
 
-  const baseParts = shell.cwdPath === '/' ? [] : splitPath(shell.cwdPath)
+  if (raw === '/') {
+    return browseByParts([])
+  }
+
+  const absolute = raw.startsWith('/')
+  const baseParts = absolute ? [] : cwdParts()
   const parts = resolvePathParts(baseParts, raw)
   return browseByParts(parts)
 }
@@ -187,8 +233,7 @@ async function browseByPath(path) {
 async function resolvePathArg(arg, { directoriesOnly = false } = {}) {
   if (!arg) throw new Error('Path required')
 
-  const baseParts = shell.cwdPath === '/' ? [] : splitPath(shell.cwdPath)
-  const parts = resolvePathParts(baseParts, arg)
+  const parts = resolvePathParts(cwdParts(), expandTilde(arg))
   if (!parts.length) throw new Error(`Not a file: ${arg}`)
 
   const parentParts = parts.slice(0, -1)
@@ -220,10 +265,10 @@ async function cmdLs(args) {
 async function cmdCd(args) {
   const target = args[0]
   if (!target || target === '~') {
-    const root = await browse(null)
-    shell.cwdId = root.directory_id
-    shell.cwdPath = '/'
-    shell.cwdName = root.name
+    const home = await browse(shell.desktopId)
+    shell.cwdId = home.directory_id
+    shell.cwdPath = home.path
+    shell.cwdName = home.name
     updatePrompt()
     return ''
   }
@@ -277,7 +322,7 @@ async function cmdHelp() {
   return [
     'Commands:',
     '  ls [path]       list directory',
-    '  cd <path>       change directory (/ Desktop, .. parent)',
+    '  cd <path>       change directory (~ Desktop, / Users root, .. parent)',
     '  rm <file>       remove file',
     '  rmdir <dir>     remove directory (recursive)',
     '  pwd             print working directory',

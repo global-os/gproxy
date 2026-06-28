@@ -72,6 +72,31 @@ async function isWithinUserTree(
   return false
 }
 
+async function resolveDirectoryPath(
+  db: NodePgDatabase<typeof schema>,
+  directoryId: number,
+): Promise<string> {
+  const segments: string[] = []
+  let currentId: number | null = directoryId
+
+  while (currentId !== null) {
+    const [row] = await db
+      .select({
+        name: schema.directory.name,
+        parent_id: schema.directory.parent_id,
+      })
+      .from(schema.directory)
+      .where(eq(schema.directory.id, currentId))
+      .limit(1)
+
+    if (!row) break
+    segments.push(row.name)
+    currentId = row.parent_id
+  }
+
+  return `/${segments.reverse().join('/')}`
+}
+
 async function getDirectory(
   db: NodePgDatabase<typeof schema>,
   userId: string,
@@ -177,6 +202,7 @@ export const fsBrowse: SyscallHandler = async ({ db, userId }, args) => {
         directory_id: dir.id,
         name: dir.name,
         parent_id: dir.parent_id,
+        path: await resolveDirectoryPath(db, dir.id),
         can_go_up: dir.parent_id !== null && dir.id !== usersRootId,
         entries: [
           ...dirs.map(d => ({ type: 'directory' as const, id: d.id, name: d.name })),
