@@ -69,7 +69,7 @@ const ClearButton = createComponent(
     },
   }),
   'button',
-  ['disabled']
+  ['type', 'onClick', 'disabled']
 )
 
 const List = createComponent(
@@ -147,6 +147,7 @@ export function SessionLogger({ sessionId }: { sessionId: string }) {
       }
     },
     onSuccess: () => {
+      queryClient.setQueryData(['session-logs', sessionId], [])
       void queryClient.invalidateQueries({ queryKey: ['session-logs', sessionId] })
     },
   })
