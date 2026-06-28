@@ -1,6 +1,6 @@
 import { h, render } from 'preact'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
-import { toParent } from './kernel.js'
+import { toParent, whenKernelAttached } from './kernel.js'
 
 function entryIcon(entry) {
   if (entry.type === 'directory') {
@@ -48,18 +48,33 @@ function FileBrowserApp() {
   const loadDirectory = useCallback(async (directoryId) => {
     const generation = ++loadGeneration.current
     setBusy(true)
-    setStatus('Loading…')
     setStatusError(false)
+
     try {
-      const payload = directoryId == null ? {} : { directoryId }
-      const result = await toParent('fs:browse', payload)
-      if (generation !== loadGeneration.current) return
-      applyBrowse(result)
-      setStatus(`${result.entries.length} item${result.entries.length === 1 ? '' : 's'}`)
-    } catch (err) {
-      if (generation !== loadGeneration.current) return
-      setStatus(err instanceof Error ? err.message : 'Failed to load folder')
-      setStatusError(true)
+      for (let attempt = 0; attempt <= 4; attempt += 1) {
+        if (generation !== loadGeneration.current) return
+        setStatus(attempt > 0 ? 'Retrying…' : 'Loading…')
+
+        try {
+          await whenKernelAttached()
+          if (generation !== loadGeneration.current) return
+
+          const payload = directoryId == null ? {} : { directoryId }
+          const result = await toParent('fs:browse', payload)
+          if (generation !== loadGeneration.current) return
+          applyBrowse(result)
+          setStatus(`${result.entries.length} item${result.entries.length === 1 ? '' : 's'}`)
+          return
+        } catch (err) {
+          if (generation !== loadGeneration.current) return
+          if (attempt < 4) {
+            await new Promise((resolve) => window.setTimeout(resolve, 200 * (attempt + 1)))
+            continue
+          }
+          setStatus(err instanceof Error ? err.message : 'Failed to load folder')
+          setStatusError(true)
+        }
+      }
     } finally {
       if (generation === loadGeneration.current) setBusy(false)
     }
@@ -71,7 +86,7 @@ function FileBrowserApp() {
       loadGeneration.current += 1
     }
     // Mount once; generation bump cancels stale browse on Strict Mode remount.
-  }, [])
+  }, [loadDirectory])
 
   const hasSelection = selected != null
 
