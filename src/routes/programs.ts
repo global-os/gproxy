@@ -3,6 +3,7 @@ import * as middleware from '../middleware.js'
 import { LaunchError, launchProgram } from '../services/launch-program.js'
 import { requireWorkspace } from '../services/workspace-access.js'
 import { clearWorkspaceLogs, listWorkspaceLogs } from '../services/workspace-logger.js'
+import { listWorkspaceProcesses } from '../services/process-service.js'
 import { deleteWindow, listWorkspaceWindows } from '../services/window-service.js'
 import { Env } from '../types.js'
 
@@ -56,6 +57,28 @@ router.delete('/workspaces/:workspaceId/logs', async (c) => {
     }
     console.error('[workspace-logs]', err)
     return c.json({ message: 'Failed to clear workspace logs' }, 500)
+  }
+})
+
+router.get('/workspaces/:workspaceId/processes', async (c) => {
+  const user = c.get('user')
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  const workspaceId = Number.parseInt(c.req.param('workspaceId'), 10)
+  if (!Number.isFinite(workspaceId)) {
+    return c.json({ message: 'Invalid workspace id' }, 400)
+  }
+
+  try {
+    await requireWorkspace(user.id, workspaceId)
+    const processes = await listWorkspaceProcesses(workspaceId)
+    return c.json(processes)
+  } catch (err) {
+    if (err instanceof LaunchError) {
+      return c.json({ message: err.message }, err.status as 404)
+    }
+    console.error('[workspace-processes]', err)
+    return c.json({ message: 'Failed to load processes' }, 500)
   }
 })
 

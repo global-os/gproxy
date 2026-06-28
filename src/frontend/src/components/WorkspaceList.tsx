@@ -4,6 +4,19 @@ import { useCallback, useState } from 'react'
 import { Tabs } from '@base-ui/react/tabs'
 import { useSession } from '../lib/auth-client'
 
+type WorkspaceProcess = {
+  id: number
+  workspaceId: number
+  directoryId: number
+  bundleName: string
+  windowCount: number
+  instances: Array<{
+    id: number
+    slug: string
+    state: 'starting' | 'running' | 'stopped'
+  }>
+}
+
 function cn(...parts: (string | false | null | undefined)[]) {
   return parts.filter(Boolean).join(' ')
 }
@@ -38,6 +51,12 @@ async function createWorkspace(): Promise<Workspace[]> {
   return r.json()
 }
 
+async function fetchWorkspaceProcesses(workspaceId: number): Promise<WorkspaceProcess[]> {
+  const r = await fetch(`/api/workspaces/${workspaceId}/processes`, { credentials: 'include' })
+  if (!r.ok) throw new Error(`Failed to load processes (${r.status})`)
+  return r.json()
+}
+
 async function deleteWorkspace(workspaceId: number): Promise<void> {
   const r = await fetch(`/api/workspaces/${workspaceId}`, {
     method: 'DELETE',
@@ -56,6 +75,162 @@ async function deleteWorkspace(workspaceId: number): Promise<void> {
 function workspaceLabel(ws: Workspace, index: number): string {
   if (ws.name && ws.name !== 'bar') return ws.name
   return `Workspace ${index + 1}`
+}
+
+function instanceStateLabel(state: WorkspaceProcess['instances'][number]['state']): string {
+  switch (state) {
+    case 'running':
+      return 'running'
+    case 'starting':
+      return 'starting'
+    case 'stopped':
+      return 'stopped'
+  }
+}
+
+function instanceStateCls(state: WorkspaceProcess['instances'][number]['state']): string {
+  switch (state) {
+    case 'running':
+      return 'text-emerald-700 bg-emerald-50 border-emerald-200'
+    case 'starting':
+      return 'text-amber-700 bg-amber-50 border-amber-200'
+    case 'stopped':
+      return 'text-gray-500 bg-gray-50 border-gray-200'
+  }
+}
+
+function WorkspaceProcessPanel({
+  workspaceId,
+  expanded,
+}: {
+  workspaceId: number
+  expanded: boolean
+}) {
+  const { data, isPending, error } = useQuery<WorkspaceProcess[]>({
+    queryKey: ['workspace-processes', workspaceId],
+    queryFn: () => fetchWorkspaceProcesses(workspaceId),
+    enabled: expanded,
+  })
+
+  if (!expanded) return null
+
+  if (isPending) {
+    return (
+      <div className="px-4 py-3 text-sm text-gray-400 border-t border-gray-200 bg-white/60">
+        Loading processes…
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="px-4 py-3 text-sm text-red-600 border-t border-gray-200 bg-white/60">
+        {error instanceof Error ? error.message : 'Failed to load processes'}
+      </div>
+    )
+  }
+
+  const processes = data ?? []
+
+  if (processes.length === 0) {
+    return (
+      <div className="px-4 py-3 text-sm text-gray-400 border-t border-gray-200 bg-white/60">
+        No processes on this workspace yet. Open the desk and launch a .gapp to start one.
+      </div>
+    )
+  }
+
+  return (
+    <ul className="m-0 p-0 list-none border-t border-gray-200 bg-white/60 divide-y divide-gray-100">
+      {processes.map((proc) => (
+        <li key={proc.id} className="px-4 py-3 flex flex-col gap-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="m-0 text-sm font-medium text-gray-900 truncate">{proc.bundleName}</p>
+              <p className="m-0 mt-0.5 text-xs text-gray-400">
+                Process {proc.id} · {proc.windowCount} window{proc.windowCount === 1 ? '' : 's'}
+              </p>
+            </div>
+          </div>
+          {proc.instances.length === 0 ? (
+            <p className="m-0 text-xs text-gray-400">No instances</p>
+          ) : (
+            <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
+              {proc.instances.map((inst) => (
+                <li
+                  key={inst.id}
+                  className="flex items-center justify-between gap-2 text-xs text-gray-600"
+                >
+                  <span className="font-mono truncate">{inst.slug}</span>
+                  <span
+                    className={cn(
+                      'shrink-0 px-2 py-0.5 rounded-full border text-[11px] font-medium capitalize',
+                      instanceStateCls(inst.state),
+                    )}
+                  >
+                    {instanceStateLabel(inst.state)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function WorkspacePreviewCard({
+  ws,
+  index,
+  expanded,
+  onToggle,
+}: {
+  ws: Workspace
+  index: number
+  expanded: boolean
+  onToggle: () => void
+}) {
+  const label = workspaceLabel(ws, index)
+
+  return (
+    <div className="rounded-xl bg-gray-50 border border-gray-200 overflow-hidden transition-colors duration-100 hover:border-violet-200">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left bg-transparent border-none cursor-pointer hover:bg-violet-50/40 transition-colors duration-100"
+      >
+        <span
+          className={cn(
+            'shrink-0 w-6 text-center text-xs text-gray-400 transition-transform duration-100',
+            expanded && 'rotate-90',
+          )}
+          aria-hidden
+        >
+          ▶
+        </span>
+        <span className="shrink-0 min-w-8 text-center px-2 py-1 rounded-md text-xs font-semibold text-violet-700 bg-violet-100">
+          #{index + 1}
+        </span>
+        <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+          <span className="text-sm font-medium text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap">
+            {label}
+          </span>
+          <span className="text-xs text-gray-400">ID {ws.id}</span>
+        </div>
+        <Link
+          to="/workspace/$workspaceId"
+          params={{ workspaceId: String(ws.id) }}
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold no-underline text-violet-700 bg-violet-100 hover:bg-violet-200 transition-colors duration-100"
+        >
+          Open
+        </Link>
+      </button>
+      <WorkspaceProcessPanel workspaceId={ws.id} expanded={expanded} />
+    </div>
+  )
 }
 
 function PrimaryButton({
@@ -105,6 +280,7 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
   const [createError, setCreateError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [expandedPreviewIds, setExpandedPreviewIds] = useState<Set<number>>(() => new Set())
   const { data: authSession } = useSession()
   const isAdmin = authSession?.user?.email === 'peterson@sent.com'
 
@@ -130,6 +306,15 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
       setCreateError(err instanceof Error ? err.message : 'Failed to create workspace')
     }
   }, [createMutate])
+
+  const togglePreview = useCallback((workspaceId: number) => {
+    setExpandedPreviewIds((current) => {
+      const next = new Set(current)
+      if (next.has(workspaceId)) next.delete(workspaceId)
+      else next.add(workspaceId)
+      return next
+    })
+  }, [])
 
   const handleDeleteWorkspace = useCallback(async (workspaceId: number) => {
     setDeleteError(null)
@@ -168,6 +353,7 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
         <div className="p-1 rounded-xl bg-gray-100 mb-6">
           <Tabs.List className="flex gap-1">
             <Tabs.Tab value="global-pc" className={tabCls}>My Global PC</Tabs.Tab>
+            <Tabs.Tab value="preview" className={tabCls}>Preview</Tabs.Tab>
             <Tabs.Tab value="settings" className={tabCls}>Settings</Tabs.Tab>
             <Tabs.Tab value="help" className={tabCls}>Help</Tabs.Tab>
             <Tabs.Indicator hidden />
@@ -260,6 +446,35 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
                 >
                   Admin panel
                 </Link>
+              )}
+            </div>
+          </div>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="preview">
+          <div className="flex flex-col gap-4">
+            <div>
+              <p className="m-0 text-base font-semibold text-gray-900">Preview</p>
+              <p className="m-0 mt-1 text-sm text-gray-500 leading-normal">
+                Expand a workspace to see its processes — each launched .gapp on that desk.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {workspaces.length === 0 ? (
+                <div className="px-4 py-8 rounded-xl text-center text-gray-400 bg-gray-50 border border-dashed border-gray-200 text-sm leading-relaxed">
+                  No workspaces yet. Create one on My Global PC to preview processes here.
+                </div>
+              ) : (
+                workspaces.map((ws, i) => (
+                  <WorkspacePreviewCard
+                    key={ws.id}
+                    ws={ws}
+                    index={i}
+                    expanded={expandedPreviewIds.has(ws.id)}
+                    onToggle={() => togglePreview(ws.id)}
+                  />
+                ))
               )}
             </div>
           </div>
