@@ -1,0 +1,34 @@
+{
+  "name": "squint-editor",
+  "version": "1.0.0",
+  "entry": "index.html",
+  "type": "module",
+  "compile": {
+    "squint": {
+      "source": "app.cljs",
+      "output": "app.js",
+      "externals": {
+        "yjs": "Y",
+        "rxjs": "rxjs"
+      }
+    }
+  },
+  "dependencies": {
+    "yjs": {
+      "version": "13.6.20",
+      "source": "bundled",
+      "path": "yjs.js",
+      "format": "iife",
+      "global": "Y",
+      "order": 1
+    },
+    "rxjs": {
+      "version": "7.8.1",
+      "source": "bundled",
+      "path": "rxjs.js",
+      "format": "iife",
+      "global": "rxjs",
+      "order": 2
+    }
+  }
+}
