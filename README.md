@@ -177,7 +177,7 @@ cd src/frontend && npm run regenerate
 Add this alias to `~/.zshrc` to open a `psql` session against the project database:
 
 ```bash
-alias proxy-db='env $(grep -v "^#" /path/to/PROXY/.env | xargs) psql "$DATABASE_URL" "sslmode=require"'
+alias proxy-db='psql "$(grep "^DATABASE_URL=" /path/to/PROXY/.env | cut -d= -f2-)?sslmode=require"'
 ```
 
 Then run:
