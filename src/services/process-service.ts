@@ -11,12 +11,17 @@ export type WorkspaceProcessInstanceDto = {
   state: 'starting' | 'running'
 }
 
+export type WorkspaceProcessWindowDto = {
+  id: number
+  title: string
+}
+
 export type WorkspaceProcessDto = {
   id: number
   workspaceId: number
   directoryId: number
   bundleName: string
-  windowCount: number
+  windows: WorkspaceProcessWindowDto[]
   instances: WorkspaceProcessInstanceDto[]
 }
 
@@ -40,9 +45,14 @@ export async function listWorkspaceProcesses(
 
   const [windows, instances] = await Promise.all([
     db
-      .select({ processId: schema.workspaceWindow.process_id })
+      .select({
+        id: schema.workspaceWindow.id,
+        processId: schema.workspaceWindow.process_id,
+        title: schema.workspaceWindow.title,
+      })
       .from(schema.workspaceWindow)
-      .where(inArray(schema.workspaceWindow.process_id, processIds)),
+      .where(inArray(schema.workspaceWindow.process_id, processIds))
+      .orderBy(schema.workspaceWindow.z_index),
     db
       .select({
         id: schema.instances.id,
@@ -55,23 +65,18 @@ export async function listWorkspaceProcesses(
       .orderBy(schema.instances.id),
   ])
 
-  const windowCountByProcess = new Map<number, number>()
+  const windowsByProcess = new Map<number, WorkspaceProcessWindowDto[]>()
   for (const win of windows) {
-    windowCountByProcess.set(
-      win.processId,
-      (windowCountByProcess.get(win.processId) ?? 0) + 1,
-    )
+    const list = windowsByProcess.get(win.processId) ?? []
+    list.push({ id: win.id, title: win.title })
+    windowsByProcess.set(win.processId, list)
   }
 
   const instancesByProcess = new Map<number, WorkspaceProcessInstanceDto[]>()
   for (const inst of instances) {
     if (inst.processId == null) continue
     const list = instancesByProcess.get(inst.processId) ?? []
-    list.push({
-      id: inst.id,
-      slug: inst.slug,
-      state: inst.state,
-    })
+    list.push({ id: inst.id, slug: inst.slug, state: inst.state })
     instancesByProcess.set(inst.processId, list)
   }
 
@@ -80,7 +85,7 @@ export async function listWorkspaceProcesses(
     workspaceId,
     directoryId: row.directoryId,
     bundleName: row.bundleName,
-    windowCount: windowCountByProcess.get(row.id) ?? 0,
+    windows: windowsByProcess.get(row.id) ?? [],
     instances: instancesByProcess.get(row.id) ?? [],
   }))
 }

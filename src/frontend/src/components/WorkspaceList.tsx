@@ -4,12 +4,17 @@ import { useCallback, useState } from 'react'
 import { Tabs } from '@base-ui/react/tabs'
 import { useSession } from '../lib/auth-client'
 
+type WorkspaceProcessWindow = {
+  id: number
+  title: string
+}
+
 type WorkspaceProcess = {
   id: number
   workspaceId: number
   directoryId: number
   bundleName: string
-  windowCount: number
+  windows: WorkspaceProcessWindow[]
   instances: Array<{
     id: number
     slug: string
@@ -55,6 +60,21 @@ async function fetchWorkspaceProcesses(workspaceId: number): Promise<WorkspacePr
   const r = await fetch(`/api/workspaces/${workspaceId}/processes`, { credentials: 'include' })
   if (!r.ok) throw new Error(`Failed to load processes (${r.status})`)
   return r.json()
+}
+
+async function closeWorkspaceWindow(workspaceId: number, windowId: number): Promise<void> {
+  const r = await fetch(`/api/workspaces/${workspaceId}/windows/${windowId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  if (!r.ok) {
+    let message = `Failed to close window (${r.status})`
+    try {
+      const body = (await r.json()) as { message?: string }
+      if (body.message) message = body.message
+    } catch { /* ignore */ }
+    throw new Error(message)
+  }
 }
 
 async function killWorkspaceProcess(workspaceId: number, processId: number): Promise<void> {
@@ -110,6 +130,45 @@ function instanceStateCls(state: WorkspaceProcess['instances'][number]['state'])
   }
 }
 
+function WindowRow({ win, workspaceId }: { win: WorkspaceProcessWindow; workspaceId: number }) {
+  const queryClient = useQueryClient()
+  const [closing, setClosing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleClose = async () => {
+    setClosing(true)
+    setError(null)
+    try {
+      await closeWorkspaceWindow(workspaceId, win.id)
+      await queryClient.invalidateQueries({ queryKey: ['workspace-processes', workspaceId] })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to close window')
+    } finally {
+      setClosing(false)
+    }
+  }
+
+  return (
+    <li className="flex items-center justify-between gap-2">
+      <span className="text-xs text-gray-600 truncate">{win.title}</span>
+      {error && <span className="text-xs text-red-500 shrink-0">{error}</span>}
+      <button
+        type="button"
+        disabled={closing}
+        onClick={() => void handleClose()}
+        className={cn(
+          'shrink-0 inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors duration-100',
+          closing
+            ? 'bg-gray-50 border-gray-200 text-gray-300 cursor-default'
+            : 'bg-white border-gray-200 text-gray-500 cursor-pointer hover:bg-red-50 hover:border-red-200 hover:text-red-600',
+        )}
+      >
+        {closing ? '…' : '×'}
+      </button>
+    </li>
+  )
+}
+
 function ProcessRow({ proc, workspaceId }: { proc: WorkspaceProcess; workspaceId: number }) {
   const queryClient = useQueryClient()
   const [killing, setKilling] = useState(false)
@@ -128,13 +187,15 @@ function ProcessRow({ proc, workspaceId }: { proc: WorkspaceProcess; workspaceId
     }
   }
 
+  const windowCount = proc.windows.length
+
   return (
     <li className="px-4 py-3 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="m-0 text-sm font-medium text-gray-900 truncate">{proc.bundleName}</p>
           <p className="m-0 mt-0.5 text-xs text-gray-400">
-            Process {proc.id} · {proc.windowCount} window{proc.windowCount === 1 ? '' : 's'}
+            Process {proc.id} · {windowCount} window{windowCount === 1 ? '' : 's'}
           </p>
         </div>
         <button
@@ -154,9 +215,14 @@ function ProcessRow({ proc, workspaceId }: { proc: WorkspaceProcess; workspaceId
       {error && (
         <p role="alert" className="m-0 text-xs text-red-600">{error}</p>
       )}
-      {proc.instances.length === 0 ? (
-        <p className="m-0 text-xs text-gray-400">No instances</p>
-      ) : (
+      {proc.windows.length > 0 && (
+        <ul className="m-0 p-0 list-none flex flex-col gap-1 pl-2 border-l-2 border-gray-100">
+          {proc.windows.map((win) => (
+            <WindowRow key={win.id} win={win} workspaceId={workspaceId} />
+          ))}
+        </ul>
+      )}
+      {proc.instances.length > 0 && (
         <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
           {proc.instances.map((inst) => (
             <li
