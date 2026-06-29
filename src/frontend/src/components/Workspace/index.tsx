@@ -146,7 +146,7 @@ const computeY = (y: number, height: number) =>
 type ServerWindow = {
   id: number
   processId: number
-  instanceId: number
+  instanceId: number | null
   instanceSlug?: string
   title: string
   bundleName: string
@@ -156,6 +156,7 @@ type ServerWindow = {
   height: number
   zIndex: number
   src: string
+  srcdoc?: string | null
 }
 
 const serverWindowToAppWindow = (win: ServerWindow) => ({
@@ -168,6 +169,7 @@ const serverWindowToAppWindow = (win: ServerWindow) => ({
   x: win.x,
   y: win.y,
   src: win.src,
+  srcdoc: win.srcdoc,
   instanceId: win.instanceId,
   processId: win.processId,
 })
@@ -206,6 +208,16 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
       void queryClient.invalidateQueries({ queryKey: ['workspace-windows', workspaceId] })
     },
   })
+
+  useEffect(() => {
+    const onWindowOpened = (event: Event) => {
+      const win = (event as CustomEvent<ServerWindow>).detail
+      if (!win?.id) return
+      actions.openWindow(serverWindowToAppWindow(win))
+    }
+    window.addEventListener('globalos:window-opened', onWindowOpened)
+    return () => window.removeEventListener('globalos:window-opened', onWindowOpened)
+  }, [actions])
 
   const hydratedWorkspace = useRef<string | null>(null)
 

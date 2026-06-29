@@ -156,7 +156,10 @@ export const workspace = pgTable('workspace', {
 export const process = pgTable('process', {
   id: serial('id').primaryKey(),
   workspace_id: integer('workspace_id').notNull().references(() => workspace.id, { onDelete: 'cascade' }),
-  directory_id: integer('directory_id').notNull().references(() => directory.id),
+  /** Null for srcdoc (non-.gapp) processes. */
+  directory_id: integer('directory_id').references(() => directory.id),
+  /** Display name for srcdoc processes; null for .gapp processes (name comes from directory). */
+  bundle_name: text('bundle_name'),
 }, (table) => [
   index('process_workspace_id_idx').on(table.workspace_id),
   uniqueIndex('process_workspace_directory_uidx').on(table.workspace_id, table.directory_id),
@@ -213,7 +216,8 @@ export const instanceBundleFile = pgTable('instance_bundle_file', {
 export const workspaceWindow = pgTable('workspace_window', {
   id: serial('id').primaryKey(),
   process_id: integer('process_id').notNull().references(() => process.id, { onDelete: 'cascade' }),
-  instance_id: integer('instance_id').notNull().references(() => instances.id, { onDelete: 'cascade' }),
+  /** Null for srcdoc windows that have no running instance. */
+  instance_id: integer('instance_id').references(() => instances.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   bundle_name: text('bundle_name').notNull(),
   x: integer('x').notNull().default(0),
@@ -223,6 +227,8 @@ export const workspaceWindow = pgTable('workspace_window', {
   z_index: integer('z_index').notNull().default(1),
   last_focused_at: timestamp('last_focused_at').defaultNow().notNull(),
   created_at: timestamp('created_at').defaultNow().notNull(),
+  /** Inline HTML content; mutually exclusive with instance_id. */
+  srcdoc: text('srcdoc'),
 }, (table) => [
   index('workspace_window_process_id_idx').on(table.process_id),
 ]);

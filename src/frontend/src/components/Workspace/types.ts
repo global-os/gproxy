@@ -21,7 +21,8 @@ export type WindowSpec = {
   x: number
   y: number
   src: string
-  instanceId?: number
+  srcdoc?: string | null
+  instanceId?: number | null
   processId?: number
 }
 
@@ -35,7 +36,8 @@ export type AppWindow = {
   x: number
   y: number
   src: string
-  instanceId?: number
+  srcdoc?: string | null
+  instanceId?: number | null
   processId?: number
 }
 

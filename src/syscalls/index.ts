@@ -6,6 +6,7 @@ import {
   fsRename,
   fsSaveDesktopFile,
 } from './fs.js'
+import { windowOpen, windowOpenProcess } from './window.js'
 import type { SyscallContext, SyscallHandler, SyscallResult } from './types.js'
 
 const handlers: Record<string, SyscallHandler> = {
@@ -15,6 +16,8 @@ const handlers: Record<string, SyscallHandler> = {
   'fs.delete': fsDelete,
   'fs.read': fsRead,
   'fs.saveDesktopFile': fsSaveDesktopFile,
+  'window.open': windowOpen,
+  'window.open.process': windowOpenProcess,
 }
 
 export async function invokeSyscall(

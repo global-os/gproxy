@@ -192,6 +192,12 @@ export class WorkspaceKernel {
       case 'fs:read':
         void this.onFsOp('fs.read', message, post, 'fs:read')
         break
+      case 'window:open':
+        void this.onWindowOpen(binding, message, post)
+        break
+      case 'window:open:self':
+        void this.onWindowOpenSelf(binding, message, post)
+        break
       case 'die:response':
         break
       case 'trace:subscribe':
@@ -291,6 +297,47 @@ export class WorkspaceKernel {
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : 'Request failed'
       post({ type: `${replyPrefix}:error`, ...replyBase, message: errMessage })
+    }
+  }
+
+  private async onWindowOpen(
+    binding: KernelWindowBinding,
+    message: KernelMessage,
+    post: (msg: KernelMessage) => void,
+  ) {
+    const { type: _type, requestId, ...args } = message
+    const replyBase = typeof requestId === 'string' ? { requestId } : {}
+    try {
+      const result = await this.invokeSyscall('window.open', {
+        ...args,
+        _workspaceId: this.workspaceId,
+      })
+      window.dispatchEvent(new CustomEvent('globalos:window-opened', { detail: result }))
+      post({ type: 'window:open:complete', ...replyBase, result })
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : 'Failed to open window'
+      post({ type: 'window:open:error', ...replyBase, message: errMessage })
+    }
+  }
+
+  private async onWindowOpenSelf(
+    binding: KernelWindowBinding,
+    message: KernelMessage,
+    post: (msg: KernelMessage) => void,
+  ) {
+    const { type: _type, requestId, ...args } = message
+    const replyBase = typeof requestId === 'string' ? { requestId } : {}
+    try {
+      const result = await this.invokeSyscall('window.open.process', {
+        ...args,
+        _workspaceId: this.workspaceId,
+        _processId: binding.processId,
+      })
+      window.dispatchEvent(new CustomEvent('globalos:window-opened', { detail: result }))
+      post({ type: 'window:open:complete', ...replyBase, result })
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : 'Failed to open window'
+      post({ type: 'window:open:error', ...replyBase, message: errMessage })
     }
   }
 

@@ -276,7 +276,7 @@ const StyledIframe = createComponent(
     display: 'block',
   }),
   'iframe',
-  ['src', 'innerRef', 'data-window-id']
+  ['src', 'srcdoc', 'innerRef', 'data-window-id']
 )
 
 type Props = {
@@ -345,13 +345,23 @@ export function WorkspaceWindow({
         </TitleButtons>
       </TitleBar>
       <ContentFrame data-window-index={windowIndex} onMouseDown={onMouseDown}>
-        <StyledIframe
-          dragging={isInteracting}
-          frontmost={frontmost}
-          src={win.src}
-          data-window-id={String(win.id)}
-          innerRef={onIframeRef}
-        />
+        {win.srcdoc != null ? (
+          <StyledIframe
+            dragging={isInteracting}
+            frontmost={frontmost}
+            srcdoc={win.srcdoc}
+            data-window-id={String(win.id)}
+            innerRef={onIframeRef}
+          />
+        ) : (
+          <StyledIframe
+            dragging={isInteracting}
+            frontmost={frontmost}
+            src={win.src}
+            data-window-id={String(win.id)}
+            innerRef={onIframeRef}
+          />
+        )}
       </ContentFrame>
       <ResizeHandleSouthWest
         data-window-index={windowIndex}

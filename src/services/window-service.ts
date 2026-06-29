@@ -9,7 +9,7 @@ export type WorkspaceWindowDto = {
   id: number
   workspaceId: number
   processId: number
-  instanceId: number
+  instanceId: number | null
   instanceSlug: string
   title: string
   bundleName: string
@@ -19,14 +19,15 @@ export type WorkspaceWindowDto = {
   height: number
   zIndex: number
   src: string
+  srcdoc?: string | null
 }
 
 type WindowJoinedRow = {
   id: number
   workspace_id: number
   process_id: number
-  instance_id: number
-  instance_slug: string
+  instance_id: number | null
+  instance_slug: string | null
   title: string
   bundle_name: string
   x: number
@@ -34,6 +35,7 @@ type WindowJoinedRow = {
   width: number
   height: number
   z_index: number
+  srcdoc: string | null
 }
 
 async function resolveWindowRows(rows: WindowJoinedRow[]): Promise<WindowJoinedRow[]> {
@@ -41,7 +43,11 @@ async function resolveWindowRows(rows: WindowJoinedRow[]): Promise<WindowJoinedR
   const resolved: WindowJoinedRow[] = []
 
   for (const row of rows) {
-    let slug = slugByInstance.get(row.instance_id) ?? row.instance_slug
+    if (row.instance_id == null) {
+      resolved.push(row)
+      continue
+    }
+    let slug = slugByInstance.get(row.instance_id) ?? row.instance_slug ?? ''
     if (!slugByInstance.has(row.instance_id) && isLegacyUuidSlug(slug)) {
       slug = await upgradeLegacySlug(row.instance_id, slug)
     }
@@ -53,12 +59,13 @@ async function resolveWindowRows(rows: WindowJoinedRow[]): Promise<WindowJoinedR
 }
 
 function toDto(row: WindowJoinedRow): WorkspaceWindowDto {
+  const slug = row.instance_slug ?? ''
   return {
     id: row.id,
     workspaceId: row.workspace_id,
     processId: row.process_id,
     instanceId: row.instance_id,
-    instanceSlug: row.instance_slug,
+    instanceSlug: slug,
     title: row.title,
     bundleName: row.bundle_name,
     x: row.x,
@@ -66,7 +73,8 @@ function toDto(row: WindowJoinedRow): WorkspaceWindowDto {
     width: row.width,
     height: row.height,
     zIndex: row.z_index,
-    src: instancePublicUrl(row.instance_slug),
+    src: slug ? instancePublicUrl(slug) : '',
+    srcdoc: row.srcdoc,
   }
 }
 
@@ -85,10 +93,11 @@ function windowQuery() {
       width: schema.workspaceWindow.width,
       height: schema.workspaceWindow.height,
       z_index: schema.workspaceWindow.z_index,
+      srcdoc: schema.workspaceWindow.srcdoc,
     })
     .from(schema.workspaceWindow)
     .innerJoin(schema.process, eq(schema.workspaceWindow.process_id, schema.process.id))
-    .innerJoin(schema.instances, eq(schema.workspaceWindow.instance_id, schema.instances.id))
+    .leftJoin(schema.instances, eq(schema.workspaceWindow.instance_id, schema.instances.id))
 }
 
 export async function listWorkspaceWindows(workspaceId: number): Promise<WorkspaceWindowDto[]> {
@@ -126,10 +135,11 @@ async function nextZIndex(workspaceId: number): Promise<number> {
 export async function createWindow(opts: {
   workspaceId: number
   processId: number
-  instanceId: number
-  instanceSlug: string
+  instanceId?: number | null
+  instanceSlug?: string
   title: string
   bundleName: string
+  srcdoc?: string | null
   x?: number
   y?: number
   width?: number
@@ -140,9 +150,10 @@ export async function createWindow(opts: {
     .insert(schema.workspaceWindow)
     .values({
       process_id: opts.processId,
-      instance_id: opts.instanceId,
+      instance_id: opts.instanceId ?? null,
       title: opts.title,
       bundle_name: opts.bundleName,
+      srcdoc: opts.srcdoc ?? null,
       x: opts.x ?? 0,
       y: opts.y ?? 0,
       width: opts.width ?? 720,
@@ -156,10 +167,11 @@ export async function createWindow(opts: {
     id: row.id,
     workspace_id: opts.workspaceId,
     process_id: opts.processId,
-    instance_id: opts.instanceId,
-    instance_slug: opts.instanceSlug,
+    instance_id: opts.instanceId ?? null,
+    instance_slug: opts.instanceSlug ?? null,
     title: opts.title,
     bundle_name: opts.bundleName,
+    srcdoc: opts.srcdoc ?? null,
     x: opts.x ?? 0,
     y: opts.y ?? 0,
     width: opts.width ?? 720,
