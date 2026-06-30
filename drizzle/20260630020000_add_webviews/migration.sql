@@ -1,0 +1,17 @@
+CREATE TABLE webview (
+  id SERIAL PRIMARY KEY,
+  slug TEXT NOT NULL UNIQUE,
+  process_id INTEGER NOT NULL REFERENCES process(id) ON DELETE CASCADE,
+  domain TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE TABLE webview_rule (
+  id SERIAL PRIMARY KEY,
+  webview_id INTEGER NOT NULL REFERENCES webview(id) ON DELETE CASCADE,
+  ord INTEGER NOT NULL,
+  match JSONB NOT NULL,
+  action JSONB NOT NULL
+);
+
+CREATE INDEX ON webview_rule (webview_id, ord);

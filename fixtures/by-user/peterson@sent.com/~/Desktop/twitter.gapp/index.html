@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>𝕏</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #000; }
+    #root { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #webview-frame { width: 100%; height: 100%; border: none; display: none; }
+    #loading {
+      color: #e7e9ea;
+      font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    #loading svg { width: 40px; height: 40px; fill: #e7e9ea; }
+    #loading-msg { opacity: 0.6; font-size: 13px; }
+    #error-msg { color: #f4212e; font-size: 13px; display: none; }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div id="loading">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.747l7.73-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"/>
+      </svg>
+      <span id="loading-msg">Connecting to 𝕏…</span>
+      <span id="error-msg"></span>
+    </div>
+    <iframe id="webview-frame" title="𝕏 / Twitter" allow="autoplay; clipboard-read; clipboard-write"></iframe>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -125,6 +125,12 @@ export class WorkspaceKernel {
       case 'window:open:self':
         void this.onWindowOpenSelf(binding, message, post)
         break
+      case 'webview:create':
+        void this.onWebviewCreate(binding, message, post)
+        break
+      case 'webview:destroy':
+        void this.onWebviewDestroy(binding, message, post)
+        break
       case 'die:response':
         break
       case 'trace:subscribe':
@@ -342,5 +348,74 @@ export class WorkspaceKernel {
       if (binding.iframe.contentWindow === source) return binding
     }
     return undefined
+  }
+
+  private async callApi<T>(path: string, method: string, body?: unknown): Promise<T> {
+    const r = await fetch(path, {
+      method,
+      credentials: 'include',
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    if (!r.ok) {
+      let msg = `API error (${r.status})`
+      try { msg = ((await r.json()) as { message?: string }).message ?? msg } catch {}
+      throw new Error(msg)
+    }
+    if (r.status === 204) return undefined as T
+    return r.json() as Promise<T>
+  }
+
+  private async onWebviewCreate(
+    binding: KernelWindowBinding,
+    message: KernelMessage,
+    post: (msg: KernelMessage) => void,
+  ) {
+    const requestId = typeof message.requestId === 'string' ? message.requestId : undefined
+    const replyBase = requestId ? { requestId } : {}
+    const domain = typeof message.domain === 'string' ? message.domain : ''
+    if (!domain) {
+      post({ type: 'webview:create:error', ...replyBase, message: 'domain is required' })
+      return
+    }
+    try {
+      const result = await this.callApi<{
+        webviewId: string
+        slug: string
+        domain: string
+        proxyOrigin: string
+      }>('/api/webviews', 'POST', { processId: binding.processId, domain })
+      post({ type: 'webview:create:complete', ...replyBase, ...result })
+    } catch (err) {
+      post({
+        type: 'webview:create:error',
+        ...replyBase,
+        message: err instanceof Error ? err.message : 'Failed to create webview',
+      })
+    }
+  }
+
+  private async onWebviewDestroy(
+    binding: KernelWindowBinding,
+    message: KernelMessage,
+    post: (msg: KernelMessage) => void,
+  ) {
+    const requestId = typeof message.requestId === 'string' ? message.requestId : undefined
+    const replyBase = requestId ? { requestId } : {}
+    const webviewId = typeof message.webviewId === 'string' ? message.webviewId : ''
+    if (!webviewId) {
+      post({ type: 'webview:destroy:error', ...replyBase, message: 'webviewId is required' })
+      return
+    }
+    try {
+      await this.callApi(`/api/webviews/${webviewId}`, 'DELETE')
+      post({ type: 'webview:destroy:complete', ...replyBase, webviewId })
+    } catch (err) {
+      post({
+        type: 'webview:destroy:error',
+        ...replyBase,
+        message: err instanceof Error ? err.message : 'Failed to destroy webview',
+      })
+    }
   }
 }

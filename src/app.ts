@@ -20,6 +20,9 @@ import globalPcRoutes from './routes/global-pc.js'
 import syscallsRoutes from './routes/syscalls.js'
 import programsRoutes from './routes/programs.js'
 import adminRoutes from './routes/admin.js'
+import webviewRoutes from './routes/webviews.js'
+import { resolveWebviewBySlug } from './runtime/webview/resolve.js'
+import { proxyWebviewRequest } from './runtime/webview/proxy.js'
 import { ensureGlobalPcForUser } from './services/global-pc.js'
 import { isBundleCached } from './runtime/cache/store.js'
 import { resolveInstanceBundleFile } from './runtime/cache/serve.js'
@@ -262,6 +265,7 @@ app.basePath('/app/api/fs').route('/', fsRoutes)
 app.basePath('/app/api/global-pc').route('/', globalPcRoutes)
 app.basePath('/app/api/syscalls').route('/', syscallsRoutes)
 app.basePath('/app/api/admin').route('/', adminRoutes)
+app.basePath('/app/api/webviews').route('/', webviewRoutes)
 app.basePath('/app/api').route('/', programsRoutes)
 
 app.get('/app/api/workspaces', async (c) => {
@@ -402,11 +406,13 @@ app.all('/instance/*', async (c) => {
   const slug = instanceSlugFromHostname(url.hostname)
   const instanceId = await resolveInstanceIdBySlug(slug)
 
-  if (instanceId === null) {
-    return c.json({ message: 'Invalid instance' }, 400)
-  }
-
   const upstreamPath = stripInstancePrefix(url.pathname, slug)
+
+  if (instanceId === null) {
+    const webview = await resolveWebviewBySlug(slug)
+    if (!webview) return c.json({ message: 'Not found' }, 404)
+    return proxyWebviewRequest(webview.domain, upstreamPath, c.req.raw)
+  }
 
   if (upstreamPath === '/_status') {
     scheduleInstancePrepare(instanceId)

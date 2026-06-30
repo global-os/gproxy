@@ -192,6 +192,7 @@ export async function checkAppTables(
       task: boolean
       workspace: boolean
       workspace_log: boolean
+      webview: boolean
     }
   }
 > {
@@ -211,6 +212,7 @@ export async function checkAppTables(
         task: boolean
         workspace: boolean
         workspace_log: boolean
+        webview: boolean
       }>(
         `SELECT
           to_regclass('public.verification') IS NOT NULL AS verification,
@@ -220,7 +222,8 @@ export async function checkAppTables(
           to_regclass('public.global_pc_icon') IS NOT NULL AS global_pc_icon,
           to_regclass('public.task') IS NOT NULL AS task,
           to_regclass('public.workspace') IS NOT NULL AS workspace,
-          to_regclass('public.workspace_log') IS NOT NULL AS workspace_log`
+          to_regclass('public.workspace_log') IS NOT NULL AS workspace_log,
+          to_regclass('public.webview') IS NOT NULL AS webview`
       ),
       timeoutMs,
       'App table check'
@@ -235,6 +238,7 @@ export async function checkAppTables(
       && tables?.task
       && tables?.workspace
       && tables?.workspace_log
+      && tables?.webview
     )
     if (!ok) {
       return {

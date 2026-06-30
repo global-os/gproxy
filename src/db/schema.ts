@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, index, serial, integer, pgEnum, customType, uniqueIndex, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, serial, integer, pgEnum, customType, uniqueIndex, primaryKey, jsonb } from "drizzle-orm/pg-core";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() { return 'bytea' },
@@ -258,4 +258,25 @@ export const workspaceEvent = pgTable('workspace_event', {
 }, (table) => [
   index('workspace_event_workspace_id_idx').on(table.workspace_id),
   index('workspace_event_workspace_id_id_idx').on(table.workspace_id, table.id),
+])
+/** Proxied external website — each webview gets a unique subdomain. */
+export const webview = pgTable('webview', {
+  id: serial('id').primaryKey(),
+  slug: text('slug').notNull().unique(),
+  process_id: integer('process_id').notNull().references(() => process.id, { onDelete: 'cascade' }),
+  domain: text('domain').notNull(),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('webview_process_id_idx').on(table.process_id),
+])
+
+/** Per-webview routing rules (match + action). */
+export const webviewRule = pgTable('webview_rule', {
+  id: serial('id').primaryKey(),
+  webview_id: integer('webview_id').notNull().references(() => webview.id, { onDelete: 'cascade' }),
+  ord: integer('ord').notNull(),
+  match: jsonb('match').notNull(),
+  action: jsonb('action').notNull(),
+}, (table) => [
+  index('webview_rule_webview_id_ord_idx').on(table.webview_id, table.ord),
 ])
