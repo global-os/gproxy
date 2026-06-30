@@ -3,6 +3,8 @@ var loadingMsg = document.getElementById('loading-msg')
 var errorMsg = document.getElementById('error-msg')
 var frame = document.getElementById('webview-frame')
 
+var pendingRequestId = null
+
 function showError(msg) {
   console.error('[twitter.gapp] error:', msg)
   if (loadingMsg) loadingMsg.style.display = 'none'
@@ -28,12 +30,13 @@ window.addEventListener('message', function(event) {
       showFrame(data.proxyOrigin)
       return
     }
-    console.log('[twitter.gapp] sending webview:create')
-    window.parent.postMessage({ type: 'webview:create', requestId: 'wv1', domain: 'x.com' }, '*')
+    pendingRequestId = window.KernelMessaging.nextId()
+    console.log('[twitter.gapp] sending webview:create, requestId:', pendingRequestId)
+    window.parent.postMessage({ type: 'webview:create', requestId: pendingRequestId, domain: 'x.com' }, '*')
     return
   }
 
-  if (data.type === 'webview:create:complete' && data.requestId === 'wv1') {
+  if (data.type === 'webview:create:complete' && data.requestId === pendingRequestId) {
     window.parent.postMessage({
       type: 'save',
       filename: '.webview-state',
@@ -46,7 +49,7 @@ window.addEventListener('message', function(event) {
     return
   }
 
-  if (data.type === 'webview:create:error' && data.requestId === 'wv1') {
+  if (data.type === 'webview:create:error' && data.requestId === pendingRequestId) {
     showError(data.message || 'Failed to connect')
     return
   }

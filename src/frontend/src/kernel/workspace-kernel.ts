@@ -28,6 +28,8 @@ export class WorkspaceKernel {
   private readonly activeOps = new Map<number, ActiveOperation>()
   /** Windows subscribed to workspace-wide kernel trace events. */
   private readonly tracers = new Set<number>()
+  /** Unique ID for this page load; sent to apps in init messages so they can generate scoped request IDs. */
+  private readonly visitId = crypto.randomUUID().replace(/-/g, '').slice(0, 8)
 
   constructor(private readonly workspaceId: string) {}
 
@@ -285,6 +287,7 @@ export class WorkspaceKernel {
         type: 'init:fresh',
         reason: 'fresh',
         filename: this.defaultFilename(binding),
+        visitId: this.visitId,
       })
       return
     }
@@ -293,10 +296,11 @@ export class WorkspaceKernel {
         type: 'init:fresh',
         reason: 'corrupted',
         filename: this.defaultFilename(binding),
+        visitId: this.visitId,
       })
       return
     }
-    post({ type: 'init', ...state })
+    post({ type: 'init', ...state, visitId: this.visitId })
   }
 
   private async onSave(

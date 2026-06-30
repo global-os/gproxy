@@ -6,6 +6,12 @@ const STRIP_RESPONSE_HEADERS = new Set([
   'cross-origin-opener-policy',
   'cross-origin-resource-policy',
   'cross-origin-embedder-policy',
+  // fetch() transparently decompresses the body based on this header, so
+  // forwarding it as-is mislabels the already-decoded body we send back.
+  'content-encoding',
+  // Refers to the compressed upstream length; no longer matches the
+  // decoded body we actually send.
+  'content-length',
 ])
 
 /** True if the first path segment looks like a proxied cross-domain hostname. */
