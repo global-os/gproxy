@@ -27,6 +27,8 @@ export const projectRoot = resolveProjectRoot()
 
 export const platformRegistryDir = path.join(projectRoot, 'src/gapp/registry')
 
+export const platformLibsDir = path.join(platformRegistryDir, 'libs')
+
 export function platformRegistryFile(name: string): string {
   return path.join(platformRegistryDir, 'deps', name)
 }

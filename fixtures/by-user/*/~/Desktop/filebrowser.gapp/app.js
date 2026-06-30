@@ -1,6 +1,6 @@
 // @ts-check
-import { toParent } from './kernel.js'
-import { createBrowserPanel } from './filepicker.js'
+import { toParent } from 'kernel'
+import { createBrowserPanel } from 'filepicker'
 
 const upBtn = /** @type {HTMLButtonElement} */ (document.getElementById('up-btn'))
 const mkdirBtn = /** @type {HTMLButtonElement} */ (document.getElementById('mkdir-btn'))

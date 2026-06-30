@@ -38,6 +38,7 @@ import { checkAppTables, checkAuthTables, pingDatabase, pingPool, pool, probeDri
 import { checkConfig, checkFrontendBundle, probeAuthHandler } from './health-checks.js'
 import { LaunchError } from './services/errors.js'
 import { deleteWorkspace } from './services/workspace-access.js'
+import { readRegistryLib } from './gapp/resolve-lib-deps.js'
 
 const app = new Hono<Env>({
   getPath(request, options) {
@@ -411,6 +412,19 @@ app.all('/instance/*', async (c) => {
     scheduleInstancePrepare(instanceId)
     const cached = await isBundleCached(instanceId)
     return c.json(getInstancePrepareStatus(instanceId, cached))
+  }
+
+  // Platform libs: /platform/libs/{name}@{version}.js — served from the registry,
+  // never bundled into the instance tar. Versioned URLs are immutable.
+  const libMatch = upstreamPath.match(/^\/platform\/libs\/([a-z][a-z0-9-]*)@(\d+\.\d+\.\d+)\.js$/)
+  if (libMatch) {
+    const [, name, version] = libMatch
+    const content = await readRegistryLib(name, version)
+    if (!content) return c.notFound()
+    return c.body(new Uint8Array(content), 200, {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    })
   }
 
   const wantsHtml =

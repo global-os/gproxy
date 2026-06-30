@@ -25,4 +25,6 @@ export type GappManifest = {
     squint?: SquintCompileSpec
   }
   dependencies?: Record<string, GappDependencySpec>
+  /** ESM platform libs resolved via import map. Values are semver ranges. */
+  deps?: Record<string, string>
 }

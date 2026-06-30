@@ -2,5 +2,9 @@
   "name": "filebrowser",
   "icon": "/.Resources/icons/16x16/gem.bmp",
   "entry": "index.html",
-  "type": "module"
+  "type": "module",
+  "deps": {
+    "kernel": "^1.0.0",
+    "filepicker": "^1.0.0"
+  }
 }

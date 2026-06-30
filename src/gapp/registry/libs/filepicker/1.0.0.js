@@ -1,5 +1,5 @@
 // @ts-check
-import { toParent } from './kernel.js'
+import { toParent } from 'kernel'
 
 /**
  * @typedef {{ type: 'directory' | 'file', id: number, name: string }} FsEntry

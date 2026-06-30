@@ -9,5 +9,9 @@
       "source": "app.cljs",
       "output": "app.js"
     }
+  },
+  "deps": {
+    "kernel": "^1.0.0",
+    "filepicker": "^1.0.0"
   }
 }
