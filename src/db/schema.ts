@@ -116,7 +116,7 @@ export const image = pgTable('image', {
   directory_checksum: text('directory_checksum'),
   tar_checksum: text('tar_checksum'),
   tar_bytes: bytea('tar_bytes'),
-  compiler_version: text('compiler_version'),
+  cache_key: text('cache_key'),
 });
 
 /** A user's Global PC — tasks, workspaces, and icon prefs. */

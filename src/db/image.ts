@@ -6,7 +6,7 @@ import { db } from "./index.js";
 import { directory, image } from "./schema.js";
 import type { GappCompileContext } from "../gapp/compile-context.js";
 import { compileGappTree } from "../gapp/compile-gapp.js";
-import { COMPILER_CACHE_KEY } from "../gapp/compiler-version.js";
+import { imageCacheKey } from "../gapp/compiler-version.js";
 import { hashDir, hashTree, collectTree, type DirEntry, type FileEntry } from "./file.js";
 
 type InnerFns = {
@@ -114,6 +114,7 @@ export async function getOrCreateImage(
 }> {
   opts?.onProgress?.('Building snapshot…')
   const directory_checksum = await hashDir(directoryId)
+  const cache_key = imageCacheKey(directory_checksum)
   const [existing] = await db
     .select({
       id: image.id,
@@ -123,8 +124,7 @@ export async function getOrCreateImage(
     .from(image)
     .where(and(
       eq(image.directory_id, directoryId),
-      eq(image.directory_checksum, directory_checksum),
-      eq(image.compiler_version, COMPILER_CACHE_KEY),
+      eq(image.cache_key, cache_key),
     ))
     .limit(1)
 
@@ -183,9 +183,10 @@ export async function createImage(
   const tar_bytes = await buildTar(dirName, dirs, compiledFiles);
   const tar_checksum = createHash("sha1").update(tar_bytes).digest("hex");
 
+  const cache_key = imageCacheKey(directory_checksum)
   const [row] = await db
     .insert(image)
-    .values({ directory_id: directoryId, directory_checksum, tar_checksum, tar_bytes, compiler_version: COMPILER_CACHE_KEY })
+    .values({ directory_id: directoryId, directory_checksum, tar_checksum, tar_bytes, cache_key })
     .returning({ id: image.id });
 
   return row.id;

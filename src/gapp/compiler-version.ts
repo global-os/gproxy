@@ -1,3 +1,5 @@
 import { getBuildVersion } from '../build-version.js'
 
-export const COMPILER_CACHE_KEY = getBuildVersion().sha
+export function imageCacheKey(dirSha: string): string {
+  return `${getBuildVersion().sha}:${dirSha}`
+}
