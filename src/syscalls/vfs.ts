@@ -2,13 +2,13 @@ import fsAsync from 'node:fs/promises'
 import path from 'node:path'
 import { platformLibsDir } from '../gapp/registry-paths.js'
 
-// Virtual filesystem IDs are strings prefixed "vfs:/mnt".
-// Real DB entry IDs are numbers. Callers can use isVfsId() to distinguish.
+// Virtual filesystem IDs are path strings like "/mnt/registry/kernel/1.0.0.js".
+// Real DB entry IDs are numbers. typeof id === 'string' is sufficient to distinguish them.
 
-const MNT_ROOT = 'vfs:/mnt'
+const MNT_ROOT = '/mnt'
 
 export function isVfsId(id: unknown): id is string {
-  return typeof id === 'string' && id.startsWith(MNT_ROOT)
+  return typeof id === 'string'
 }
 
 function vfsId(...segments: string[]): string {
@@ -16,8 +16,7 @@ function vfsId(...segments: string[]): string {
 }
 
 function parseVfsId(id: string): { mountName: string | null; segments: string[] } {
-  if (id === MNT_ROOT) return { mountName: null, segments: [] }
-  const parts = id.slice(MNT_ROOT.length + 1).split('/').filter(Boolean)
+  const parts = id.replace(/^\/mnt\/?/, '').split('/').filter(Boolean)
   const [mountName = null, ...segments] = parts
   return { mountName, segments }
 }
@@ -168,14 +167,14 @@ const mounts: Record<string, VirtualMount> = {
 /** Synthetic entry injected into the Desktop root listing. */
 export const MNT_ENTRY: VfsEntry = {
   type: 'directory',
-  id: MNT_ROOT,
+  id: '/mnt',
   name: 'mnt',
 }
 
 export async function vfsBrowse(id: string): Promise<VfsBrowseResult> {
-  if (id === MNT_ROOT) {
+  if (id === '/mnt') {
     return {
-      id: MNT_ROOT,
+      id: '/mnt',
       name: 'mnt',
       parent_id: null,
       can_go_up: true,
