@@ -4,12 +4,18 @@ import type { Env } from '../types.js'
 import * as schema from '../db/schema.js'
 import { generateInstanceSlug } from '../runtime/instance/slug.js'
 import { instancePublicUrl } from '../runtime/urls.js'
+import { auth } from '../auth.js'
 
 const router = new Hono<Env>()
 
 router.post('/', async (c) => {
-  const user = c.get('user')
-  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+  let user = c.get('user')
+  if (!user) {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null)
+    user = session?.user ?? null
+  }
+  const hasCookie = !!c.req.raw.headers.get('cookie')
+  if (!user) return c.json({ message: 'Unauthorized', debug: { hasCookie } }, 401)
 
   const db = c.get('db')
   const body = await c.req.json() as { processId?: number; domain?: string }

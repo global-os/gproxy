@@ -265,7 +265,6 @@ app.basePath('/app/api/fs').route('/', fsRoutes)
 app.basePath('/app/api/global-pc').route('/', globalPcRoutes)
 app.basePath('/app/api/syscalls').route('/', syscallsRoutes)
 app.basePath('/app/api/admin').route('/', adminRoutes)
-app.use('/app/api/webviews/**', middleware.betterAuthMiddleware)
 app.basePath('/app/api/webviews').route('/', webviewRoutes)
 app.basePath('/app/api').route('/', programsRoutes)
 
