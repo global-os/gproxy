@@ -430,7 +430,7 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
   }, [createMutate])
 
   const openManage = useCallback((workspaceId: number) => {
-    setKillError(null)
+    setDeleteError(null)
     setExpandedManageIds(new Set([workspaceId]))
     setScreen('manage')
   }, [])

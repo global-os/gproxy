@@ -276,7 +276,7 @@ const StyledIframe = createComponent(
     display: 'block',
   }),
   'iframe',
-  ['src', 'srcdoc', 'innerRef', 'data-window-id']
+  ['src', 'srcdoc', 'data-window-id']
 )
 
 type Props = {

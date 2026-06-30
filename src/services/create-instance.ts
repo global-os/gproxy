@@ -68,6 +68,10 @@ export async function createInstanceForProcess(processId: number): Promise<Creat
     throw new LaunchError('Process not found', 404)
   }
 
+  if (processRow.directory_id === null) {
+    throw new LaunchError('Process has no app directory', 400)
+  }
+
   const meta = await resolveImageMeta(processRow.directory_id)
   const slug = generateInstanceSlug()
 

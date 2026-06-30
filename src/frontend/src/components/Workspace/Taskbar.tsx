@@ -193,7 +193,7 @@ export function Taskbar({ onLaunchApp }: Props) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [clock, setClock] = useState(() => new Date())
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
 
   const { data: entries = [], isLoading } = useQuery<FileIndexEntry[]>({
     queryKey: ['file-index'],
@@ -291,7 +291,7 @@ export function Taskbar({ onLaunchApp }: Props) {
   return (
     <>
       {menuOpen && (
-        <MenuPanel innerRef={panelRef}>
+        <MenuPanel innerRef={(el: HTMLDivElement | null) => { panelRef.current = el }}>
           <MenuHeader>Find a file or app</MenuHeader>
           <Results>
             {isLoading && <Hint>Loading file index…</Hint>}

@@ -127,6 +127,11 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
       return false
     }
 
+    if (processRow.directory_id === null) {
+      setInstancePrepareFailed(instanceId, 'Process has no app directory')
+      return false
+    }
+
     const workspaceId = await resolveWorkspaceIdForInstance(instanceId)
     const workspaceLog = workspaceId ? createWorkspaceLogWriter(workspaceId) : null
 

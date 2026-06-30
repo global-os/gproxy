@@ -13,7 +13,7 @@ import { db } from '../db/index.js'
 
 export type LaunchResult = {
   processId: number
-  instanceId: number
+  instanceId: number | null
   instanceSlug: string
   url: string
   action: 'focus' | 'open'

@@ -19,7 +19,7 @@ export type WorkspaceProcessWindowDto = {
 export type WorkspaceProcessDto = {
   id: number
   workspaceId: number
-  directoryId: number
+  directoryId: number | null
   bundleName: string
   windows: WorkspaceProcessWindowDto[]
   instances: WorkspaceProcessInstanceDto[]
