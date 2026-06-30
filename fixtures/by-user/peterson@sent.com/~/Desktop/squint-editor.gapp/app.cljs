@@ -53,9 +53,10 @@
 
 (defn select-file! [id name]
   (swap! browse-state assoc :selected-id id :selected-name name)
-  (doseq [el (array-seq (.querySelectorAll $file-list ".picker-item"))]
-    (let [item-id (js/parseInt (.. el -dataset -fileId) 10)]
-      (.toggle (.-classList el) "selected" (= item-id id))))
+  (.forEach (.querySelectorAll $file-list ".picker-item")
+    (fn [el]
+      (let [item-id (js/parseInt (.. el -dataset -fileId) 10)]
+        (.toggle (.-classList el) "selected" (= item-id id)))))
   (set! (.-disabled $picker-open) false))
 
 (defn navigate-to! [dir-id]
