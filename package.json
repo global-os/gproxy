@@ -11,6 +11,7 @@
     "dev:frontend": "cd src/frontend; npm run-script dev",
     "dev:storybook": "cd src/frontend && npm run storybook",
     "build:backend": "tsc",
+    "typecheck": "tsc --noEmit && cd src/frontend && npx tsc --noEmit",
     "build:frontend": "cd src/frontend; npm run-script build",
     "build:www": "cd src/www && npm install && npm run build",
     "build": "node scripts/write-build-version.mjs && npm run-script build:www && npm run-script build:frontend && npm run-script build:backend",
