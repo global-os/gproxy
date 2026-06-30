@@ -184,6 +184,20 @@ The app receives this, prompts the user, and can save via the `fs.saveDesktopFil
 
 The kernel validates that `webviewId` belongs to the sending process before forwarding any message.
 
+## Real-world website compatibility
+
+Modern websites actively resist being proxied. Several mechanisms will cause pages to break even when the proxy is working correctly:
+
+**Content Security Policy (CSP).** A site can send a header like `Content-Security-Policy: default-src 'self'` that tells the browser to refuse to load any resource that didn't come from the original domain. Since our proxy serves everything from `*.app.onetrueos.com`, the browser will block scripts, images, and stylesheets that the site's own CSP doesn't whitelist. The proxy needs to strip or rewrite CSP headers from upstream responses — the original proxy code already did this (`responseHeaders.delete('content-security-policy')`).
+
+**HSTS (HTTP Strict Transport Security).** Sites can tell the browser "never connect to me over HTTP, always use HTTPS, and remember this for a year." This is stored per-domain in the browser. It doesn't affect the proxy directly (we always use HTTPS upstream), but combined with HSTS preloading (where browsers ship with a built-in list of HTTPS-only domains) it means some sites are essentially impossible to proxy in certain browsers.
+
+**Subresource Integrity (SRI).** Scripts and stylesheets can include a hash of their expected content: `<script integrity="sha256-abc123...">`. If the proxy modifies the response at all (e.g. rewriting URLs in a script), the hash no longer matches and the browser refuses to execute it.
+
+**JavaScript origin checks.** JavaScript running inside the proxied page can read `window.location.hostname` and will see `r7kx2mqp.app.onetrueos.com` instead of `wellsfargo.com`. Sites that validate their own origin in JS (common in auth flows, payment forms, and anything using `postMessage`) will break or behave unexpectedly.
+
+These are inherent to any web proxy, not specific to this design. For controlled use cases with known content (internal tools, simple public pages, sites you control), they're manageable. For arbitrary real-world sites, expect breakage.
+
 ## What is not in scope (yet)
 
 - `rewrite-links` templates (`"to": "https://example.com?orig={href}"`) — literal URL only for now
