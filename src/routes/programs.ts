@@ -6,7 +6,7 @@ import { clearWorkspaceLogs, listWorkspaceLogs } from '../services/workspace-log
 import { db } from '../db/index.js'
 import { createWorkspaceEventStream } from '../events/sse.js'
 import { killWorkspaceProcess, listWorkspaceProcesses } from '../services/process-service.js'
-import { deleteWindow, listWorkspaceWindows } from '../services/window-service.js'
+import { deleteWindow, listWorkspaceWindows, updateWindowGeometry } from '../services/window-service.js'
 import { Env } from '../types.js'
 
 const router = new Hono<Env>()
@@ -159,6 +159,30 @@ router.get('/workspaces/:workspaceId/windows', async (c) => {
     }
     console.error('[windows]', err)
     return c.json({ message: 'Failed to load windows' }, 500)
+  }
+})
+
+router.patch('/workspaces/:workspaceId/windows/:windowId', async (c) => {
+  const user = c.get('user')
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  const workspaceId = Number.parseInt(c.req.param('workspaceId'), 10)
+  const windowId = Number.parseInt(c.req.param('windowId'), 10)
+  if (!Number.isFinite(workspaceId) || !Number.isFinite(windowId)) {
+    return c.json({ message: 'Invalid workspace or window id' }, 400)
+  }
+
+  try {
+    await requireWorkspace(user.id, workspaceId)
+    const body = await c.req.json<{ x?: number; y?: number; width?: number; height?: number }>()
+    await updateWindowGeometry(workspaceId, windowId, body)
+    return c.json({ ok: true })
+  } catch (err) {
+    if (err instanceof LaunchError) {
+      return c.json({ message: err.message }, err.status as 404)
+    }
+    console.error('[windows]', err)
+    return c.json({ message: 'Failed to update window' }, 500)
   }
 })
 

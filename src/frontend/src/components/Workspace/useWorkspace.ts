@@ -13,7 +13,16 @@ const initialState: State = {
   zIndexCounter: 1,
 }
 
-export function useWorkspace(onStartup?: (actions: WorkspaceActions) => void) {
+function persistWindowGeometry(workspaceId: string, windowId: number, patch: { x: number; y: number; width?: number; height?: number }) {
+  void fetch(`/api/workspaces/${workspaceId}/windows/${windowId}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+}
+
+export function useWorkspace(workspaceId: string, onStartup?: (actions: WorkspaceActions) => void) {
   const [state, dispatch] = useReducer(reducer, initialState)
 
   const actions = useMemo<WorkspaceActions>(() => ({
@@ -40,6 +49,26 @@ export function useWorkspace(onStartup?: (actions: WorkspaceActions) => void) {
     hasRun.current = true
     onStartup(actions)
   }, [onStartup])
+
+  const prevDraggingWindow = useRef<number | undefined>(undefined)
+  useEffect(() => {
+    const prev = prevDraggingWindow.current
+    prevDraggingWindow.current = state.draggingWindow
+    if (prev !== undefined && state.draggingWindow === undefined) {
+      const win = state.windows[prev]
+      if (win) persistWindowGeometry(workspaceId, win.id, { x: win.x, y: win.y })
+    }
+  }, [state.draggingWindow, state.windows, workspaceId])
+
+  const prevResizingWindow = useRef<number | undefined>(undefined)
+  useEffect(() => {
+    const prev = prevResizingWindow.current
+    prevResizingWindow.current = state.resizingWindow
+    if (prev !== undefined && state.resizingWindow === undefined) {
+      const win = state.windows[prev]
+      if (win) persistWindowGeometry(workspaceId, win.id, { x: win.x, y: win.y, width: win.width, height: win.height })
+    }
+  }, [state.resizingWindow, state.windows, workspaceId])
 
   const onMouseDown = useCallback((event: MouseEvent) => {
     const target = event.target as HTMLElement

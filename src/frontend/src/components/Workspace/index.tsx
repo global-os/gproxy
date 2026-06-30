@@ -176,7 +176,8 @@ const serverWindowToAppWindow = (win: ServerWindow) => ({
 
 export function Workspace({ workspaceId, children }: WorkspaceProps) {
   const { state, onMouseDown, onMouseUp, onMouseMove, actions } = useWorkspace(
-    children.onStartup
+    workspaceId,
+    children.onStartup,
   )
   const [launchMessage, setLaunchMessage] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -230,6 +231,8 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
       if (!r.ok) return []
       return r.json()
     },
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
   })
 
   useEffect(() => {
