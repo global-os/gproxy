@@ -174,17 +174,10 @@ export async function createImage(
   const { dirs, files } = await collectTree(directoryId, dirName);
   const directory_checksum = hashTree(dirs, files);
 
-  const hasSquintSource = files.some((f) => f.path === `${dirName}/app.cljs`)
-  let compiledFiles = files
-  if (hasSquintSource) {
-    if (!opts?.compile) {
-      throw new Error('Squint app build requires a workspace compile context')
-    }
-    compiledFiles = await compileGappTree(dirName, files, {
-      ...opts.compile,
-      bundleName: opts.compile.bundleName ?? dirName,
-    })
-  }
+  const compiledFiles = await compileGappTree(dirName, files, opts?.compile ? {
+    ...opts.compile,
+    bundleName: opts.compile.bundleName ?? dirName,
+  } : undefined)
   const tar_bytes = await buildTar(dirName, dirs, compiledFiles);
   const tar_checksum = createHash("sha1").update(tar_bytes).digest("hex");
 
