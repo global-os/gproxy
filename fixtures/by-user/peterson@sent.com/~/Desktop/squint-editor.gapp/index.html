@@ -91,15 +91,42 @@
     box-shadow: 0 4px 16px rgba(0,0,0,0.15);
   }
   .picker-title { font-size: 0.9rem; font-weight: 600; color: #333; }
+  .picker-path {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 12px;
+    color: #555;
+  }
+  #picker-up-btn {
+    padding: 2px 8px;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  #picker-dir-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   #file-list {
     border: 1px solid #ddd;
     border-radius: 6px;
     font-size: 13px;
-    outline: none;
     width: 100%;
-    min-height: 140px;
+    min-height: 150px;
+    max-height: 200px;
+    overflow-y: auto;
   }
-  #file-list:focus { border-color: #888; }
+  .picker-item {
+    padding: 5px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+  }
+  .picker-item:hover { background: #f0f4ff; }
+  .picker-item.selected { background: #2563eb; color: #fff; }
   #picker-status { font-size: 12px; color: #b91c1c; min-height: 1em; }
   .picker-buttons { display: flex; gap: 0.5rem; justify-content: flex-end; }
 </style>
@@ -107,12 +134,16 @@
 <body>
   <div id="file-picker">
     <div class="picker-box">
-      <div class="picker-title">Open from Desktop</div>
-      <select id="file-list" size="8"></select>
+      <div class="picker-title">Open file</div>
+      <div class="picker-path">
+        <button id="picker-up-btn" type="button" disabled>↑ Up</button>
+        <span id="picker-dir-name">Desktop</span>
+      </div>
+      <div id="file-list"></div>
       <div id="picker-status"></div>
       <div class="picker-buttons">
         <button id="picker-cancel-btn" type="button">Cancel</button>
-        <button id="picker-open-btn" type="button">Open</button>
+        <button id="picker-open-btn" type="button" disabled>Open</button>
       </div>
     </div>
   </div>
