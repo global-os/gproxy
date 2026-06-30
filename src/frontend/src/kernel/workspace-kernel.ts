@@ -20,19 +20,8 @@ type TraceEvent = {
   message: KernelMessage
 }
 
-type PendingInbound = {
-  source: MessageEventSource
-  data: KernelMessage
-  receivedAt: number
-}
-
-const PENDING_MAX_PER_WINDOW = 32
-const PENDING_TTL_MS = 30_000
-
 export class WorkspaceKernel {
   private readonly bindings = new Map<number, KernelWindowBinding>()
-  /** Inbound messages received before the iframe binding exists, keyed by windowId. */
-  private readonly pendingByWindowId = new Map<number, PendingInbound[]>()
   /** Per-process opaque state (schema owned by the app). */
   private readonly processState = new Map<number, Record<string, unknown>>()
   /** In-flight operation per process (e.g. which window is saving). */
@@ -48,7 +37,6 @@ export class WorkspaceKernel {
       const persisted = loadProcessState(this.workspaceId, binding.processId)
       if (persisted) this.processState.set(binding.processId, persisted)
     }
-    this.drainPending(binding)
   }
 
   unregister(windowId: number) {
@@ -61,7 +49,6 @@ export class WorkspaceKernel {
     }
     this.bindings.delete(windowId)
     this.tracers.delete(windowId)
-    this.pendingByWindowId.delete(windowId)
   }
 
   private emitTrace(
@@ -91,72 +78,12 @@ export class WorkspaceKernel {
   handleMessage(event: MessageEvent) {
     if (!isKernelMessage(event.data)) return
 
+    console.log('Kernel message: ', event)
+
     const binding = this.findBinding(event.source)
-    if (binding) {
-      this.processMessage(binding, event.data)
-      return
-    }
+    if (!binding) return
 
-    const source = event.source
-    const windowId = this.resolveWindowIdForSource(source)
-    if (windowId === undefined || !source) return
-
-    this.enqueuePending(windowId, {
-      source,
-      data: event.data,
-      receivedAt: Date.now(),
-    })
-  }
-
-  private enqueuePending(windowId: number, item: PendingInbound) {
-    this.pruneExpired(windowId)
-
-    let queue = this.pendingByWindowId.get(windowId)
-    if (!queue) {
-      queue = []
-      this.pendingByWindowId.set(windowId, queue)
-    }
-
-    if (queue.length >= PENDING_MAX_PER_WINDOW) {
-      queue.shift()
-    }
-
-    const last = queue[queue.length - 1]
-    if (item.data.type === 'ready' && last?.data.type === 'ready') {
-      queue[queue.length - 1] = item
-      return
-    }
-
-    queue.push(item)
-  }
-
-  private pruneExpired(windowId: number) {
-    const queue = this.pendingByWindowId.get(windowId)
-    if (!queue) return
-
-    const now = Date.now()
-    const fresh = queue.filter((item) => now - item.receivedAt <= PENDING_TTL_MS)
-    if (fresh.length) {
-      this.pendingByWindowId.set(windowId, fresh)
-    } else {
-      this.pendingByWindowId.delete(windowId)
-    }
-  }
-
-  private drainPending(binding: KernelWindowBinding) {
-    const queue = this.pendingByWindowId.get(binding.windowId)
-    if (!queue?.length) return
-
-    this.pendingByWindowId.delete(binding.windowId)
-
-    const frame = binding.iframe.contentWindow
-    const now = Date.now()
-
-    for (const item of queue) {
-      if (item.source !== frame) continue
-      if (now - item.receivedAt > PENDING_TTL_MS) continue
-      this.processMessage(binding, item.data)
-    }
+    this.processMessage(binding, event.data)
   }
 
   private processMessage(binding: KernelWindowBinding, message: KernelMessage) {
@@ -341,7 +268,7 @@ export class WorkspaceKernel {
     }
   }
 
-  private defaultFilename(binding: KernelWindowBinding): string {
+  private defaultFilename(_binding: KernelWindowBinding): string {
     return 'Untitled.txt'
   }
 
@@ -414,25 +341,6 @@ export class WorkspaceKernel {
     for (const binding of this.bindings.values()) {
       if (binding.iframe.contentWindow === source) return binding
     }
-    return undefined
-  }
-
-  /** Match an unbound iframe message to a workspace window via data-window-id on the iframe. */
-  private resolveWindowIdForSource(source: MessageEventSource | null): number | undefined {
-    if (!source) return undefined
-
-    for (const binding of this.bindings.values()) {
-      if (binding.iframe.contentWindow === source) return binding.windowId
-    }
-
-    const frames = document.querySelectorAll('iframe[data-window-id]')
-    for (const frame of frames) {
-      if (!(frame instanceof HTMLIFrameElement)) continue
-      if (frame.contentWindow !== source) continue
-      const id = Number(frame.dataset.windowId)
-      if (Number.isInteger(id) && id > 0) return id
-    }
-
     return undefined
   }
 }

@@ -6,30 +6,25 @@ export function useWorkspaceKernel(workspaceId: string) {
   const kernel = useMemo(() => new WorkspaceKernel(workspaceId), [workspaceId])
   const bindingsRef = useRef(new Map<number, KernelWindowBinding>())
   const windowsRef = useRef(new Map<number, AppWindow>())
-  const pendingIframesRef = useRef(new Map<number, HTMLIFrameElement>())
   const iframeRefFns = useRef(new Map<number, (el: HTMLIFrameElement | null) => void>())
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => kernel.handleMessage(event)
     window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
-  }, [kernel])
 
-  useEffect(() => {
     for (const binding of bindingsRef.current.values()) {
       kernel.register(binding)
     }
+
+    return () => window.removeEventListener('message', onMessage)
   }, [kernel])
 
   const bindWindow = useCallback((win: AppWindow, iframe: HTMLIFrameElement | null) => {
     if (!iframe) {
       bindingsRef.current.delete(win.id)
       kernel.unregister(win.id)
-      pendingIframesRef.current.delete(win.id)
       return
     }
-
-    pendingIframesRef.current.delete(win.id)
 
     const binding: KernelWindowBinding = {
       workspaceId,
@@ -48,17 +43,12 @@ export function useWorkspaceKernel(workspaceId: string) {
   const syncWindow = useCallback((win: AppWindow) => {
     windowsRef.current.set(win.id, win)
     const binding = bindingsRef.current.get(win.id)
-    if (binding) {
-      binding.title = win.title
-      binding.bundleName = win.bundleName ?? `${win.title}.gapp`
-      binding.processId = win.processId ?? binding.processId
-      binding.instanceId = win.instanceId ?? binding.instanceId
-      return
-    }
-
-    const pending = pendingIframesRef.current.get(win.id)
-    if (pending) bindWindow(win, pending)
-  }, [bindWindow])
+    if (!binding) return
+    binding.title = win.title
+    binding.bundleName = win.bundleName ?? `${win.title}.gapp`
+    binding.processId = win.processId ?? binding.processId
+    binding.instanceId = win.instanceId ?? binding.instanceId
+  }, [])
 
   const releaseWindow = useCallback((windowId: number) => {
     const win = windowsRef.current.get(windowId)
@@ -72,11 +62,7 @@ export function useWorkspaceKernel(workspaceId: string) {
     if (!fn) {
       fn = (el: HTMLIFrameElement | null) => {
         const win = windowsRef.current.get(windowId)
-        if (!win) {
-          if (el) pendingIframesRef.current.set(windowId, el)
-          else pendingIframesRef.current.delete(windowId)
-          return
-        }
+        if (!win) return
         bindWindow(win, el)
       }
       iframeRefFns.current.set(windowId, fn)
