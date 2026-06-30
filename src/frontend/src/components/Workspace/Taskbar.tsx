@@ -192,7 +192,7 @@ export function Taskbar({ onLaunchApp }: Props) {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
   const [clock, setClock] = useState(() => new Date())
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
   const { data: entries = [], isLoading } = useQuery<FileIndexEntry[]>({
@@ -318,7 +318,7 @@ export function Taskbar({ onLaunchApp }: Props) {
             })}
           </Results>
           <SearchField
-            innerRef={inputRef}
+            innerRef={(el: HTMLInputElement | null) => { inputRef.current = el }}
             type="text"
             placeholder="Type to search…"
             value={query}
