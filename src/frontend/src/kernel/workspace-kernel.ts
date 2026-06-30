@@ -28,8 +28,14 @@ export class WorkspaceKernel {
   private readonly activeOps = new Map<number, ActiveOperation>()
   /** Windows subscribed to workspace-wide kernel trace events. */
   private readonly tracers = new Set<number>()
-  /** Unique ID for this page load; sent to apps in init messages so they can generate scoped request IDs. */
-  private readonly visitId = crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+  /** Server-issued ID unique to this page load, used by apps to generate scoped request IDs. */
+  private readonly visitIdPromise: Promise<string> = fetch('/api/visits', {
+    method: 'POST',
+    credentials: 'include',
+  })
+    .then((r) => r.json() as Promise<{ visitId: string }>)
+    .then((j) => j.visitId)
+    .catch(() => crypto.randomUUID())
 
   constructor(private readonly workspaceId: string) {}
 
@@ -98,7 +104,7 @@ export class WorkspaceKernel {
 
     switch (message.type) {
       case 'ready':
-        this.onReady(binding, post)
+        void this.onReady(binding, post)
         break
       case 'save':
         void this.onSave(binding, message, post)
@@ -280,27 +286,20 @@ export class WorkspaceKernel {
     return 'Untitled.txt'
   }
 
-  private onReady(binding: KernelWindowBinding, post: (msg: KernelMessage) => void) {
+  private async onReady(binding: KernelWindowBinding, post: (msg: KernelMessage) => void) {
+    const visitId = await this.visitIdPromise
+    post({ type: 'visit', visitId })
+
     const state = this.resolveProcessState(binding.processId)
     if (state === undefined) {
-      post({
-        type: 'init:fresh',
-        reason: 'fresh',
-        filename: this.defaultFilename(binding),
-        visitId: this.visitId,
-      })
+      post({ type: 'init:fresh', reason: 'fresh', filename: this.defaultFilename(binding) })
       return
     }
     if (state === null) {
-      post({
-        type: 'init:fresh',
-        reason: 'corrupted',
-        filename: this.defaultFilename(binding),
-        visitId: this.visitId,
-      })
+      post({ type: 'init:fresh', reason: 'corrupted', filename: this.defaultFilename(binding) })
       return
     }
-    post({ type: 'init', ...state, visitId: this.visitId })
+    post({ type: 'init', ...state })
   }
 
   private async onSave(
