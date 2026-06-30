@@ -421,7 +421,7 @@ app.all('/instance/*', async (c) => {
   if (instanceId === null) {
     const webview = await resolveWebviewBySlug(slug)
     if (!webview) return c.json({ message: 'Not found' }, 404)
-    return proxyWebviewRequest(webview.domain, upstreamPath, c.req.raw)
+    return proxyWebviewRequest(webview.domain, upstreamPath, c.req.raw, url.hostname)
   }
 
   if (upstreamPath === '/_status') {

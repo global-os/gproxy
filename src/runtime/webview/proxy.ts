@@ -21,34 +21,50 @@ function extractCrossDomain(upstreamPath: string): { domain: string; rest: strin
   return { domain: m[1]!, rest: m[2] || '/' }
 }
 
-function stripCookieDomain(setCookie: string): string {
-  return setCookie.replace(/;\s*domain=[^;,]*/gi, '')
+/**
+ * Rewrite Set-Cookie so the browser accepts it under the proxy origin.
+ * Strip the upstream domain and downgrade Secure if needed.
+ */
+function rewriteSetCookie(setCookie: string, proxyHost: string): string {
+  return setCookie
+    .replace(/;\s*domain=[^;,]*/gi, `; Domain=${proxyHost}`)
+    .replace(/;\s*samesite=none/gi, '; SameSite=Lax')
 }
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** Rewrite absolute URLs in HTML to route through the proxy. */
+function rewriteUrl(url: string, boundRe: RegExp): string {
+  try {
+    const parsed = new URL(url)
+    const bare = parsed.pathname + parsed.search + parsed.hash
+    return boundRe.test(parsed.hostname) ? bare : `/${parsed.host}${bare}`
+  } catch {
+    return url
+  }
+}
+
+/** Rewrite absolute URLs in HTML attributes to route through the proxy. */
 function rewriteHtml(html: string, boundDomain: string): string {
   const boundRe = new RegExp(escapeRegex(boundDomain), 'gi')
-
   return html.replace(
     /((?:src|href|action|srcset)=)(["'])(https?:\/\/[^"']+)\2/gi,
-    (match, attr: string, quote: string, url: string) => {
-      try {
-        const parsed = new URL(url)
-        const bare = parsed.pathname + parsed.search + parsed.hash
-        if (boundRe.test(parsed.hostname)) {
-          // Same-domain → relative path
-          return `${attr}${quote}${bare}${quote}`
-        }
-        // Cross-domain → proxy via /{hostname}/path
-        return `${attr}${quote}/${parsed.host}${bare}${quote}`
-      } catch {
-        return match
-      }
-    },
+    (_match, attr: string, quote: string, url: string) =>
+      `${attr}${quote}${rewriteUrl(url, boundRe)}${quote}`,
+  )
+}
+
+/**
+ * Rewrite absolute URLs in JS/JSON string literals to route through the proxy.
+ * Handles fetch/XHR calls to cross-origin APIs that appear as string literals
+ * in bundled code (e.g. "https://api.x.com/..." → "/api.x.com/...").
+ */
+function rewriteStringLiterals(text: string, boundDomain: string): string {
+  const boundRe = new RegExp(escapeRegex(boundDomain), 'gi')
+  return text.replace(
+    /(["'])(https?:\/\/[a-z0-9][\w.-]+(?:\/[^"']*)?)\1/gi,
+    (_match, quote: string, url: string) => `${quote}${rewriteUrl(url, boundRe)}${quote}`,
   )
 }
 
@@ -56,6 +72,7 @@ export async function proxyWebviewRequest(
   boundDomain: string,
   upstreamPath: string,
   incomingRequest: Request,
+  proxyHost: string,
 ): Promise<Response> {
   const cross = extractCrossDomain(upstreamPath)
   const fetchDomain = cross ? cross.domain : boundDomain
@@ -90,7 +107,7 @@ export async function proxyWebviewRequest(
     const lower = key.toLowerCase()
     if (STRIP_RESPONSE_HEADERS.has(lower)) continue
     if (lower === 'set-cookie') {
-      responseHeaders.append('Set-Cookie', stripCookieDomain(value))
+      responseHeaders.append('Set-Cookie', rewriteSetCookie(value, proxyHost))
       continue
     }
     if (lower === 'transfer-encoding') continue
@@ -99,18 +116,26 @@ export async function proxyWebviewRequest(
 
   const contentType = upstreamResponse.headers.get('content-type') ?? ''
   const isHtml = contentType.includes('text/html')
+  const isJs = /javascript/.test(contentType)
+  const isJson = contentType.includes('application/json')
 
-  if (!isHtml) {
+  if (!isHtml && !isJs && !isJson) {
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
       headers: responseHeaders,
     })
   }
 
-  const html = await upstreamResponse.text()
-  const rewritten = rewriteHtml(html, boundDomain)
-  responseHeaders.set('Content-Type', 'text/html; charset=utf-8')
+  const text = await upstreamResponse.text()
   responseHeaders.delete('content-length')
+
+  let rewritten: string
+  if (isHtml) {
+    rewritten = rewriteHtml(text, boundDomain)
+    responseHeaders.set('Content-Type', 'text/html; charset=utf-8')
+  } else {
+    rewritten = rewriteStringLiterals(text, boundDomain)
+  }
 
   return new Response(rewritten, {
     status: upstreamResponse.status,
