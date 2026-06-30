@@ -2,7 +2,7 @@
 
 (def SAVE_TIMEOUT_MS 15000)
 
-(def state (atom {:saving false}))
+(def state (atom {:saving false :filename "Untitled.txt"}))
 
 (def $editor (.getElementById js/document "editor"))
 (def $filename (.getElementById js/document "filename"))
@@ -23,15 +23,12 @@
   (.toggle (.-classList $status) "error" (boolean err?)))
 
 (defn render! []
-  (set! (.-disabled $save) (:saving @state)))
-
-(defn set-filename! [name]
-  (set! (.-value $filename) (or name "Untitled.txt")))
+  (set! (.-disabled $save) (:saving @state))
+  (set! (.-textContent $filename) (:filename @state)))
 
 (defn load! [msg]
   (set-content! (.-content msg))
-  (set-filename! (.-filename msg))
-  (swap! state assoc :saving false)
+  (swap! state assoc :saving false :filename (or (.-filename msg) "Untitled.txt"))
   (render!)
   (status! "" false))
 
@@ -54,19 +51,21 @@
 (defn save! []
   (js/console.log "save! called, state:" (clj->js @state))
   (when-not (:saving @state)
-    (let [name (.trim (.-value $filename))]
-      (js/console.log "save! name:" name "content length:" (.-length (get-content)))
-      (if (zero? (.-length name))
-        (status! "Filename required" true)
-        (do
-          (swap! state assoc :saving true)
-          (render!)
-          (status! "" false)
-          (schedule-save-timeout!)
-          (js/console.log "save! posting to kernel")
-          (post! #js {:type "save"
-                      :filename name
-                      :content (get-content)}))))))
+    (let [chosen (.prompt js/window "Save to your desktop as:" (:filename @state))]
+      (js/console.log "save! chosen:" chosen)
+      (when-not (nil? chosen)
+        (let [filename (.trim chosen)]
+          (if (zero? (.-length filename))
+            (status! "Save cancelled — filename is required" true)
+            (do
+              (swap! state assoc :saving true :filename filename)
+              (render!)
+              (status! "" false)
+              (schedule-save-timeout!)
+              (js/console.log "save! posting to kernel")
+              (post! #js {:type "save"
+                          :filename filename
+                          :content (get-content)}))))))))
 
 (defn handle-msg [msg]
   (case (.-type msg)
@@ -76,7 +75,7 @@
                       (clear-save-timeout!)
                       (swap! state assoc :saving false)
                       (when-let [name (.-filename msg)]
-                        (set-filename! name))
+                        (swap! state assoc :filename name))
                       (render!)
                       (status! "Saved" false))
     "save:error" (do

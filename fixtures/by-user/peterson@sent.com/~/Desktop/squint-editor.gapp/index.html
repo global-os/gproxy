@@ -22,17 +22,27 @@
     justify-content: space-between;
     gap: 0.75rem;
   }
-  #filename {
-    flex: 1;
+  .filename-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
     min-width: 0;
-    font-family: monospace;
-    font-size: 13px;
-    padding: 4px 8px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    outline: none;
+    flex: 1 1 auto;
   }
-  #filename:focus { border-color: #888; }
+  .filename-label {
+    font-size: 0.72rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  #filename {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   button {
     padding: 6px 14px;
     font-size: 13px;
@@ -63,7 +73,10 @@
 </head>
 <body>
   <div class="toolbar">
-    <input id="filename" type="text" spellcheck="false" value="Untitled.txt" aria-label="Desktop filename">
+    <div class="filename-wrap">
+      <span class="filename-label">File</span>
+      <span id="filename">Untitled.txt</span>
+    </div>
     <button id="save-btn" type="button">Save</button>
   </div>
   <textarea id="editor" spellcheck="false"></textarea>
