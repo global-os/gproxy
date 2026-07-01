@@ -70,22 +70,19 @@ function rewriteHtmlAttrs(html: string, boundDomain: string): string {
 
 /**
  * Script injected at the top of every proxied HTML page.
- * Monkey-patches fetch() and XMLHttpRequest.open() so that cross-origin
- * requests to the bound domain (and its subdomains) are transparently
- * rerouted through the proxy before the site's own code runs.
- * Only the bound domain is intercepted — third-party widgets (Google Sign-In,
- * CDNs, etc.) are left alone so their own CORS/credentialing still works.
+ * Monkey-patches fetch() and XMLHttpRequest.open() to route ALL cross-origin
+ * requests through the proxy. The proxy rewrites Origin/Referer to the bound
+ * domain before forwarding, so third-party services (e.g. Google Sign-In)
+ * see x.com as the caller rather than our proxy subdomain.
  */
-function buildInterceptScript(boundDomain: string): string {
-  const bd = JSON.stringify(boundDomain)
+function buildInterceptScript(): string {
   return `<script>(function(){
-var _o=location.origin,_bd=${bd};
+var _o=location.origin;
 function _p(u){
   try{
     var s=u instanceof Request?u.url:u instanceof URL?u.href:typeof u==='string'?u:null;
     if(!s||!s.startsWith('http')||s.startsWith(_o))return null;
     var r=new URL(s);
-    if(r.hostname!==_bd&&!r.hostname.endsWith('.'+_bd))return null;
     return '/'+r.host+r.pathname+r.search+r.hash;
   }catch(e){return null;}
 }
@@ -109,8 +106,8 @@ function rewriteHtml(html: string, boundDomain: string): string {
   // Strip <meta http-equiv="Content-Security-Policy"> tags — they would block
   // our injected inline script the same way HTTP CSP headers do.
   result = result.replace(/<meta[^>]+http-equiv\s*=\s*["']?content-security-policy["']?[^>]*>/gi, '')
-  const intercept = buildInterceptScript(boundDomain)
   // Inject as the first child of <head> so it runs before any site scripts.
+  const intercept = buildInterceptScript()
   const injected = result.replace(/(<head[^>]*>)/i, `$1${intercept}`)
   if (injected !== result) return injected
   // No <head> tag — inject before the first <script>.
@@ -133,9 +130,16 @@ export async function proxyWebviewRequest(
 
   const upstream = `https://${fetchDomain}${fetchPath}`
 
+  const boundOrigin = `https://${boundDomain}`
   const forwardHeaders = new Headers()
   for (const [key, value] of incomingRequest.headers.entries()) {
-    if (!HOP_BY_HOP.has(key.toLowerCase())) forwardHeaders.set(key, value)
+    const lower = key.toLowerCase()
+    if (HOP_BY_HOP.has(lower)) continue
+    // Present as the bound domain to all upstream services so third-party
+    // integrations (e.g. Google Sign-In) see x.com rather than our proxy.
+    if (lower === 'origin') { forwardHeaders.set('Origin', boundOrigin); continue }
+    if (lower === 'referer') { forwardHeaders.set('Referer', boundOrigin + '/'); continue }
+    forwardHeaders.set(key, value)
   }
   forwardHeaders.set(
     'User-Agent',
