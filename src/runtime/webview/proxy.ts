@@ -98,6 +98,15 @@ XMLHttpRequest.prototype.open=function(m,u){
   arguments[1]=rw!==null?rw:u;
   return _xo.apply(this,arguments);
 };
+try{
+  var _cd=Object.getOwnPropertyDescriptor(Document.prototype,'cookie');
+  if(_cd&&_cd.set){
+    var _cs=_cd.set;
+    Object.defineProperty(document,'cookie',{configurable:true,get:_cd.get,set:function(v){
+      _cs.call(document,String(v).replace(/;\\s*domain=[^;,]*/gi,''));
+    }});
+  }
+}catch(e){}
 })()</script>`
 }
 
