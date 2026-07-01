@@ -29,6 +29,8 @@ const HOP_BY_HOP = new Set([
   'host',
   // Proxy-domain cookies are meaningless to the upstream.
   'cookie',
+  // We buffer the body, so let fetch() compute the correct length.
+  'content-length',
 ])
 
 /**
@@ -67,19 +69,22 @@ function rewriteHtmlAttrs(html: string, boundDomain: string): string {
 
 /**
  * Script injected at the top of every proxied HTML page.
- * Monkey-patches fetch() and XMLHttpRequest.open() so that any cross-origin
- * absolute URL is transparently routed through the proxy before X's code runs.
- * String-literal rewriting in JS bundles is insufficient because modern bundlers
- * split base URLs from paths and assemble them at runtime.
+ * Monkey-patches fetch() and XMLHttpRequest.open() so that cross-origin
+ * requests to the bound domain (and its subdomains) are transparently
+ * rerouted through the proxy before the site's own code runs.
+ * Only the bound domain is intercepted — third-party widgets (Google Sign-In,
+ * CDNs, etc.) are left alone so their own CORS/credentialing still works.
  */
-function buildInterceptScript(): string {
+function buildInterceptScript(boundDomain: string): string {
+  const bd = JSON.stringify(boundDomain)
   return `<script>(function(){
-var _o=location.origin;
+var _o=location.origin,_bd=${bd};
 function _p(u){
   try{
     var s=u instanceof Request?u.url:u instanceof URL?u.href:typeof u==='string'?u:null;
     if(!s||!s.startsWith('http')||s.startsWith(_o))return null;
     var r=new URL(s);
+    if(r.hostname!==_bd&&!r.hostname.endsWith('.'+_bd))return null;
     return '/'+r.host+r.pathname+r.search+r.hash;
   }catch(e){return null;}
 }
@@ -103,7 +108,7 @@ function rewriteHtml(html: string, boundDomain: string): string {
   // Strip <meta http-equiv="Content-Security-Policy"> tags — they would block
   // our injected inline script the same way HTTP CSP headers do.
   result = result.replace(/<meta[^>]+http-equiv\s*=\s*["']?content-security-policy["']?[^>]*>/gi, '')
-  const intercept = buildInterceptScript()
+  const intercept = buildInterceptScript(boundDomain)
   // Inject as the first child of <head> so it runs before any site scripts.
   const injected = result.replace(/(<head[^>]*>)/i, `$1${intercept}`)
   if (injected !== result) return injected
@@ -133,7 +138,13 @@ export async function proxyWebviewRequest(
   )
 
   const method = incomingRequest.method.toUpperCase()
-  const body = method !== 'GET' && method !== 'HEAD' ? incomingRequest.body : null
+  // Buffer the body rather than streaming — passing a ReadableStream to fetch()
+  // requires the non-standard duplex:'half' option in Node.js and may fail on
+  // Vercel. Buffering also lets fetch() set the correct Content-Length.
+  let body: ArrayBuffer | null = null
+  if (method !== 'GET' && method !== 'HEAD' && incomingRequest.body) {
+    try { body = await incomingRequest.arrayBuffer() } catch { /* empty body */ }
+  }
 
   let upstreamResponse: Response
   try {
