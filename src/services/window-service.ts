@@ -245,10 +245,10 @@ export async function updateWindowGeometry(
   await db
     .update(schema.workspaceWindow)
     .set({
-      ...(patch.x !== undefined ? { x: patch.x } : {}),
-      ...(patch.y !== undefined ? { y: patch.y } : {}),
-      ...(patch.width !== undefined ? { width: patch.width } : {}),
-      ...(patch.height !== undefined ? { height: patch.height } : {}),
+      ...(patch.x !== undefined ? { x: Math.round(patch.x) } : {}),
+      ...(patch.y !== undefined ? { y: Math.round(patch.y) } : {}),
+      ...(patch.width !== undefined ? { width: Math.round(patch.width) } : {}),
+      ...(patch.height !== undefined ? { height: Math.round(patch.height) } : {}),
     })
     .where(eq(schema.workspaceWindow.id, windowId))
 }
