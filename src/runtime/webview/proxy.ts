@@ -1,7 +1,14 @@
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
 
-const outboundProxy = process.env.PROXY_URL ? new ProxyAgent(process.env.PROXY_URL) : null
-if (outboundProxy) console.log('[webview] outbound proxy active:', process.env.PROXY_URL?.replace(/:([^@]+)@/, ':***@'))
+let outboundProxy: ProxyAgent | null = null
+if (process.env.PROXY_URL) {
+  try {
+    outboundProxy = new ProxyAgent(process.env.PROXY_URL)
+    console.log('[webview] outbound proxy active:', process.env.PROXY_URL.replace(/:([^@]+)@/, ':***@'))
+  } catch (err) {
+    console.error('[webview] PROXY_URL is invalid, outbound proxy disabled:', err)
+  }
+}
 
 const STRIP_RESPONSE_HEADERS = new Set([
   'content-security-policy',
