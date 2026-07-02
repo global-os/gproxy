@@ -63,6 +63,15 @@ const HOP_BY_HOP = new Set([
   'host',
   // We buffer the body, so let fetch() compute the correct length.
   'content-length',
+  // Browser security metadata that reveals the cross-origin iframe context
+  // to the upstream. Sites like X use these to detect proxy/WebView access
+  // and serve error pages instead of normal content.
+  'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'sec-fetch-user',
+  'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform',
+  'sec-ch-ua-arch', 'sec-ch-ua-bitness', 'sec-ch-ua-full-version',
+  'sec-ch-ua-full-version-list', 'sec-ch-ua-model', 'sec-ch-ua-wow64',
+  'sec-ch-prefers-color-scheme', 'sec-ch-prefers-reduced-motion',
+  'sec-ch-viewport-width', 'sec-ch-width',
 ])
 
 /**
