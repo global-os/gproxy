@@ -1,6 +1,7 @@
 import { ProxyAgent } from 'undici'
 
 const outboundProxy = process.env.PROXY_URL ? new ProxyAgent(process.env.PROXY_URL) : null
+if (outboundProxy) console.log('[webview] outbound proxy active:', process.env.PROXY_URL?.replace(/:([^@]+)@/, ':***@'))
 
 const STRIP_RESPONSE_HEADERS = new Set([
   'content-security-policy',
