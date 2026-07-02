@@ -26,15 +26,31 @@ const STRIP_RESPONSE_HEADERS = new Set([
   'content-length',
 ])
 
+// Common file extensions that appear as path segments but are never real TLDs.
+const FILE_EXT_TLDS = new Set([
+  'js', 'mjs', 'cjs', 'ts', 'jsx', 'tsx',
+  'css', 'scss', 'less',
+  'php', 'html', 'htm', 'xml',
+  'json', 'yaml', 'yml',
+  'svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'avif',
+  'woff', 'woff2', 'ttf', 'eot', 'otf',
+  'map', 'gz', 'br', 'zip',
+])
+
 /** True if the first path segment looks like a proxied cross-domain hostname. */
 function extractCrossDomain(upstreamPath: string): { domain: string; rest: string } | null {
   // Require 2+ dot-separated labels (covers x.com, api.x.com, abs.twimg.com, etc.)
   const m = upstreamPath.match(/^\/([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*){1,})(\/.*)?$/i)
   if (!m) return null
   const candidate = m[1]!
+  const labels = candidate.split('.')
+  const tld = labels[labels.length - 1]!.toLowerCase()
+  // Last label must be purely alphabetic (rejects 1.1, v4i0.We4, etc.)
+  if (!/^[a-z]{2,}$/i.test(tld)) return null
+  // Last label must not be a file extension masquerading as a TLD (rejects rsrc.php, api.js, etc.)
+  if (FILE_EXT_TLDS.has(tld)) return null
   // Reject if any label is a minified-filename hex hash (e.g. a1954c7a, 542e285a).
-  // Real domain labels don't look like short hex strings.
-  if (candidate.split('.').some(l => /^[0-9a-f]{6,16}$/i.test(l))) return null
+  if (labels.some(l => /^[0-9a-f]{6,16}$/i.test(l))) return null
   return { domain: candidate, rest: m[2] || '/' }
 }
 
