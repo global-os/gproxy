@@ -189,6 +189,12 @@ export async function proxyWebviewRequest(
     return new Response('Not found', { status: 404 })
   }
 
+  // Stub castle.io bot-detection SDK — it crashes in the proxy iframe context.
+  // Return an empty script so X.com handles the missing token gracefully.
+  if (/\/castle\.[a-f0-9]+\.js$/.test(upstreamPath)) {
+    return new Response('', { status: 200, headers: { 'Content-Type': 'application/javascript' } })
+  }
+
   const cross = extractCrossDomain(upstreamPath)
   const fetchDomain = cross ? cross.domain : boundDomain
   const fetchPath = cross ? cross.rest : upstreamPath
