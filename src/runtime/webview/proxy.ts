@@ -73,7 +73,18 @@ const HOP_BY_HOP = new Set([
   'sec-ch-ua-full-version-list', 'sec-ch-ua-model', 'sec-ch-ua-wow64',
   'sec-ch-prefers-color-scheme', 'sec-ch-prefers-reduced-motion',
   'sec-ch-viewport-width', 'sec-ch-width',
+  // Vercel infrastructure headers injected into every inbound request.
+  // These reveal our deployment identity and proxy chain to upstream services,
+  // which is exactly how X detected us ("Please use X.com or official X apps").
+  'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto',
+  'x-real-ip',
 ])
+
+// Vercel injects many x-vercel-* headers; strip all of them by prefix check
+// rather than maintaining an exhaustive list.
+function isVercelInternalHeader(name: string): boolean {
+  return name.startsWith('x-vercel-')
+}
 
 /**
  * Rewrite Set-Cookie so the browser accepts it under the proxy origin.
@@ -330,6 +341,7 @@ const cross = extractCrossDomain(upstreamPath)
   for (const [key, value] of incomingRequest.headers.entries()) {
     const lower = key.toLowerCase()
     if (HOP_BY_HOP.has(lower)) continue
+    if (isVercelInternalHeader(lower)) continue
     // Present as the bound domain to all upstream services so third-party
     // integrations (e.g. Google Sign-In) see x.com rather than our proxy.
     if (lower === 'origin') { forwardHeaders.set('Origin', boundOrigin); continue }
