@@ -1,5 +1,6 @@
 import { parse as acornParse } from 'acorn'
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
+import { getActiveSessionId, captureResponseBody, recordTraffic } from './recording.js'
 
 let outboundProxy: ProxyAgent | null = null
 if (process.env.PROXY_URL) {
@@ -301,13 +302,21 @@ export async function probeOutboundProxy(url: string, timeoutMs = 8_000): Promis
   }
 }
 
+function headersToArray(h: Headers): { name: string; value: string }[] {
+  const out: { name: string; value: string }[] = []
+  h.forEach((value, name) => out.push({ name, value }))
+  return out
+}
+
 export async function proxyWebviewRequest(
   boundDomain: string,
   upstreamPath: string,
   incomingRequest: Request,
+  slug = '',
 ): Promise<Response> {
 
-
+const t0 = Date.now()
+const sessionId = await getActiveSessionId()
 const cross = extractCrossDomain(upstreamPath)
   const fetchDomain = cross ? cross.domain : boundDomain
   const fetchPath = cross ? cross.rest : upstreamPath
@@ -362,6 +371,18 @@ const cross = extractCrossDomain(upstreamPath)
       : await fetch(upstream, fetchInit)
   } catch (err) {
     console.error(`[webview] upstream fetch failed for ${upstream}:`, err)
+    if (sessionId != null) {
+      void recordTraffic({
+        sessionId, slug, method, upstreamUrl: upstream,
+        requestHeaders: headersToArray(forwardHeaders),
+        requestBody: body ? Buffer.from(body).toString('base64') : null,
+        responseStatus: 0,
+        responseHeaders: [],
+        responseBody: err instanceof Error ? err.message : String(err),
+        responseBodyEncoding: null,
+        durationMs: Date.now() - t0,
+      })
+    }
     return new Response('Upstream unreachable', { status: 502 })
   }
 
@@ -406,7 +427,36 @@ const cross = extractCrossDomain(upstreamPath)
       console.log('[castle] stub:', stub ? stub.slice(0, 120) : 'none — returning real script')
       responseHeaders.set('Content-Type', 'application/javascript')
       responseHeaders.delete('content-length')
-      return new Response(stub ?? realScript, { status: 200, headers: responseHeaders })
+      const castleBody = stub ?? realScript
+      if (sessionId != null) {
+        void recordTraffic({
+          sessionId, slug, method, upstreamUrl: upstream,
+          requestHeaders: headersToArray(forwardHeaders),
+          requestBody: body ? Buffer.from(body).toString('base64') : null,
+          responseStatus: 200,
+          responseHeaders: headersToArray(responseHeaders),
+          responseBody: castleBody.slice(0, 512 * 1024),
+          responseBodyEncoding: null,
+          durationMs: Date.now() - t0,
+        })
+      }
+      return new Response(castleBody, { status: 200, headers: responseHeaders })
+    }
+
+    if (sessionId != null) {
+      const { body: buf, text: respText, encoding: respEncoding } = await captureResponseBody(upstreamResponse)
+      void recordTraffic({
+        sessionId, slug, method, upstreamUrl: upstream,
+        requestHeaders: headersToArray(forwardHeaders),
+        requestBody: body ? Buffer.from(body).toString('base64') : null,
+        responseStatus: upstreamResponse.status,
+        responseHeaders: headersToArray(responseHeaders),
+        responseBody: respText,
+        responseBodyEncoding: respEncoding,
+        durationMs: Date.now() - t0,
+      })
+      responseHeaders.delete('content-length')
+      return new Response(buf, { status: upstreamResponse.status, headers: responseHeaders })
     }
 
     return new Response(upstreamResponse.body, {
@@ -422,6 +472,18 @@ const cross = extractCrossDomain(upstreamPath)
   const rewritten = cross ? html : rewriteHtml(html, boundDomain)
   responseHeaders.set('Content-Type', 'text/html; charset=utf-8')
   responseHeaders.delete('content-length')
+  if (sessionId != null) {
+    void recordTraffic({
+      sessionId, slug, method, upstreamUrl: upstream,
+      requestHeaders: headersToArray(forwardHeaders),
+      requestBody: body ? Buffer.from(body).toString('base64') : null,
+      responseStatus: upstreamResponse.status,
+      responseHeaders: headersToArray(responseHeaders),
+      responseBody: rewritten.slice(0, 512 * 1024),
+      responseBodyEncoding: null,
+      durationMs: Date.now() - t0,
+    })
+  }
 
   return new Response(rewritten, {
     status: upstreamResponse.status,

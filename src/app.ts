@@ -22,6 +22,7 @@ import programsRoutes from './routes/programs.js'
 import adminRoutes from './routes/admin.js'
 import webviewRoutes from './routes/webviews.js'
 import visitsRoutes from './routes/visits.js'
+import proxyRecordingRoutes from './routes/proxy-recording.js'
 import { resolveWebviewBySlug } from './runtime/webview/resolve.js'
 import { proxyWebviewRequest, probeOutboundProxy } from './runtime/webview/proxy.js'
 import { ensureGlobalPcForUser } from './services/global-pc.js'
@@ -286,6 +287,7 @@ app.basePath('/app/api/syscalls').route('/', syscallsRoutes)
 app.basePath('/app/api/admin').route('/', adminRoutes)
 app.basePath('/app/api/webviews').route('/', webviewRoutes)
 app.basePath('/app/api/visits').route('/', visitsRoutes)
+app.basePath('/app/api/proxy-recording').route('/', proxyRecordingRoutes)
 app.basePath('/app/api').route('/', programsRoutes)
 
 app.get('/app/api/workspaces', async (c) => {
@@ -432,7 +434,7 @@ app.all('/instance/*', async (c) => {
     const webview = await resolveWebviewBySlug(slug)
     if (!webview) return c.json({ message: 'Not found' }, 404)
     console.log(`[webview-route] slug=${slug} path=${upstreamPath} cookies=${c.req.raw.headers.get('cookie') ? c.req.raw.headers.get('cookie')!.split(';').length : 0}`)
-    return proxyWebviewRequest(webview.domain, upstreamPath, c.req.raw)
+    return proxyWebviewRequest(webview.domain, upstreamPath, c.req.raw, slug)
   }
 
   if (upstreamPath === '/_status') {

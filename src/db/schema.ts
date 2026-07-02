@@ -280,3 +280,27 @@ export const webviewRule = pgTable('webview_rule', {
 }, (table) => [
   index('webview_rule_webview_id_ord_idx').on(table.webview_id, table.ord),
 ])
+
+export const proxyRecordingSession = pgTable('proxy_recording_session', {
+  id: serial('id').primaryKey(),
+  started_at: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  stopped_at: timestamp('stopped_at', { withTimezone: true }),
+})
+
+export const proxyTraffic = pgTable('proxy_traffic', {
+  id: serial('id').primaryKey(),
+  session_id: integer('session_id').notNull().references(() => proxyRecordingSession.id, { onDelete: 'cascade' }),
+  recorded_at: timestamp('recorded_at', { withTimezone: true }).defaultNow().notNull(),
+  slug: text('slug').notNull(),
+  method: text('method').notNull(),
+  upstream_url: text('upstream_url').notNull(),
+  request_headers: jsonb('request_headers').$type<{ name: string; value: string }[]>().notNull(),
+  request_body: text('request_body'),
+  response_status: integer('response_status'),
+  response_headers: jsonb('response_headers').$type<{ name: string; value: string }[]>().notNull(),
+  response_body: text('response_body'),
+  response_body_encoding: text('response_body_encoding'),
+  duration_ms: integer('duration_ms'),
+}, (table) => [
+  index('proxy_traffic_session_id_idx').on(table.session_id, table.id),
+])
