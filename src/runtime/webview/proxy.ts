@@ -163,6 +163,13 @@ try{Object.defineProperty(window,'parent',{get:function(){return window;},config
 try{Object.defineProperty(window,'top',{get:function(){return window;},configurable:true});}catch(e){}
 try{Object.defineProperty(window,'frameElement',{get:function(){return null;},configurable:true});}catch(e){}
 
+// Intercept dynamically injected <script> src so cross-origin script loads
+// are routed through the proxy just like fetch/XHR.
+try{
+  var _sd=Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype,'src');
+  if(_sd&&_sd.set){var _ss=_sd.set;Object.defineProperty(HTMLScriptElement.prototype,'src',{get:_sd.get,set:function(v){var rw=_p(typeof v==='string'?v:String(v));_ss.call(this,rw!==null?rw:v);},configurable:true});}
+}catch(e){}
+
 })()</script>`
 }
 
