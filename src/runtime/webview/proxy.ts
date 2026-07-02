@@ -157,6 +157,8 @@ export async function proxyWebviewRequest(
   const upstream = `https://${fetchDomain}${fetchPath}`
 
   const boundOrigin = `https://${boundDomain}`
+  const incomingCookie = incomingRequest.headers.get('cookie')
+  console.log(`[webview] ${incomingRequest.method} ${upstream} cookies=${incomingCookie ? incomingCookie.split(';').length : 0}`)
   const forwardHeaders = new Headers()
   for (const [key, value] of incomingRequest.headers.entries()) {
     const lower = key.toLowerCase()
