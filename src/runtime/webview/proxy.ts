@@ -206,7 +206,8 @@ function extractWebpackChunkStub(script: string): string | null {
   let ast: ASTNode
   try {
     ast = acornParse(script, { ecmaVersion: 'latest', sourceType: 'script' }) as unknown as ASTNode
-  } catch {
+  } catch (err) {
+    console.log('[castle] acorn parse failed:', err instanceof Error ? err.message.slice(0, 120) : String(err))
     return null
   }
 
@@ -267,6 +268,7 @@ function extractWebpackChunkStub(script: string): string | null {
     }
   })
 
+  console.log('[castle] acorn extracted: globalName=', globalName || '(none)', 'chunkIds=', chunkIds, 'moduleIds=', moduleIds)
   if (!globalName || chunkIds.length === 0) return null
 
   const modules = moduleIds.length > 0
