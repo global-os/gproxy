@@ -176,12 +176,25 @@ app.get('/debug', async (c) => {
     stale: staleTables.filter(t => tableSet.has(t)),
   }
 
+  const twimagStart = Date.now()
+  let twimagProbe: { ok: boolean; ms: number; status?: number; error?: string } = { ok: false, ms: 0 }
+  try {
+    const r = await Promise.race([
+      fetch('https://abs.twimg.com/'),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
+    ])
+    twimagProbe = { ok: r.status < 500, ms: Date.now() - twimagStart, status: r.status }
+  } catch (err) {
+    twimagProbe = { ok: false, ms: Date.now() - twimagStart, error: err instanceof Error ? err.message : String(err) }
+  }
+
   return c.json({
     pool: { ok: poolOk, ms: poolMs, ...(poolError ? { error: poolError } : {}) },
     userLookup,
     drizzleUserLookup,
     scrypt,
     authProbe,
+    twimagProbe,
     requestEnv: {
       hasIncoming: Boolean((c.env as HttpBindings | undefined)?.incoming),
       hasRawBody: Buffer.isBuffer(
