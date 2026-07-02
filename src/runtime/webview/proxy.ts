@@ -290,10 +290,7 @@ export async function proxyWebviewRequest(
   upstreamPath: string,
   incomingRequest: Request,
 ): Promise<Response> {
-  // Cloudflare/CDN infrastructure paths — not real upstream content.
-  if (upstreamPath.startsWith('/cdn-cgi/')) {
-    return new Response('Not found', { status: 404 })
-  }
+
 
 const cross = extractCrossDomain(upstreamPath)
   const fetchDomain = cross ? cross.domain : boundDomain
