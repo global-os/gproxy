@@ -280,18 +280,25 @@ const cross = extractCrossDomain(upstreamPath)
       // Extract the webpack chunk push call: (self["webpackChunk_X"]=self["webpackChunk_X"]||[]).push([[chunkId], {
       // We need the global name and chunk ID array to produce a valid registration.
       const m = realScript.match(/\(self\["([^"]+)"\]\s*=\s*self\["\1"\]\s*\|\|\s*\[\]\s*\)\.push\(\[(\[[^\]]+\])/)
+      console.log('[castle] regex match:', m ? `globalName=${m[1]} chunkIds=${m[2]}` : 'NO MATCH — first 120 chars:', realScript.slice(0, 120))
       if (m) {
         const globalName = m[1]!  // e.g. "webpackChunk_twitter_responsive_web"
         const chunkIds = m[2]!    // e.g. "[15793]"
-        // Collect all module IDs in the chunk (keys of the module map: `12345:function`)
-        // so the stub accounts for every module without hardcoding any ID.
-        const moduleIds = [...realScript.matchAll(/(\d+):function/g)].map(m => m[1]!)
+        // Collect module IDs from the module map header only (first 300 chars after the
+        // map opening) to avoid matching numeric keys inside the module function bodies.
+        const mapStart = m.index! + m[0].length
+        const moduleIds = [...realScript.slice(mapStart, mapStart + 300).matchAll(/(\d+):function/g)].map(m => m[1]!)
         const modules = moduleIds.length > 0 ? moduleIds.map(id => `${id}:function(){}`).join(',') : '0:function(){}'
         const stub = `(self["${globalName}"]=self["${globalName}"]||[]).push([${chunkIds},{${modules}}])`
+        console.log('[castle] stub first 120:', stub.slice(0, 120))
         responseHeaders.set('Content-Type', 'application/javascript')
         responseHeaders.delete('content-length')
         return new Response(stub, { status: 200, headers: responseHeaders })
       }
+      // Regex failed — fall back to the real script (body already consumed via .text()).
+      responseHeaders.set('Content-Type', 'application/javascript')
+      responseHeaders.delete('content-length')
+      return new Response(realScript, { status: upstreamResponse.status, headers: responseHeaders })
     }
 
     return new Response(upstreamResponse.body, {
