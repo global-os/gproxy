@@ -32,8 +32,6 @@ const HOP_BY_HOP = new Set([
   'te', 'trailers', 'transfer-encoding', 'upgrade',
   // Set to the upstream host by the fetch() call itself.
   'host',
-  // Proxy-domain cookies are meaningless to the upstream.
-  'cookie',
   // We buffer the body, so let fetch() compute the correct length.
   'content-length',
 ])
