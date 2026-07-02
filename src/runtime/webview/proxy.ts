@@ -279,14 +279,17 @@ const cross = extractCrossDomain(upstreamPath)
       const realScript = await upstreamResponse.text()
       // Extract the webpack chunk push call: (self["webpackChunk_X"]=self["webpackChunk_X"]||[]).push([[chunkId], {
       // We need the global name and chunk ID array to produce a valid registration.
-      const m = realScript.match(/\(self\["([^"]+)"\]\s*=\s*self\["\1"\]\s*\|\|\s*\[\]\s*\)\.push\(\[(\[[^\]]+\])/)
-      console.log('[castle] regex match:', m ? `globalName=${m[1]} chunkIds=${m[2]}` : 'NO MATCH — first 120 chars:', realScript.slice(0, 120))
-      if (m) {
-        const globalName = m[1]!  // e.g. "webpackChunk_twitter_responsive_web"
-        const chunkIds = m[2]!    // e.g. "[15793]"
-        // Collect module IDs from the module map header only (first 300 chars after the
-        // map opening) to avoid matching numeric keys inside the module function bodies.
-        const mapStart = m.index! + m[0].length
+      // Castle wraps its webpack push inside a UMD IIFE using a local variable for
+      // the global (not `self` directly), so we extract the global name and push
+      // call separately rather than requiring both in one pattern.
+      const globalMatch = realScript.match(/"(webpackChunk_[^"]+)"/)
+      const pushMatch  = realScript.match(/\.push\(\[(\[[^\]]+\])/)
+      console.log('[castle] globalMatch:', globalMatch?.[1], 'pushMatch:', pushMatch?.[1])
+      if (globalMatch && pushMatch) {
+        const globalName = globalMatch[1]!  // e.g. "webpackChunk_twitter_responsive_web"
+        const chunkIds   = pushMatch[1]!    // e.g. "[15793]"
+        // Collect module IDs from the 300 chars after the push's module map opening.
+        const mapStart = pushMatch.index! + pushMatch[0].length + 1  // +1 skips the `{`
         const moduleIds = [...realScript.slice(mapStart, mapStart + 300).matchAll(/(\d+):function/g)].map(m => m[1]!)
         const modules = moduleIds.length > 0 ? moduleIds.map(id => `${id}:function(){}`).join(',') : '0:function(){}'
         const stub = `(self["${globalName}"]=self["${globalName}"]||[]).push([${chunkIds},{${modules}}])`
@@ -295,7 +298,8 @@ const cross = extractCrossDomain(upstreamPath)
         responseHeaders.delete('content-length')
         return new Response(stub, { status: 200, headers: responseHeaders })
       }
-      // Regex failed — fall back to the real script (body already consumed via .text()).
+      // Neither pattern matched — return the real script unchanged.
+      console.log('[castle] no match, returning real script')
       responseHeaders.set('Content-Type', 'application/javascript')
       responseHeaders.delete('content-length')
       return new Response(realScript, { status: upstreamResponse.status, headers: responseHeaders })
