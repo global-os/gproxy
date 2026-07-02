@@ -6,6 +6,7 @@ import { db as globalDb } from '../db/index.js'
 import { generateInstanceSlug } from '../runtime/instance/slug.js'
 import { instancePublicUrl } from '../runtime/urls.js'
 import { auth } from '../auth.js'
+import { evictWebviewCache } from '../runtime/webview/resolve.js'
 
 const router = new Hono<Env>()
 
@@ -75,7 +76,7 @@ router.delete('/:webviewId', async (c) => {
 
   try {
     const [row] = await globalDb
-      .select({ workspace_user_id: schema.workspace.user_id })
+      .select({ workspace_user_id: schema.workspace.user_id, slug: schema.webview.slug })
       .from(schema.webview)
       .innerJoin(schema.process, eq(schema.process.id, schema.webview.process_id))
       .innerJoin(schema.workspace, eq(schema.workspace.id, schema.process.workspace_id))
@@ -87,6 +88,7 @@ router.delete('/:webviewId', async (c) => {
     }
 
     await globalDb.delete(schema.webview).where(eq(schema.webview.id, webviewId))
+    evictWebviewCache(row.slug)
 
     return c.json({ ok: true })
   } catch (err) {
