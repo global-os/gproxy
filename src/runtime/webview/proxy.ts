@@ -276,16 +276,24 @@ const cross = extractCrossDomain(upstreamPath)
   const isHtml = contentType.includes('text/html')
 
   if (!isHtml) {
-    // For the castle.io bot-detection chunk, extract the webpack registration
-    // wrapper from the real script and return a no-op stub. This lets webpack
-    // register the chunk successfully while skipping the fingerprinting code.
+    // Castle.io is X's bot-detection SDK. It crashes inside the proxy iframe
+    // context (cross-origin parent access), which prevents login. We intercept
+    // the chunk, preserve the webpack registration wrapper so the bundle doesn't
+    // throw ChunkLoadError, but replace every module body with a no-op so the
+    // fingerprinting code never runs.
     if (/castle\.[a-f0-9]+\.js$/.test(upstreamPath)) {
       const realScript = await upstreamResponse.text()
+      // Extract the webpack chunk push call: (self["webpackChunk_X"]=self["webpackChunk_X"]||[]).push([[chunkId], {
+      // We need the global name and chunk ID array to produce a valid registration.
       const m = realScript.match(/\(self\["([^"]+)"\]\s*=\s*self\["\1"\]\s*\|\|\s*\[\]\s*\)\.push\(\[(\[[^\]]+\])/)
       if (m) {
-        const globalName = m[1]!
-        const chunkIds = m[2]!
-        const stub = `(self["${globalName}"]=self["${globalName}"]||[]).push([${chunkIds},{164079:function(){}}])`
+        const globalName = m[1]!  // e.g. "webpackChunk_twitter_responsive_web"
+        const chunkIds = m[2]!    // e.g. "[15793]"
+        // Collect all module IDs in the chunk (keys of the module map: `12345:function`)
+        // so the stub accounts for every module without hardcoding any ID.
+        const moduleIds = [...realScript.matchAll(/(\d+):function/g)].map(m => m[1]!)
+        const modules = moduleIds.length > 0 ? moduleIds.map(id => `${id}:function(){}`).join(',') : '0:function(){}'
+        const stub = `(self["${globalName}"]=self["${globalName}"]||[]).push([${chunkIds},{${modules}}])`
         responseHeaders.set('Content-Type', 'application/javascript')
         responseHeaders.delete('content-length')
         return new Response(stub, { status: 200, headers: responseHeaders })
