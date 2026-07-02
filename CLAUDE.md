@@ -152,6 +152,7 @@ Public paths `/health` and `/debug` bypass the `/app` prefix.
 | Syscalls | `src/routes/syscalls.ts`, `src/syscalls/` |
 | Session kernel | `src/frontend/src/kernel/session-kernel.ts`, `useSessionKernel.ts`, `state.ts` |
 | Webview proxy | `src/routes/webviews.ts`, `src/runtime/webview/proxy.ts`, `src/runtime/webview/resolve.ts` |
+| Webview recording | `src/runtime/webview/recording.ts`, `src/routes/proxy-recording.ts` |
 | Platform library | `src/gapp/platform/messaging.js` |
 | Gapp compile | `src/gapp/compile-gapp.ts`, `src/gapp/registry/` |
 | Fixtures | `fixtures/by-user/`, `src/db/seed.ts` |
@@ -182,13 +183,15 @@ npm run db:migrate   # local; also runs automatically in vercel-build on deploy
 - `BETTER_AUTH_SECRET`
 - `BETTER_AUTH_URL` (production)
 
-Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides.
+Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides, `PROXY_URL` (outbound residential proxy), `SIDECAR_URL` (TLS-impersonation sidecar, planned).
 
 ## Vercel / serverless pitfalls (read before changing auth, launch, or DB code)
 
 1. **Auth body stream:** Never pass raw `c.req.raw` to `auth.handler()` on POST without buffering. `api/index.ts` sets `incoming.rawBody`; `src/routes/auth.ts` uses `buildBufferedRequest()`.
 
 2. **Pool size:** Serverless pool `max: 3` (`src/db/index.ts`). `setRlsUser` holds a connection for the whole request. Routes that use global `db` must **not** run under `setRlsUser` — see `src/routes/programs.ts` (launch/windows). FS routes use `c.get('db')` with RLS correctly.
+
+   **Webview pool exhaustion:** The `provideDb` middleware runs for all `/instance/**` requests and holds a pool connection per request. A webview page load fires 10–20 concurrent script/asset requests; each acquires a connection, exhausting the pool. Requests that can't get a connection are killed by Vercel's timeout and return 502 with **no logs** (the handler never runs). Fix: cache webview slug→row lookups in memory (`src/runtime/webview/resolve.ts`) so only the first request per function instance hits the DB. Do **not** add per-request DB calls (inserts, lookups) to the webview proxy hot path — batch them or skip entirely.
 
 3. **Launch timeouts:** Do not `SELECT image.tar_bytes`, `hashDir`, `buildTar`, or `ensureInstanceContent` inside the launch handler. Launch only uses `resolveImageMeta()` (id + checksum). Heavy work belongs in `ensureInstanceReady()` when the iframe loads. Placeholder checksum: `PENDING_INSTANCE_CHECKSUM` in `src/runtime/instance-constants.ts`.
 
@@ -202,14 +205,37 @@ Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides.
 
 **Intercept script** (`src/runtime/webview/proxy.ts` → `buildInterceptScript`): injected as the first child of `<head>` in every proxied HTML response. Two sections:
 
-- **REPLACEMENTS** — monkey-patches `fetch()` and `XMLHttpRequest.open()` to route all cross-origin requests through the proxy (`https://api.x.com/path` → `/api.x.com/path`). The proxy rewrites `Origin` / `Referer` to the bound domain before forwarding, so third-party services (e.g. Google Sign-In) see the real site rather than the proxy subdomain.
-- **SHIMS** — patches `document.cookie` setter to strip `Domain=` attributes, so cookies that sites set with their own domain (e.g. `Domain=.twitter.com`) land on the proxy host instead of being rejected by the browser.
+- **REPLACEMENTS** — monkey-patches `fetch()`, `XMLHttpRequest.open()`, and `navigator.sendBeacon()` to route all cross-origin requests through the proxy (`https://api.x.com/path` → `/api.x.com/path`). The proxy rewrites `Origin` / `Referer` to the bound domain before forwarding, so third-party services see the real site rather than our proxy subdomain. Also intercepts dynamically injected `<script src>` so lazy-loaded chunks are proxied.
+- **SHIMS** — patches `document.cookie` setter to strip `Domain=` attributes, so cookies set with their real domain land on the proxy host instead of being rejected by the browser.
 
-**`/cdn-cgi/**`** paths are returned as 404 immediately — these are Cloudflare infrastructure endpoints that don't exist on the upstream origin.
+**Cookie forwarding:** The browser sends cookies for the proxy domain (`{slug}.app.onetrueos.com`). These are forwarded as-is in the `Cookie` header to the upstream. Sites set cookies via `Set-Cookie` in responses; the proxy strips `Domain=` so they land on the proxy origin and are returned on subsequent requests. This means the user's upstream session (guest tokens, CSRF tokens, etc.) accumulates correctly across page loads.
 
-**IP-based rate limiting:** Sites like Instagram 429 unauthenticated requests from known datacenter IPs (Vercel runs on AWS). To bypass this, set `PROXY_URL` to an outbound HTTP/SOCKS5 proxy (e.g. a residential proxy service). Mullvad and other VPN ranges are also typically blocked; a residential proxy service (Bright Data, Oxylabs, Smartproxy) is more reliable. The proxy code reads `PROXY_URL` and passes it as the `dispatcher` to undici's `fetch`.
+**Header stripping (`HOP_BY_HOP` in `proxy.ts`):** Several header categories are stripped before forwarding to upstream:
+- Standard hop-by-hop headers (`connection`, `transfer-encoding`, etc.)
+- `Sec-Fetch-*` and `Sec-CH-*` — browser security metadata that reveals the cross-origin iframe context; X uses these to detect proxy/WebView access.
+- `forwarded`, `x-forwarded-for/host/proto`, `x-real-ip` — Vercel injects these on every inbound request; forwarding them tells upstream we're a proxy.
+- All `x-vercel-*` headers (matched by prefix) — Vercel injects deployment metadata (e.g. `x-vercel-deployment-url`) that trivially identifies the request as coming from Vercel infrastructure. **This was the root cause of X's "Please use X.com or official X apps" error.**
 
-**Cookie forwarding:** Proxy strips `Cookie` from forwarded request headers (proxy-domain cookies are meaningless to upstream). To pass a user's real session, the app must supply the upstream cookies separately (not yet implemented).
+**Accept-Encoding:** Must be set to `gzip, deflate, br, zstd` to match Chrome 131's fingerprint. Cloudflare uses this value as a bot-detection signal. We send it explicitly (stripping whatever the browser sent) and manually decompress brotli responses in case undici doesn't handle `br` automatically.
+
+**IP-based blocking:** Sites like X and Instagram reject requests from known datacenter IPs (Vercel runs on AWS). Set `PROXY_URL` to an outbound HTTP/SOCKS5 residential proxy. Mullvad and VPN ranges are also typically blocked. The proxy passes `PROXY_URL` as the `dispatcher` to undici's `fetch`. Note: `PROXY_URL` only masks the IP — the TLS handshake still originates from Node.js and carries its own fingerprint (see below).
+
+**TLS fingerprinting (unsolved):** Cloudflare Bot Management fingerprints the TLS ClientHello (JA3/JA4 — cipher suites, extensions, ordering). Node.js/undici produces a fingerprint that Cloudflare identifies as non-Chrome. Even through a residential proxy, the TLS handshake goes directly from our Node.js process to upstream. Symptoms: X deletes the `ct0` CSRF cookie on every page load, blocking login. Cloudflare returns 403 HTML challenge pages for some endpoints. Fix requires a TLS-impersonation sidecar (`tls-client` Go library or `curl-impersonate`) that makes outbound requests with Chrome's actual TLS fingerprint. Planned: `SIDECAR_URL` env var; when set, proxy routes upstream fetches through the sidecar instead of direct undici.
+
+**Castle.io webpack stub (X-specific):** X's bot-detection SDK (`ondemand.castle.*.js`) is a webpack chunk that crashes in the cross-origin iframe context. The proxy intercepts it by filename regex, parses the chunk with `acorn` to extract the webpack chunk array name, chunk IDs, and module IDs, then returns a no-op stub: `(self["webpackChunk_twitter_responsive_web"]=...).push([[chunkId],{moduleId:function(){}}])`. This prevents the `ChunkLoadError` that would otherwise cascade and break the login UI.
+
+**`/cdn-cgi/` paths:** Previously returned 404. Now proxied through to upstream (some Cloudflare challenge scripts at these paths are needed for bot scoring).
+
+**Proxy traffic recorder** (`src/runtime/webview/recording.ts`, `src/routes/proxy-recording.ts`): Debug tool that captures all proxied request/response pairs to Postgres and exports as a HAR file for comparison with native browser traffic.
+
+```bash
+curl -X POST https://app.app.onetrueos.com/api/proxy-recording/start  # clears old data
+# ... trigger the traffic you want to capture ...
+curl -X POST https://app.app.onetrueos.com/api/proxy-recording/stop
+curl https://app.app.onetrueos.com/api/proxy-recording/har -o traffic.har
+```
+
+Recording uses a batched in-memory flush (500ms) to avoid adding DB connections to the hot request path.
 
 ## Debugging checklist
 
@@ -220,6 +246,10 @@ Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides.
 | Windows 500 | Was pool deadlock with `setRlsUser` on programs router; verify fix intact |
 | Instance 502 | `ensureInstanceReady` logs; image row exists; tar extract to `/tmp` |
 | Schema errors | `/debug` `schema.missing`; run `scripts/apply-pending-migrations.mjs` |
+| Webview scripts 502, no `[webview] GET` logs | Pool exhausted before handler ran — check that `resolveWebviewBySlug` cache is warm; avoid per-request DB calls in the proxy hot path |
+| Webview upstream fetch failed | Search logs for `upstream fetch failed` to see actual error; if absent, upstream returned non-2xx (forwarded silently) — check `[webview] GET` lines |
+| X login "Please use X.com or official X apps" | Check: (1) `x-vercel-*` / `forwarded` headers stripped ✓; (2) `ct0` cookie set (not deleted) in main page response — if deleted, Cloudflare TLS fingerprinting is blocking us; needs TLS sidecar |
+| X `ct0` deleted on page load | Cloudflare Bot Management detecting Node.js TLS fingerprint; `PROXY_URL` set but TLS still identifies as non-Chrome; sidecar (`SIDECAR_URL`) needed |
 
 ## Conventions
 
