@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bluesky</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #0a7aff; }
+    #root { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #webview-frame { width: 100%; height: 100%; border: none; display: none; }
+    #loading {
+      color: #fff;
+      font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    #loading svg { width: 40px; height: 40px; fill: #fff; }
+    #loading-msg { opacity: 0.8; font-size: 13px; }
+    #error-msg { color: #ffdddd; font-size: 13px; display: none; }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div id="loading">
+      <!-- Bluesky butterfly logo -->
+      <svg viewBox="0 0 360 320" aria-hidden="true">
+        <path d="M180 142c-16-106-80-132-80-132s28 90 16 114c-6 12-24 16-36 10C62 122 32 90 0 80c0 0 40 40 60 80 12 24 8 50-10 62C26 238 0 240 0 240s50-4 80-20c16-8 28-24 28-24s-4 40-28 60c0 0 36-12 60-40 14-16 24-40 24-40h32s10 24 24 40c24 28 60 40 60 40-24-20-28-60-28-60s12 16 28 24c30 16 80 20 80 20s-26-2-50-18c-18-12-22-38-10-62 20-40 60-80 60-80-32 10-62 42-80 54-12 6-30 2-36-10-12-24 16-114 16-114S196 36 180 142z"/>
+      </svg>
+      <span id="loading-msg">Connecting to Bluesky…</span>
+      <span id="error-msg"></span>
+    </div>
+    <iframe id="webview-frame" title="Bluesky" allow="autoplay; clipboard-read; clipboard-write"></iframe>
+  </div>
+  <script src="messaging.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
