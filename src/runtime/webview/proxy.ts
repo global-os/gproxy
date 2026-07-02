@@ -306,9 +306,9 @@ const cross = extractCrossDomain(upstreamPath)
       if (globalMatch && pushMatch) {
         const globalName = globalMatch[1]!  // e.g. "webpackChunk_twitter_responsive_web"
         const chunkIds   = pushMatch[1]!    // e.g. "[15793]"
-        // Collect module IDs from the 300 chars after the push's module map opening.
-        const mapStart = pushMatch.index! + pushMatch[0].length + 1  // +1 skips the `{`
-        const moduleIds = [...realScript.slice(mapStart, mapStart + 300).matchAll(/(\d+):function/g)].map(m => m[1]!)
+        // Module functions may be defined in a variable earlier in the UMD IIFE
+        // rather than inline in the push call, so search the whole script.
+        const moduleIds = [...new Set([...realScript.matchAll(/(\d+):function/g)].map(m => m[1]!))]
         const modules = moduleIds.length > 0 ? moduleIds.map(id => `${id}:function(){}`).join(',') : '0:function(){}'
         const stub = `(self["${globalName}"]=self["${globalName}"]||[]).push([${chunkIds},{${modules}}])`
         console.log('[castle] stub first 120:', stub.slice(0, 120))
