@@ -300,7 +300,7 @@ const cross = extractCrossDomain(upstreamPath)
       // Castle wraps its webpack push inside a UMD IIFE using a local variable for
       // the global (not `self` directly), so we extract the global name and push
       // call separately rather than requiring both in one pattern.
-      const globalMatch = realScript.match(/"(webpackChunk_[^"]+)"/)
+      const globalMatch = realScript.match(/(webpackChunk_[a-zA-Z0-9_]+)/)
       const pushMatch  = realScript.match(/\.push\(\[(\[[^\]]+\])/)
       console.log('[castle] globalMatch:', globalMatch?.[1], 'pushMatch:', pushMatch?.[1])
       if (globalMatch && pushMatch) {
