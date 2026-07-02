@@ -1,3 +1,7 @@
+import { ProxyAgent } from 'undici'
+
+const outboundProxy = process.env.PROXY_URL ? new ProxyAgent(process.env.PROXY_URL) : null
+
 const STRIP_RESPONSE_HEADERS = new Set([
   'content-security-policy',
   'content-security-policy-report-only',
@@ -180,12 +184,14 @@ export async function proxyWebviewRequest(
 
   let upstreamResponse: Response
   try {
-    upstreamResponse = await fetch(upstream, {
+    const fetchInit: RequestInit & { dispatcher?: ProxyAgent } = {
       method: incomingRequest.method,
       headers: forwardHeaders,
       body,
       redirect: 'follow',
-    })
+    }
+    if (outboundProxy) fetchInit.dispatcher = outboundProxy
+    upstreamResponse = await fetch(upstream, fetchInit)
   } catch (err) {
     console.error(`[webview] upstream fetch failed for ${upstream}:`, err)
     return new Response('Upstream unreachable', { status: 502 })
