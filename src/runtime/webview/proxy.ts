@@ -1,3 +1,4 @@
+import vm from 'node:vm'
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
 
 let outboundProxy: ProxyAgent | null = null
@@ -295,32 +296,39 @@ const cross = extractCrossDomain(upstreamPath)
     // fingerprinting code never runs.
     if (/castle\.[a-f0-9]+\.js$/.test(upstreamPath)) {
       const realScript = await upstreamResponse.text()
-      // Extract the webpack chunk push call: (self["webpackChunk_X"]=self["webpackChunk_X"]||[]).push([[chunkId], {
-      // We need the global name and chunk ID array to produce a valid registration.
-      // Castle wraps its webpack push inside a UMD IIFE using a local variable for
-      // the global (not `self` directly), so we extract the global name and push
-      // call separately rather than requiring both in one pattern.
-      const globalMatch = realScript.match(/(webpackChunk_[a-zA-Z0-9_]+)/)
-      const pushMatch  = realScript.match(/\.push\(\[(\[[^\]]+\])/)
-      console.log('[castle] globalMatch:', globalMatch?.[1], 'pushMatch:', pushMatch?.[1])
-      if (globalMatch && pushMatch) {
-        const globalName = globalMatch[1]!  // e.g. "webpackChunk_twitter_responsive_web"
-        const chunkIds   = pushMatch[1]!    // e.g. "[15793]"
-        // Match numeric module IDs as object keys regardless of value type
-        // (function keyword, arrow, or variable ref) or whether the key is quoted.
-        const moduleIds = [...new Set([...realScript.matchAll(/[{,]\s*"?(\d{4,})"?\s*:/g)].map(m => m[1]!))]
-        const modules = moduleIds.length > 0 ? moduleIds.map(id => `${id}:function(){}`).join(',') : '0:function(){}'
-        const stub = `(self["${globalName}"]=self["${globalName}"]||[]).push([${chunkIds},{${modules}}])`
-        console.log('[castle] stub first 120:', stub.slice(0, 120))
-        responseHeaders.set('Content-Type', 'application/javascript')
-        responseHeaders.delete('content-length')
-        return new Response(stub, { status: 200, headers: responseHeaders })
+      // Run the castle script in a sandboxed VM with a fake global. The UMD
+      // wrapper detects the global context and calls webpackChunk_X.push([chunkIds, moduleMap]).
+      // We intercept that push to capture the exact globalName, chunkIds, and
+      // module IDs — then rebuild a no-op stub with those values.
+      let stub: string | null = null
+      try {
+        let globalName = ''
+        let chunkIds = ''
+        let moduleIds: string[] = []
+        const fakeArray = {
+          push(args: [unknown[], Record<string, unknown>]) {
+            chunkIds = JSON.stringify(args[0])
+            moduleIds = Object.keys(args[1])
+          }
+        }
+        const fakeGlobal = new Proxy({} as Record<string, unknown>, {
+          get: (_, key) => String(key).startsWith('webpackChunk') ? (globalName = String(key), fakeArray) : undefined,
+          set: (_, key, val) => { if (String(key).startsWith('webpackChunk')) { globalName = String(key); Object.assign(fakeArray, val) } return true },
+        })
+        vm.runInNewContext(realScript, {
+          window: fakeGlobal, global: fakeGlobal, globalThis: fakeGlobal, self: fakeGlobal,
+        }, { timeout: 2000 })
+        if (globalName && chunkIds) {
+          const modules = moduleIds.length > 0 ? moduleIds.map(id => `${id}:function(){}`).join(',') : '0:function(){}'
+          stub = `(self["${globalName}"]=self["${globalName}"]||[]).push([${chunkIds},{${modules}}])`
+        }
+      } catch (err) {
+        console.log('[castle] vm execution error:', err instanceof Error ? err.message : String(err))
       }
-      // Neither pattern matched — return the real script unchanged.
-      console.log('[castle] no match, returning real script')
+      console.log('[castle] stub:', stub ? stub.slice(0, 120) : 'none — returning real script')
       responseHeaders.set('Content-Type', 'application/javascript')
       responseHeaders.delete('content-length')
-      return new Response(realScript, { status: upstreamResponse.status, headers: responseHeaders })
+      return new Response(stub ?? realScript, { status: 200, headers: responseHeaders })
     }
 
     return new Response(upstreamResponse.body, {
