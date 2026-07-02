@@ -1,4 +1,4 @@
-import vm from 'node:vm'
+import { parse as acornParse } from 'acorn'
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
 
 let outboundProxy: ProxyAgent | null = null
@@ -181,6 +181,83 @@ function rewriteHtml(html: string, boundDomain: string): string {
   return result.replace(/(<script[\s>])/i, `${intercept}$1`)
 }
 
+/**
+ * Parse a webpack chunk script and return a no-op stub that preserves the
+ * chunk registration so webpack doesn't throw ChunkLoadError, but replaces
+ * every module body with an empty function.
+ *
+ * Handles UMD wrappers where the webpack push is inside an IIFE and the
+ * global/module map may be accessed via a local variable — we walk the AST
+ * rather than executing the script or relying on regex.
+ */
+function extractWebpackChunkStub(script: string): string | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type ASTNode = Record<string, any>
+
+  let ast: ASTNode
+  try {
+    ast = acornParse(script, { ecmaVersion: 'latest', sourceType: 'script' }) as unknown as ASTNode
+  } catch {
+    return null
+  }
+
+  // Generic depth-first walker — visits every node once.
+  function walk(node: unknown, visit: (n: ASTNode) => void) {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) { node.forEach(n => walk(n, visit)); return }
+    const n = node as ASTNode
+    if (n.type) visit(n)
+    for (const val of Object.values(n)) walk(val, visit)
+  }
+
+  let globalName = ''
+  let chunkIds: number[] = []
+  let moduleIds: string[] = []
+
+  walk(ast, (n) => {
+    // Global name: any string literal whose value starts with "webpackChunk_".
+    if (n.type === 'Literal' && typeof n.value === 'string' && n.value.startsWith('webpackChunk_')) {
+      globalName = n.value
+    }
+
+    // Module map: an ObjectExpression whose keys are all large integers.
+    // Matches both inline `{164079: fn}` and variable-held module maps.
+    if (n.type === 'ObjectExpression' && n.properties?.length > 0 && moduleIds.length === 0) {
+      const keys = (n.properties as ASTNode[]).map(p => {
+        const k = p.key as ASTNode
+        if (!k) return null
+        if (k.type === 'Literal' && /^\d{4,}$/.test(String(k.value))) return String(k.value)
+        if (k.type === 'Identifier' && /^\d{4,}$/.test(k.name)) return k.name as string
+        return null
+      })
+      if (keys.every(Boolean)) moduleIds = keys as string[]
+    }
+
+    // Chunk IDs: .push([[id, ...], moduleMapOrRef])
+    if (
+      n.type === 'CallExpression' &&
+      n.callee?.type === 'MemberExpression' &&
+      n.callee.property?.name === 'push' &&
+      n.arguments?.length === 1 &&
+      n.arguments[0]?.type === 'ArrayExpression' &&
+      n.arguments[0].elements?.length === 2 &&
+      n.arguments[0].elements[0]?.type === 'ArrayExpression'
+    ) {
+      chunkIds = (n.arguments[0].elements[0].elements as ASTNode[])
+        .map((e: ASTNode) => (e?.type === 'Literal' && typeof e.value === 'number' ? e.value : null))
+        .filter(Boolean) as number[]
+    }
+  })
+
+  if (!globalName || chunkIds.length === 0) return null
+
+  const modules = moduleIds.length > 0
+    ? moduleIds.map(id => `${id}:function(){}`).join(',')
+    : '0:function(){}'
+
+  return `(self["${globalName}"]=self["${globalName}"]||[]).push([[${chunkIds.join(',')}],{${modules}}])`
+}
+
 /** Probe a URL through the outbound proxy (if configured) — used by /debug. */
 export async function probeOutboundProxy(url: string, timeoutMs = 8_000): Promise<{ ok: boolean; status?: number; ms: number; proxyActive: boolean; error?: string }> {
   const t = Date.now()
@@ -296,35 +373,7 @@ const cross = extractCrossDomain(upstreamPath)
     // fingerprinting code never runs.
     if (/castle\.[a-f0-9]+\.js$/.test(upstreamPath)) {
       const realScript = await upstreamResponse.text()
-      // Run the castle script in a sandboxed VM with a fake global. The UMD
-      // wrapper detects the global context and calls webpackChunk_X.push([chunkIds, moduleMap]).
-      // We intercept that push to capture the exact globalName, chunkIds, and
-      // module IDs — then rebuild a no-op stub with those values.
-      let stub: string | null = null
-      try {
-        let globalName = ''
-        let chunkIds = ''
-        let moduleIds: string[] = []
-        const fakeArray = {
-          push(args: [unknown[], Record<string, unknown>]) {
-            chunkIds = JSON.stringify(args[0])
-            moduleIds = Object.keys(args[1])
-          }
-        }
-        const fakeGlobal = new Proxy({} as Record<string, unknown>, {
-          get: (_, key) => String(key).startsWith('webpackChunk') ? (globalName = String(key), fakeArray) : undefined,
-          set: (_, key, val) => { if (String(key).startsWith('webpackChunk')) { globalName = String(key); Object.assign(fakeArray, val) } return true },
-        })
-        vm.runInNewContext(realScript, {
-          window: fakeGlobal, global: fakeGlobal, globalThis: fakeGlobal, self: fakeGlobal,
-        }, { timeout: 2000 })
-        if (globalName && chunkIds) {
-          const modules = moduleIds.length > 0 ? moduleIds.map(id => `${id}:function(){}`).join(',') : '0:function(){}'
-          stub = `(self["${globalName}"]=self["${globalName}"]||[]).push([${chunkIds},{${modules}}])`
-        }
-      } catch (err) {
-        console.log('[castle] vm execution error:', err instanceof Error ? err.message : String(err))
-      }
+      const stub = extractWebpackChunkStub(realScript)
       console.log('[castle] stub:', stub ? stub.slice(0, 120) : 'none — returning real script')
       responseHeaders.set('Content-Type', 'application/javascript')
       responseHeaders.delete('content-length')
