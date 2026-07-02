@@ -235,7 +235,10 @@ export async function proxyWebviewRequest(
   }
 
   const html = await upstreamResponse.text()
-  const rewritten = rewriteHtml(html, boundDomain)
+  // Only inject the intercept script into same-domain pages. Cross-domain HTML
+  // (e.g. a Facebook endpoint returning an error page) is consumed as a fetch
+  // response body by site JS — injecting script tags corrupts JSON.parse calls.
+  const rewritten = cross ? html : rewriteHtml(html, boundDomain)
   responseHeaders.set('Content-Type', 'text/html; charset=utf-8')
   responseHeaders.delete('content-length')
 
