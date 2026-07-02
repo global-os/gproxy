@@ -191,7 +191,7 @@ export async function proxyWebviewRequest(
 
   // Stub castle.io bot-detection SDK — it crashes in the proxy iframe context.
   // Return an empty script so X.com handles the missing token gracefully.
-  if (/\/castle\.[a-f0-9]+\.js$/.test(upstreamPath)) {
+  if (/castle\.[a-f0-9]+\.js$/.test(upstreamPath)) {
     return new Response('', { status: 200, headers: { 'Content-Type': 'application/javascript' } })
   }
 
