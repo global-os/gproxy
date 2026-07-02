@@ -23,7 +23,7 @@ import adminRoutes from './routes/admin.js'
 import webviewRoutes from './routes/webviews.js'
 import visitsRoutes from './routes/visits.js'
 import { resolveWebviewBySlug } from './runtime/webview/resolve.js'
-import { proxyWebviewRequest } from './runtime/webview/proxy.js'
+import { proxyWebviewRequest, probeOutboundProxy } from './runtime/webview/proxy.js'
 import { ensureGlobalPcForUser } from './services/global-pc.js'
 import { isBundleCached } from './runtime/cache/store.js'
 import { resolveInstanceBundleFile } from './runtime/cache/serve.js'
@@ -176,22 +176,10 @@ app.get('/debug', async (c) => {
     stale: staleTables.filter(t => tableSet.has(t)),
   }
 
-  const probeUrl1 = 'https://abs.twimg.com/'
-  const probeUrl2 = 'https://x.com/'
-  const [twimagProbe, xcomProbe] = await Promise.all(
-    [probeUrl1, probeUrl2].map(async (url) => {
-      const t = Date.now()
-      try {
-        const r = await Promise.race([
-          fetch(url, { redirect: 'follow' }),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
-        ])
-        return { url, ok: r.status < 500, ms: Date.now() - t, status: r.status }
-      } catch (err) {
-        return { url, ok: false, ms: Date.now() - t, error: err instanceof Error ? err.message : String(err) }
-      }
-    })
-  )
+  const [twimagProbe, xcomProbe] = await Promise.all([
+    probeOutboundProxy('https://abs.twimg.com/'),
+    probeOutboundProxy('https://x.com/'),
+  ])
 
   return c.json({
     pool: { ok: poolOk, ms: poolMs, ...(poolError ? { error: poolError } : {}) },

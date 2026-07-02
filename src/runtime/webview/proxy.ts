@@ -180,6 +180,24 @@ function rewriteHtml(html: string, boundDomain: string): string {
   return result.replace(/(<script[\s>])/i, `${intercept}$1`)
 }
 
+/** Probe a URL through the outbound proxy (if configured) — used by /debug. */
+export async function probeOutboundProxy(url: string, timeoutMs = 8_000): Promise<{ ok: boolean; status?: number; ms: number; proxyActive: boolean; error?: string }> {
+  const t = Date.now()
+  try {
+    const fetchInit = { redirect: 'follow' as const }
+    const res = await Promise.race([
+      outboundProxy
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ? (await undiciFetch(url, { ...fetchInit, dispatcher: outboundProxy } as any)) as unknown as Response
+        : fetch(url, fetchInit),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+    ])
+    return { ok: res.status < 500, status: res.status, ms: Date.now() - t, proxyActive: !!outboundProxy }
+  } catch (err) {
+    return { ok: false, ms: Date.now() - t, proxyActive: !!outboundProxy, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 export async function proxyWebviewRequest(
   boundDomain: string,
   upstreamPath: string,
