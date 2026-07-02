@@ -220,7 +220,32 @@ Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides, `PROXY_URL`
 
 **IP-based blocking:** Sites like X and Instagram reject requests from known datacenter IPs (Vercel runs on AWS). Set `PROXY_URL` to an outbound HTTP/SOCKS5 residential proxy. Mullvad and VPN ranges are also typically blocked. The proxy passes `PROXY_URL` as the `dispatcher` to undici's `fetch`. Note: `PROXY_URL` only masks the IP — the TLS handshake still originates from Node.js and carries its own fingerprint (see below).
 
-**TLS fingerprinting (unsolved):** Cloudflare Bot Management fingerprints the TLS ClientHello (JA3/JA4 — cipher suites, extensions, ordering). Node.js/undici produces a fingerprint that Cloudflare identifies as non-Chrome. Even through a residential proxy, the TLS handshake goes directly from our Node.js process to upstream. Symptoms: X deletes the `ct0` CSRF cookie on every page load, blocking login. Cloudflare returns 403 HTML challenge pages for some endpoints. Fix requires a TLS-impersonation sidecar (`tls-client` Go library or `curl-impersonate`) that makes outbound requests with Chrome's actual TLS fingerprint. Planned: `SIDECAR_URL` env var; when set, proxy routes upstream fetches through the sidecar instead of direct undici.
+**TLS fingerprinting:** Cloudflare Bot Management fingerprints the TLS ClientHello (JA3/JA4 — cipher suites, extensions, ordering). Node.js/undici produces a fingerprint that Cloudflare identifies as non-Chrome. Even through a residential proxy, the TLS handshake goes directly from our Node.js process to upstream. Symptoms: X deletes the `ct0` CSRF cookie on every page load, blocking login. Cloudflare returns 403 HTML challenge pages for some endpoints.
+
+**TLS sidecar** (`sidecar/`): Go HTTP server wrapping the `tls-client` library with a Chrome 131 TLS profile. When `SIDECAR_URL` is set, Vercel routes all upstream fetches through it instead of direct undici. Auth via `SIDECAR_SECRET` (Bearer token). The sidecar omits `Accept-Encoding` so Go's http transport sends gzip and auto-decompresses — callers always receive a decoded body with no `Content-Encoding`. Deployed on a Vultr VM; see deployment steps below.
+
+Deploying on Vultr (one-time setup):
+```bash
+# 1. Create Ubuntu 24.04 VM (1 vCPU / 1GB RAM) in Vultr dashboard
+# 2. SSH in
+curl -fsSL https://get.docker.com | sh
+git clone https://github.com/global-os/proxy && cd proxy
+docker build -t proxy-sidecar ./sidecar/
+docker run -d --restart=always -p 8080:8080 \
+  -e SIDECAR_SECRET=<strong-random-secret> \
+  --name proxy-sidecar proxy-sidecar
+# 3. Add to Vercel env vars (both production and preview)
+#    SIDECAR_URL=http://<vultr-ip>:8080
+#    SIDECAR_SECRET=<same-secret>
+```
+
+Updating after code changes:
+```bash
+git pull && docker build -t proxy-sidecar ./sidecar/ && \
+  docker stop proxy-sidecar && docker rm proxy-sidecar && \
+  docker run -d --restart=always -p 8080:8080 \
+    -e SIDECAR_SECRET=<secret> --name proxy-sidecar proxy-sidecar
+```
 
 **Castle.io webpack stub (X-specific):** X's bot-detection SDK (`ondemand.castle.*.js`) is a webpack chunk that crashes in the cross-origin iframe context. The proxy intercepts it by filename regex, parses the chunk with `acorn` to extract the webpack chunk array name, chunk IDs, and module IDs, then returns a no-op stub: `(self["webpackChunk_twitter_responsive_web"]=...).push([[chunkId],{moduleId:function(){}}])`. This prevents the `ChunkLoadError` that would otherwise cascade and break the login UI.
 

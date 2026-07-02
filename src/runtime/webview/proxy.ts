@@ -16,6 +16,50 @@ if (process.env.PROXY_URL) {
   }
 }
 
+const sidecarUrl = process.env.SIDECAR_URL?.replace(/\/$/, '') ?? null
+const sidecarSecret = process.env.SIDECAR_SECRET ?? null
+if (sidecarUrl) {
+  console.log('[webview] TLS sidecar active:', sidecarUrl)
+}
+
+type SidecarFetchInit = { method: string; headers: Headers; body: ArrayBuffer | null; redirect: 'follow' }
+
+async function fetchViaSidecar(upstream: string, init: SidecarFetchInit): Promise<Response> {
+  const headers: [string, string][] = []
+  init.headers.forEach((value, name) => {
+    // Omit Accept-Encoding — Go's http client adds gzip and auto-decompresses,
+    // so the sidecar always returns an already-decoded body with no Content-Encoding.
+    if (name.toLowerCase() === 'accept-encoding') return
+    headers.push([name, value])
+  })
+
+  const body = init.body && init.body.byteLength > 0
+    ? Buffer.from(init.body).toString('base64')
+    : ''
+
+  const sidecarResp = await fetch(`${sidecarUrl}/fetch`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(sidecarSecret ? { 'Authorization': `Bearer ${sidecarSecret}` } : {}),
+    },
+    body: JSON.stringify({ url: upstream, method: init.method, headers, body }),
+  })
+
+  if (!sidecarResp.ok) {
+    throw new Error(`sidecar ${sidecarResp.status}: ${await sidecarResp.text()}`)
+  }
+
+  const data = await sidecarResp.json() as { status: number; headers: [string, string][]; body: string }
+
+  const responseHeaders = new Headers()
+  for (const [name, value] of data.headers) {
+    responseHeaders.append(name, value)
+  }
+
+  return new Response(Buffer.from(data.body, 'base64'), { status: data.status, headers: responseHeaders })
+}
+
 const STRIP_RESPONSE_HEADERS = new Set([
   'content-security-policy',
   'content-security-policy-report-only',
@@ -299,21 +343,23 @@ function extractWebpackChunkStub(script: string): string | null {
   return `(self["${globalName}"]=self["${globalName}"]||[]).push([[${chunkIds.join(',')}],{${modules}}])`
 }
 
-/** Probe a URL through the outbound proxy (if configured) — used by /debug. */
-export async function probeOutboundProxy(url: string, timeoutMs = 8_000): Promise<{ ok: boolean; status?: number; ms: number; proxyActive: boolean; error?: string }> {
+/** Probe a URL through the configured fetch path (sidecar → outboundProxy → direct) — used by /debug. */
+export async function probeOutboundProxy(url: string, timeoutMs = 8_000): Promise<{ ok: boolean; status?: number; ms: number; proxyActive: boolean; sidecarActive: boolean; error?: string }> {
   const t = Date.now()
   try {
-    const fetchInit = { redirect: 'follow' as const }
+    const fetchInit = { method: 'GET', headers: new Headers(), body: null, redirect: 'follow' as const }
     const res = await Promise.race([
-      outboundProxy
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ? (await undiciFetch(url, { ...fetchInit, dispatcher: outboundProxy } as any)) as unknown as Response
-        : fetch(url, fetchInit),
+      sidecarUrl
+        ? fetchViaSidecar(url, fetchInit)
+        : outboundProxy
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ? (await undiciFetch(url, { redirect: 'follow', dispatcher: outboundProxy } as any)) as unknown as Response
+          : fetch(url, { redirect: 'follow' }),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
     ])
-    return { ok: res.status < 500, status: res.status, ms: Date.now() - t, proxyActive: !!outboundProxy }
+    return { ok: res.status < 500, status: res.status, ms: Date.now() - t, proxyActive: !!outboundProxy, sidecarActive: !!sidecarUrl }
   } catch (err) {
-    return { ok: false, ms: Date.now() - t, proxyActive: !!outboundProxy, error: err instanceof Error ? err.message : String(err) }
+    return { ok: false, ms: Date.now() - t, proxyActive: !!outboundProxy, sidecarActive: !!sidecarUrl, error: err instanceof Error ? err.message : String(err) }
   }
 }
 
@@ -379,10 +425,14 @@ const cross = extractCrossDomain(upstreamPath)
       body,
       redirect: 'follow' as const,
     }
-    upstreamResponse = outboundProxy
+    if (sidecarUrl) {
+      upstreamResponse = await fetchViaSidecar(upstream, fetchInit)
+    } else if (outboundProxy) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ? (await undiciFetch(upstream, { ...fetchInit, dispatcher: outboundProxy } as any)) as unknown as Response
-      : await fetch(upstream, fetchInit)
+      upstreamResponse = (await undiciFetch(upstream, { ...fetchInit, dispatcher: outboundProxy } as any)) as unknown as Response
+    } else {
+      upstreamResponse = await fetch(upstream, fetchInit)
+    }
   } catch (err) {
     console.error(`[webview] upstream fetch failed for ${upstream}:`, err)
     if (sessionId != null) {
