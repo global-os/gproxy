@@ -39,7 +39,7 @@ import { frontendDistRoot, readFrontendFile, resolveFrontendFile } from './front
 import { resolveStorybookFile } from './storybook-paths.js'
 import { benchmarkScrypt } from './crypto/password.js'
 import { checkAppTables, checkAuthTables, pingDatabase, pingPool, pool, probeDrizzleUserLookup, probeUserLookup } from './db/index.js'
-import { checkConfig, checkFrontendBundle, probeAuthHandler } from './health-checks.js'
+import { checkConfig, checkFrontendBundle, checkProxyUrl, probeAuthHandler } from './health-checks.js'
 import { LaunchError } from './services/errors.js'
 import { deleteWorkspace } from './services/workspace-access.js'
 import { readRegistryLib } from './gapp/resolve-lib-deps.js'
@@ -205,6 +205,7 @@ app.get('/debug', async (c) => {
 app.get('/health', async (c) => {
   const config = checkConfig()
   const frontend = checkFrontendBundle()
+  const proxy = checkProxyUrl()
 
   const [direct, pooled, authTables, appTables, userLookup, authProbe] = await Promise.all([
     pingDatabase(),
@@ -218,6 +219,7 @@ app.get('/health', async (c) => {
   const ok =
     config.ok &&
     frontend.ok &&
+    proxy.ok &&
     direct.ok &&
     pooled.ok &&
     authTables.ok &&
@@ -230,6 +232,7 @@ app.get('/health', async (c) => {
       status: ok ? 'ok' : 'degraded',
       config,
       frontend,
+      proxy,
       database: direct,
       pool: pooled,
       authTables,

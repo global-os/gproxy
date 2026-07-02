@@ -1,8 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { ProxyAgent } from 'undici'
 import { auth } from './auth.js'
 
 export type ConfigCheck = { ok: boolean; missing: string[] }
+export type ProxyCheck = { configured: boolean; ok: boolean; error?: string }
 export type BundleCheck = { ok: boolean; missing: string[] }
 export type AuthProbeResult = { ok: boolean; ms: number; status?: number; error?: string }
 
@@ -12,6 +14,17 @@ const BUNDLE_FILES = [
   path.join(process.cwd(), 'src/frontend/dist/index.html'),
   path.join(process.cwd(), 'src/build-version.json'),
 ]
+
+export function checkProxyUrl(): ProxyCheck {
+  const url = process.env.PROXY_URL
+  if (!url?.trim()) return { configured: false, ok: true }
+  try {
+    new ProxyAgent(url)
+    return { configured: true, ok: true }
+  } catch (err) {
+    return { configured: true, ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
 
 export function checkConfig(): ConfigCheck {
   const missing = REQUIRED_ENV.filter((key) => !process.env[key]?.trim())
