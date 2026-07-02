@@ -176,17 +176,22 @@ app.get('/debug', async (c) => {
     stale: staleTables.filter(t => tableSet.has(t)),
   }
 
-  const twimagStart = Date.now()
-  let twimagProbe: { ok: boolean; ms: number; status?: number; error?: string } = { ok: false, ms: 0 }
-  try {
-    const r = await Promise.race([
-      fetch('https://abs.twimg.com/'),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
-    ])
-    twimagProbe = { ok: r.status < 500, ms: Date.now() - twimagStart, status: r.status }
-  } catch (err) {
-    twimagProbe = { ok: false, ms: Date.now() - twimagStart, error: err instanceof Error ? err.message : String(err) }
-  }
+  const probeUrl1 = 'https://abs.twimg.com/'
+  const probeUrl2 = 'https://x.com/'
+  const [twimagProbe, xcomProbe] = await Promise.all(
+    [probeUrl1, probeUrl2].map(async (url) => {
+      const t = Date.now()
+      try {
+        const r = await Promise.race([
+          fetch(url, { redirect: 'follow' }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
+        ])
+        return { url, ok: r.status < 500, ms: Date.now() - t, status: r.status }
+      } catch (err) {
+        return { url, ok: false, ms: Date.now() - t, error: err instanceof Error ? err.message : String(err) }
+      }
+    })
+  )
 
   return c.json({
     pool: { ok: poolOk, ms: poolMs, ...(poolError ? { error: poolError } : {}) },
@@ -195,6 +200,7 @@ app.get('/debug', async (c) => {
     scrypt,
     authProbe,
     twimagProbe,
+    xcomProbe,
     requestEnv: {
       hasIncoming: Boolean((c.env as HttpBindings | undefined)?.incoming),
       hasRawBody: Buffer.isBuffer(
