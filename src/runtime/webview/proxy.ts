@@ -137,6 +137,11 @@ XMLHttpRequest.prototype.open=function(m,u){
   arguments[1]=rw!==null?rw:u;
   return _xo.apply(this,arguments);
 };
+var _sb=navigator.sendBeacon.bind(navigator);
+navigator.sendBeacon=function(u,d){
+  var rw=_p(typeof u==='string'?u:String(u));
+  return _sb(rw!==null?rw:u,d);
+};
 
 /* ── SHIMS ────────────────────────────────────────────────────────────── */
 
