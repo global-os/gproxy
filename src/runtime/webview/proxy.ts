@@ -196,13 +196,7 @@ export async function proxyWebviewRequest(
     return new Response('Not found', { status: 404 })
   }
 
-  // Stub castle.io bot-detection SDK — it crashes in the proxy iframe context.
-  // Return an empty script so X.com handles the missing token gracefully.
-  if (/castle\.[a-f0-9]+\.js$/.test(upstreamPath)) {
-    return new Response('', { status: 200, headers: { 'Content-Type': 'application/javascript' } })
-  }
-
-  const cross = extractCrossDomain(upstreamPath)
+const cross = extractCrossDomain(upstreamPath)
   const fetchDomain = cross ? cross.domain : boundDomain
   const fetchPath = cross ? cross.rest : upstreamPath
 
@@ -282,6 +276,22 @@ export async function proxyWebviewRequest(
   const isHtml = contentType.includes('text/html')
 
   if (!isHtml) {
+    // For the castle.io bot-detection chunk, extract the webpack registration
+    // wrapper from the real script and return a no-op stub. This lets webpack
+    // register the chunk successfully while skipping the fingerprinting code.
+    if (/castle\.[a-f0-9]+\.js$/.test(upstreamPath)) {
+      const realScript = await upstreamResponse.text()
+      const m = realScript.match(/\(self\["([^"]+)"\]\s*=\s*self\["\1"\]\s*\|\|\s*\[\]\s*\)\.push\(\[(\[[^\]]+\])/)
+      if (m) {
+        const globalName = m[1]!
+        const chunkIds = m[2]!
+        const stub = `(self["${globalName}"]=self["${globalName}"]||[]).push([${chunkIds},{164079:function(){}}])`
+        responseHeaders.set('Content-Type', 'application/javascript')
+        responseHeaders.delete('content-length')
+        return new Response(stub, { status: 200, headers: responseHeaders })
+      }
+    }
+
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
       headers: responseHeaders,
