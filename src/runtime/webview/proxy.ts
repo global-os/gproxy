@@ -21,9 +21,14 @@ const STRIP_RESPONSE_HEADERS = new Set([
 
 /** True if the first path segment looks like a proxied cross-domain hostname. */
 function extractCrossDomain(upstreamPath: string): { domain: string; rest: string } | null {
-  const m = upstreamPath.match(/^\/([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*){2,})(\/.*)?$/i)
+  // Require 2+ dot-separated labels (covers x.com, api.x.com, abs.twimg.com, etc.)
+  const m = upstreamPath.match(/^\/([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*){1,})(\/.*)?$/i)
   if (!m) return null
-  return { domain: m[1]!, rest: m[2] || '/' }
+  const candidate = m[1]!
+  // Reject if any label is a minified-filename hex hash (e.g. a1954c7a, 542e285a).
+  // Real domain labels don't look like short hex strings.
+  if (candidate.split('.').some(l => /^[0-9a-f]{6,16}$/i.test(l))) return null
+  return { domain: candidate, rest: m[2] || '/' }
 }
 
 // Headers that must not be forwarded to the upstream.
