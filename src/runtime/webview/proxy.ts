@@ -1,6 +1,10 @@
 import { parse as acornParse } from 'acorn'
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
+import { brotliDecompress } from 'node:zlib'
+import { promisify } from 'node:util'
 import { getActiveSessionId, captureResponseBody, recordTraffic } from './recording.js'
+
+const brotliDecompressAsync = promisify(brotliDecompress)
 
 let outboundProxy: ProxyAgent | null = null
 if (process.env.PROXY_URL) {
@@ -354,11 +358,9 @@ const cross = extractCrossDomain(upstreamPath)
     'User-Agent',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
   )
-  // Request only encodings Node.js fetch auto-decodes (gzip, deflate).
-  // Brotli (br) is NOT auto-decoded by undici/Node, so if we allowed it
-  // upstream would send br-encoded bytes that we'd forward without decoding,
-  // causing the browser to receive corrupted content.
-  forwardHeaders.set('Accept-Encoding', 'gzip, deflate')
+  // Match Chrome 131's Accept-Encoding for fingerprint compatibility.
+  // We manually decompress br below if undici doesn't handle it automatically.
+  forwardHeaders.set('Accept-Encoding', 'gzip, deflate, br, zstd')
 
   const method = incomingRequest.method.toUpperCase()
   // Buffer the body rather than streaming — passing a ReadableStream to fetch()
@@ -396,6 +398,19 @@ const cross = extractCrossDomain(upstreamPath)
       })
     }
     return new Response('Upstream unreachable', { status: 502 })
+  }
+
+  // If undici didn't auto-decompress brotli (or zstd), do it manually so the
+  // browser receives raw bytes. We strip content-encoding before forwarding
+  // regardless, so the browser must always receive an already-decoded body.
+  const rawEncoding = upstreamResponse.headers.get('content-encoding') ?? ''
+  if (rawEncoding === 'br') {
+    const compressed = Buffer.from(await upstreamResponse.arrayBuffer())
+    const decompressed = await brotliDecompressAsync(compressed)
+    upstreamResponse = new Response(decompressed, {
+      status: upstreamResponse.status,
+      headers: upstreamResponse.headers,
+    })
   }
 
   const responseHeaders = new Headers()
