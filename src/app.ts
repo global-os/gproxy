@@ -421,6 +421,7 @@ app.all('/instance/*', async (c) => {
   if (instanceId === null) {
     const webview = await resolveWebviewBySlug(slug)
     if (!webview) return c.json({ message: 'Not found' }, 404)
+    console.log(`[webview-route] slug=${slug} path=${upstreamPath} cookies=${c.req.raw.headers.get('cookie') ? c.req.raw.headers.get('cookie')!.split(';').length : 0}`)
     return proxyWebviewRequest(webview.domain, upstreamPath, c.req.raw)
   }
 
