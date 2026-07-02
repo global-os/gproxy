@@ -22,6 +22,8 @@ export function checkProxyUrl(): ProxyCheck {
     new ProxyAgent(url)
     return { configured: true, ok: true }
   } catch (err) {
+    const redacted = url.replace(/:([^@]+)@/, ':***@')
+    console.error('[health] PROXY_URL invalid. Redacted value:', redacted, 'Length:', url.length)
     return { configured: true, ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 }
