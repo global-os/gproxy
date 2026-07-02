@@ -229,17 +229,26 @@ function extractWebpackChunkStub(script: string): string | null {
       globalName = n.value
     }
 
-    // Module map: an ObjectExpression whose keys are all large integers.
-    // Matches both inline `{164079: fn}` and variable-held module maps.
+    // Module map: an ObjectExpression where every key is a large integer AND
+    // every value is a function. This distinguishes the webpack module map
+    // `{164079: function(e,t,r){...}}` from other numeric-keyed objects
+    // (config tables, lookup maps, etc.) that castle includes in the same script.
     if (n.type === 'ObjectExpression' && n.properties?.length > 0 && moduleIds.length === 0) {
-      const keys = (n.properties as ASTNode[]).map(p => {
+      const props = n.properties as ASTNode[]
+      const allModuleLike = props.every(p => {
         const k = p.key as ASTNode
-        if (!k) return null
-        if (k.type === 'Literal' && /^\d{4,}$/.test(String(k.value))) return String(k.value)
-        if (k.type === 'Identifier' && /^\d{4,}$/.test(k.name)) return k.name as string
-        return null
+        const v = p.value as ASTNode
+        const keyOk = (k?.type === 'Literal' && /^\d{4,}$/.test(String(k.value))) ||
+                      (k?.type === 'Identifier' && /^\d{4,}$/.test(k.name as string))
+        const valOk = v?.type === 'FunctionExpression' || v?.type === 'ArrowFunctionExpression'
+        return keyOk && valOk
       })
-      if (keys.every(Boolean)) moduleIds = keys as string[]
+      if (allModuleLike) {
+        moduleIds = props.map(p => {
+          const k = p.key as ASTNode
+          return k.type === 'Literal' ? String(k.value) : k.name as string
+        })
+      }
     }
 
     // Chunk IDs: .push([[id, ...], moduleMapOrRef])
