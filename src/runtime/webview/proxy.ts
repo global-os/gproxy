@@ -309,12 +309,19 @@ const cross = extractCrossDomain(upstreamPath)
     // integrations (e.g. Google Sign-In) see x.com rather than our proxy.
     if (lower === 'origin') { forwardHeaders.set('Origin', boundOrigin); continue }
     if (lower === 'referer') { forwardHeaders.set('Referer', boundOrigin + '/'); continue }
+    // Drop the browser's Accept-Encoding so we can control it below.
+    if (lower === 'accept-encoding') continue
     forwardHeaders.set(key, value)
   }
   forwardHeaders.set(
     'User-Agent',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
   )
+  // Request only encodings Node.js fetch auto-decodes (gzip, deflate).
+  // Brotli (br) is NOT auto-decoded by undici/Node, so if we allowed it
+  // upstream would send br-encoded bytes that we'd forward without decoding,
+  // causing the browser to receive corrupted content.
+  forwardHeaders.set('Accept-Encoding', 'gzip, deflate')
 
   const method = incomingRequest.method.toUpperCase()
   // Buffer the body rather than streaming — passing a ReadableStream to fetch()
