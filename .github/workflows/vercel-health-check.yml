@@ -35,7 +35,7 @@ jobs:
 
           echo "Looking up Vercel deployment for SHA ${{ github.sha }}..."
 
-          for i in $(seq 1 24); do
+          for i in $(seq 1 40); do
             RESPONSE=$(curl -sf \
               -H "Authorization: Bearer $VERCEL_TOKEN" \
               "https://api.vercel.com/v6/deployments?projectId=prj_YzDbpigPcAjP3uOJc6OiU0jmdopH&teamId=team_xx5yJzNru2p4zBytKd4iyRQ1&limit=10")
@@ -58,7 +58,7 @@ jobs:
               echo "Attempt $i: no deployment found yet..."
             fi
 
-            [ "$i" -lt 24 ] && sleep 15
+            [ "$i" -lt 40 ] && sleep 20
           done
 
           echo "Timed out waiting for Vercel deployment to be ready"
