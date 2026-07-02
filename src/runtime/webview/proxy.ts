@@ -220,13 +220,18 @@ function extractWebpackChunkStub(script: string): string | null {
     for (const val of Object.values(n)) walk(val, visit)
   }
 
-  let globalName = ''
+  // Castle finds the webpack chunk array by iterating window properties at
+  // runtime rather than using the name as a literal — so acorn won't see it in
+  // the push call. The name DOES appear verbatim somewhere in the script body
+  // (module 164079's own code), so a plain regex is reliable here.
+  const globalNameMatch = script.match(/(webpackChunk_[A-Za-z0-9_]+)/)
+  let globalName = globalNameMatch?.[1] ?? ''
   let chunkIds: number[] = []
   let moduleIds: string[] = []
 
   walk(ast, (n) => {
-    // Global name: any string literal whose value starts with "webpackChunk_".
-    if (n.type === 'Literal' && typeof n.value === 'string' && n.value.startsWith('webpackChunk_')) {
+    // Global name via AST as secondary signal (castle may not expose it this way).
+    if (!globalName && n.type === 'Literal' && typeof n.value === 'string' && n.value.startsWith('webpackChunk_')) {
       globalName = n.value
     }
 
