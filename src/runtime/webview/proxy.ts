@@ -157,12 +157,6 @@ try{
   }
 }catch(e){}
 
-// Mask iframe context so bot-detection SDKs (e.g. castle.io) don't bail when
-// they detect window.parent !== window or throw accessing cross-origin parent.
-try{Object.defineProperty(window,'parent',{get:function(){return window;},configurable:true});}catch(e){}
-try{Object.defineProperty(window,'top',{get:function(){return window;},configurable:true});}catch(e){}
-try{Object.defineProperty(window,'frameElement',{get:function(){return null;},configurable:true});}catch(e){}
-
 // Intercept dynamically injected <script> src so cross-origin script loads
 // are routed through the proxy just like fetch/XHR.
 try{
