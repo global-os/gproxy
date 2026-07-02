@@ -1,4 +1,4 @@
-import { ProxyAgent } from 'undici'
+import { ProxyAgent, fetch as undiciFetch } from 'undici'
 
 const outboundProxy = process.env.PROXY_URL ? new ProxyAgent(process.env.PROXY_URL) : null
 if (outboundProxy) console.log('[webview] outbound proxy active:', process.env.PROXY_URL?.replace(/:([^@]+)@/, ':***@'))
@@ -185,14 +185,16 @@ export async function proxyWebviewRequest(
 
   let upstreamResponse: Response
   try {
-    const fetchInit: RequestInit & { dispatcher?: ProxyAgent } = {
+    const fetchInit = {
       method: incomingRequest.method,
       headers: forwardHeaders,
       body,
-      redirect: 'follow',
+      redirect: 'follow' as const,
     }
-    if (outboundProxy) fetchInit.dispatcher = outboundProxy
-    upstreamResponse = await fetch(upstream, fetchInit)
+    upstreamResponse = outboundProxy
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ? (await undiciFetch(upstream, { ...fetchInit, dispatcher: outboundProxy } as any)) as unknown as Response
+      : await fetch(upstream, fetchInit)
   } catch (err) {
     console.error(`[webview] upstream fetch failed for ${upstream}:`, err)
     return new Response('Upstream unreachable', { status: 502 })
