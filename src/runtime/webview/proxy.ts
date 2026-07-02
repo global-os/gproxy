@@ -384,7 +384,7 @@ const cross = extractCrossDomain(upstreamPath)
   } catch (err) {
     console.error(`[webview] upstream fetch failed for ${upstream}:`, err)
     if (sessionId != null) {
-      void recordTraffic({
+      recordTraffic({
         sessionId, slug, method, upstreamUrl: upstream,
         requestHeaders: headersToArray(forwardHeaders),
         requestBody: body ? Buffer.from(body).toString('base64') : null,
@@ -441,7 +441,7 @@ const cross = extractCrossDomain(upstreamPath)
       responseHeaders.delete('content-length')
       const castleBody = stub ?? realScript
       if (sessionId != null) {
-        void recordTraffic({
+        recordTraffic({
           sessionId, slug, method, upstreamUrl: upstream,
           requestHeaders: headersToArray(forwardHeaders),
           requestBody: body ? Buffer.from(body).toString('base64') : null,
@@ -457,7 +457,7 @@ const cross = extractCrossDomain(upstreamPath)
 
     if (sessionId != null) {
       const { body: buf, text: respText, encoding: respEncoding } = await captureResponseBody(upstreamResponse)
-      void recordTraffic({
+      recordTraffic({
         sessionId, slug, method, upstreamUrl: upstream,
         requestHeaders: headersToArray(forwardHeaders),
         requestBody: body ? Buffer.from(body).toString('base64') : null,
@@ -485,7 +485,7 @@ const cross = extractCrossDomain(upstreamPath)
   responseHeaders.set('Content-Type', 'text/html; charset=utf-8')
   responseHeaders.delete('content-length')
   if (sessionId != null) {
-    void recordTraffic({
+    recordTraffic({
       sessionId, slug, method, upstreamUrl: upstream,
       requestHeaders: headersToArray(forwardHeaders),
       requestBody: body ? Buffer.from(body).toString('base64') : null,

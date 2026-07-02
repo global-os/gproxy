@@ -2,44 +2,53 @@ import { isNull, desc } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import * as schema from '../../db/schema.js'
 
-// Per-instance cache: undefined = unchecked, null = no active session, number = session id
-let activeSessionId: number | null | undefined = undefined
+// Singleton promise — concurrent requests on a cold start share one DB query
+// instead of each racing to acquire a pool connection.
+let sessionPromise: Promise<number | null> | null = null
 
-export async function getActiveSessionId(): Promise<number | null> {
-  if (activeSessionId !== undefined) return activeSessionId
-  const [row] = await db
+function querySession(): Promise<number | null> {
+  if (sessionPromise) return sessionPromise
+  sessionPromise = db
     .select({ id: schema.proxyRecordingSession.id })
     .from(schema.proxyRecordingSession)
     .where(isNull(schema.proxyRecordingSession.stopped_at))
     .orderBy(desc(schema.proxyRecordingSession.started_at))
     .limit(1)
-  activeSessionId = row?.id ?? null
-  return activeSessionId
+    .then(([row]) => row?.id ?? null)
+  return sessionPromise
+}
+
+export function getActiveSessionId(): Promise<number | null> {
+  return querySession()
+}
+
+function setSession(id: number | null): void {
+  sessionPromise = Promise.resolve(id)
 }
 
 export async function startRecording(): Promise<number> {
-  // Clear all previous data
   await db.delete(schema.proxyRecordingSession)
   const [row] = await db
     .insert(schema.proxyRecordingSession)
     .values({ started_at: new Date() })
     .returning({ id: schema.proxyRecordingSession.id })
-  activeSessionId = row.id
+  setSession(row.id)
   return row.id
 }
 
 export async function stopRecording(): Promise<void> {
-  if (activeSessionId == null) return
+  const id = await querySession()
+  if (id == null) return
   await db
     .update(schema.proxyRecordingSession)
     .set({ stopped_at: new Date() })
     .where(isNull(schema.proxyRecordingSession.stopped_at))
-  activeSessionId = null
+  setSession(null)
 }
 
 export async function clearRecording(): Promise<void> {
   await db.delete(schema.proxyRecordingSession)
-  activeSessionId = null
+  setSession(null)
 }
 
 export interface TrafficEntry {
@@ -56,8 +65,26 @@ export interface TrafficEntry {
   durationMs: number
 }
 
-export async function recordTraffic(entry: TrafficEntry): Promise<void> {
-  await db.insert(schema.proxyTraffic).values({
+// Batch pending inserts so concurrent requests share one DB round-trip
+// instead of each acquiring their own pool connection.
+let pendingEntries: (typeof schema.proxyTraffic.$inferInsert)[] = []
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleFlush(): void {
+  if (flushTimer) return
+  flushTimer = setTimeout(() => {
+    flushTimer = null
+    const batch = pendingEntries
+    pendingEntries = []
+    if (batch.length === 0) return
+    db.insert(schema.proxyTraffic).values(batch).catch(err => {
+      console.error('[recording] flush failed:', err instanceof Error ? err.message : String(err))
+    })
+  }, 500)
+}
+
+export function recordTraffic(entry: TrafficEntry): void {
+  pendingEntries.push({
     session_id: entry.sessionId,
     slug: entry.slug,
     method: entry.method,
@@ -70,6 +97,7 @@ export async function recordTraffic(entry: TrafficEntry): Promise<void> {
     response_body_encoding: entry.responseBodyEncoding,
     duration_ms: entry.durationMs,
   })
+  scheduleFlush()
 }
 
 const BODY_SIZE_LIMIT = 512 * 1024 // 512 KB
@@ -80,13 +108,11 @@ export async function captureResponseBody(
   const contentType = response.headers.get('content-type') ?? ''
   const buf = await response.arrayBuffer()
 
-  // Skip body text for images, fonts, audio, video
   const isBinaryMedia = /^(image|font|audio|video)\//.test(contentType)
   if (isBinaryMedia || buf.byteLength > BODY_SIZE_LIMIT) {
     return { body: buf, text: null, encoding: null }
   }
 
-  // Detect binary content types that are small enough to base64
   const isTextLike = /^(text\/|application\/json|application\/x-www-form-urlencoded|application\/javascript|application\/x-protobuf)/.test(contentType)
   if (!isTextLike) {
     return { body: buf, text: Buffer.from(buf).toString('base64'), encoding: 'base64' }
