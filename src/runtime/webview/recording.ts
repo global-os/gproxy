@@ -2,8 +2,14 @@ import { isNull, desc } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import * as schema from '../../db/schema.js'
 
-// Singleton promise — concurrent requests on a cold start share one DB query
-// instead of each racing to acquire a pool connection.
+// In-flight promise — concurrent requests on a cold start share one DB query
+// instead of each racing to acquire a pool connection. Cleared as soon as the
+// query settles (not cached indefinitely): this runs on Vercel, where warm
+// instances handle many requests over their lifetime, and /start/stop happen
+// on whichever instance handles that HTTP request — a stale cached `null`
+// from before /start was called would otherwise never be revisited by an
+// instance for the rest of its warm lifetime, silently dropping recorded
+// traffic despite recording being active.
 let sessionPromise: Promise<number | null> | null = null
 
 function querySession(): Promise<number | null> {
@@ -15,15 +21,12 @@ function querySession(): Promise<number | null> {
     .orderBy(desc(schema.proxyRecordingSession.started_at))
     .limit(1)
     .then(([row]) => row?.id ?? null)
+    .finally(() => { sessionPromise = null })
   return sessionPromise
 }
 
 export function getActiveSessionId(): Promise<number | null> {
   return querySession()
-}
-
-function setSession(id: number | null): void {
-  sessionPromise = Promise.resolve(id)
 }
 
 export async function startRecording(): Promise<number> {
@@ -32,23 +35,18 @@ export async function startRecording(): Promise<number> {
     .insert(schema.proxyRecordingSession)
     .values({ started_at: new Date() })
     .returning({ id: schema.proxyRecordingSession.id })
-  setSession(row.id)
   return row.id
 }
 
 export async function stopRecording(): Promise<void> {
-  const id = await querySession()
-  if (id == null) return
   await db
     .update(schema.proxyRecordingSession)
     .set({ stopped_at: new Date() })
     .where(isNull(schema.proxyRecordingSession.stopped_at))
-  setSession(null)
 }
 
 export async function clearRecording(): Promise<void> {
   await db.delete(schema.proxyRecordingSession)
-  setSession(null)
 }
 
 export interface TrafficEntry {
