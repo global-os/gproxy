@@ -9,7 +9,7 @@ RUN npm install
 # installs Chrome plus whatever system libs it needs to run in this image.
 RUN npx patchright install --with-deps chrome
 
-COPY server.mjs ./
+COPY server.mjs mitm-proxy.mjs ./
 
 EXPOSE 8080
 CMD ["node", "server.mjs"]
