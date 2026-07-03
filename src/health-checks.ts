@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { ProxyAgent } from 'undici'
+import { ProxyAgent, fetch as undiciFetch } from 'undici'
 import { auth } from './auth.js'
 
 export type ConfigCheck = { ok: boolean; missing: string[] }
@@ -15,6 +15,8 @@ export type SidecarProbeResult = {
   proxyOk?: boolean
   serverIp?: string
   proxyIp?: string
+  vercelProxyIp?: string
+  ipsMatch?: boolean
   error?: string
 }
 
@@ -50,14 +52,33 @@ export function checkFrontendBundle(): BundleCheck {
   return { ok: missing.length === 0, missing }
 }
 
+async function fetchIpViaProxy(timeoutMs: number): Promise<string | null> {
+  const proxyUrl = process.env.PROXY_URL
+  if (!proxyUrl) return null
+  try {
+    const agent = new ProxyAgent(proxyUrl)
+    const res = await Promise.race([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      undiciFetch('https://api.ipify.org', { dispatcher: agent } as any),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+    ])
+    return (await (res as unknown as Response).text()).trim()
+  } catch {
+    return null
+  }
+}
+
 export async function probeSidecar(timeoutMs = 5_000): Promise<SidecarProbeResult> {
   const url = process.env.SIDECAR_URL?.replace(/\/$/, '')
   if (!url) return { configured: false, ok: true, ms: 0 }
   const start = Date.now()
   try {
-    const res = await Promise.race([
-      fetch(`${url}/health`),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+    const [res, vercelProxyIp] = await Promise.all([
+      Promise.race([
+        fetch(`${url}/health`),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+      ]),
+      fetchIpViaProxy(timeoutMs),
     ])
     if (!res.ok) {
       return { configured: true, ok: false, ms: Date.now() - start, error: `status ${res.status}` }
@@ -66,6 +87,7 @@ export async function probeSidecar(timeoutMs = 5_000): Promise<SidecarProbeResul
       proxyActive?: boolean
       ipProbe?: { serverIp?: string; proxyIp?: string; proxyOk?: boolean; checked?: boolean }
     } | null
+    const proxyIp = body?.ipProbe?.proxyIp
     return {
       configured: true,
       ok: true,
@@ -73,7 +95,8 @@ export async function probeSidecar(timeoutMs = 5_000): Promise<SidecarProbeResul
       proxyActive: body?.proxyActive,
       proxyOk: body?.ipProbe?.proxyOk,
       serverIp: body?.ipProbe?.serverIp,
-      proxyIp: body?.ipProbe?.proxyIp,
+      proxyIp,
+      ...(vercelProxyIp != null ? { vercelProxyIp, ipsMatch: vercelProxyIp === proxyIp } : {}),
     }
   } catch (err) {
     return { configured: true, ok: false, ms: Date.now() - start, error: err instanceof Error ? err.message : String(err) }
