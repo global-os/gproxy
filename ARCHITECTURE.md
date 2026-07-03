@@ -106,7 +106,7 @@ flowchart LR
 
 This also solves bug #3 for free: since the MITM proxy (a plain Node process) holds the real proxy credentials and forwards through `https-proxy-agent`/`http-proxy-agent`, Chrome only ever talks to a local, unauthenticated proxy and never engages its own internal proxy-auth handling.
 
-**Status: in progress, not working yet.** Every request through the new MITM layer currently fails with a generic Chrome `network error: Failed`, including against a real external HTTPS site (not a localhost-bypass artifact). Not yet root-caused — likely candidates: `http-mitm-proxy`'s on-the-fly certificate generation failing silently (no `[mitm] onError` output was observed, which is itself suspicious), or an issue with how `--ignore-certificate-errors` interacts with the generated certs. Needs further investigation before this fix can be verified end-to-end the way the CORS-preflight and proxy-auth fixes were.
+**Status: working, verified.** The initial version failed every request with a generic Chrome `network error: Failed`, including against a real external HTTPS site. Root cause: `proxy.listen({ port: 0 })` with no explicit host resolved to IPv6-only (`::1`) on this system, while Chrome's proxy config connects via the literal IPv4 loopback address (`127.0.0.1`) — connection refused. Fixed by explicitly binding `host: '127.0.0.1'`. Verified against httpbin.org (main-doc-style request correctly shows `Dest: document, Mode: navigate, Site: none`; API-style requests correctly show `same-site` when the Origin's registrable domain matches the target, `cross-site` when it doesn't) and against the full real chain (Chrome → MITM → real residential proxy → x.com, 200 with real page content, ~250ms).
 
 ## What's still unresolved
 

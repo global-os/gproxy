@@ -66,8 +66,13 @@ export async function startMitmProxy(upstreamProxyUrl) {
     callback()
   })
 
+  // Explicit 127.0.0.1, not 'localhost' — Node's default dual-stack resolution
+  // can bind IPv6-only (::1), and Chrome's proxy config below connects via
+  // the literal IPv4 loopback address, which would then get connection
+  // refused (confirmed empirically — this was the actual cause of every
+  // request failing with a generic Chrome "network error: Failed").
   const port = await new Promise((resolve, reject) => {
-    proxy.listen({ port: 0 }, (err) => {
+    proxy.listen({ port: 0, host: '127.0.0.1' }, (err) => {
       if (err) return reject(err)
       resolve(proxy.httpServer.address().port)
     })
