@@ -188,6 +188,8 @@ var _bound="https://${boundDomain}";
 /* ── REPLACEMENTS ─────────────────────────────────────────────────────── */
 
 var _o=location.origin;
+var _oHost=location.host;
+var _boundHost=new URL(_bound).host;
 function _p(u){
   try{
     var s=u instanceof Request?u.url:u instanceof URL?u.href:typeof u==='string'?u:null;
@@ -196,10 +198,22 @@ function _p(u){
     return '/'+r.host+r.pathname+r.search+r.hash;
   }catch(e){return null;}
 }
+// The site's own JS can read the real proxy subdomain (location.href,
+// document.referrer, etc. — genuine properties of the real browser tab, not
+// spoofable, see SHIMS below) and embed it in outgoing request bodies (e.g.
+// analytics/onboarding payloads). Rewrite any occurrence of the real origin
+// or bare hostname in outgoing bodies to the bound domain before the request
+// leaves the browser — this only touches what gets sent over the wire, never
+// location.* itself, so it can't break any legitimate in-app use of location.
+function _rb(body){
+  if(typeof body!=='string')return body;
+  return body.split(_o).join(_bound).split(_oHost).join(_boundHost);
+}
 var _f=window.fetch.bind(window);
 window.fetch=function(input,init){
   var rw=_p(input);
   if(rw!==null)input=input instanceof Request?new Request(rw,input):rw;
+  if(init&&typeof init.body==='string'){init=Object.assign({},init,{body:_rb(init.body)});}
   return _f(input,init);
 };
 var _xo=XMLHttpRequest.prototype.open;
@@ -208,10 +222,14 @@ XMLHttpRequest.prototype.open=function(m,u){
   arguments[1]=rw!==null?rw:u;
   return _xo.apply(this,arguments);
 };
+var _xs=XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.send=function(body){
+  return _xs.call(this,_rb(body));
+};
 var _sb=navigator.sendBeacon.bind(navigator);
 navigator.sendBeacon=function(u,d){
   var rw=_p(typeof u==='string'?u:String(u));
-  return _sb(rw!==null?rw:u,d);
+  return _sb(rw!==null?rw:u,_rb(d));
 };
 
 /* ── SHIMS ────────────────────────────────────────────────────────────── */
