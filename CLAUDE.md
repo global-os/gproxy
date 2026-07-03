@@ -183,7 +183,7 @@ npm run db:migrate   # local; also runs automatically in vercel-build on deploy
 - `BETTER_AUTH_SECRET`
 - `BETTER_AUTH_URL` (production)
 
-Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides, `PROXY_URL` (outbound residential proxy), `SIDECAR_URL` (TLS-impersonation sidecar, planned).
+Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides, `PROXY_URL` (outbound residential proxy), `SIDECAR_URL` (real-Chrome sidecar, see `SETUP_SIDECAR.md`).
 
 ## Vercel / serverless pitfalls (read before changing auth, launch, or DB code)
 
@@ -224,32 +224,9 @@ Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides, `PROXY_URL`
 
 **TLS fingerprinting:** Cloudflare Bot Management fingerprints the TLS ClientHello (JA3/JA4 — cipher suites, extensions, ordering). Node.js/undici produces a fingerprint that Cloudflare identifies as non-Chrome. Even through a residential proxy, the TLS handshake goes directly from our Node.js process to upstream. Symptoms: X deletes the `ct0` CSRF cookie on every page load, blocking login. Cloudflare returns 403 HTML challenge pages for some endpoints.
 
-**TLS sidecar** (`sidecar/`): Go HTTP server wrapping the `tls-client` library with a Chrome 146 TLS profile (`profiles.Chrome_146` — the newest Chrome profile the library ships as of this writing; re-check periodically since real Chrome moves faster than the library adds profiles, and an outdated profile is itself a soft bot signal). When `SIDECAR_URL` is set, Vercel routes all upstream fetches through it instead of direct undici. Auth via `SIDECAR_SECRET` (Bearer token). The sidecar omits `Accept-Encoding` so Go's http transport sends gzip and auto-decompresses — callers always receive a decoded body with no `Content-Encoding`. Deployed on a Vultr VM running **NixOS**, container runtime is **podman** (`virtualisation.podman.enable = true;` in `configuration.nix`, not Docker); see `SETUP_SIDECAR.md` and deployment steps below.
+**TLS sidecar** (`sidecar/`): Node server driving **real Google Chrome** via Patchright (a stealth-patched Playwright), not TLS impersonation — see `SETUP_SIDECAR.md` for why Chromium/impersonation don't hold up and real Chrome does. When `SIDECAR_URL` is set, Vercel routes all upstream fetches through it instead of direct undici. Auth via `SIDECAR_SECRET` (Bearer token). Because browsers refuse to let page JS set `Origin`/`Referer`/`Cookie` via `fetch()` (forbidden headers), the sidecar intercepts at the CDP `Fetch` domain to override them before the request leaves Chrome — this is what lets `proxy.ts`'s Origin/Referer spoofing keep working with a real browser underneath. Deployed on a Hetzner VM (`mainframe-2`) running NixOS, managed via the `petersweb-infra` repo — **do not deploy by hand**, see `SETUP_SIDECAR.md` § Deployment.
 
-Deploying on Vultr (one-time setup):
-```bash
-# 1. Create NixOS VM (1 vCPU / 1GB RAM) in Vultr dashboard
-# 2. SSH in; enable podman via configuration.nix, then `nixos-rebuild switch`
-#    (virtualisation.podman.enable = true; networking.firewall.allowedTCPPorts = [ 8080 ];)
-git clone https://github.com/global-os/proxy && cd proxy
-podman build -t proxy-sidecar ./sidecar/
-podman run -d --restart=always -p 8080:8080 \
-  -e SIDECAR_SECRET=<strong-random-secret> \
-  --name proxy-sidecar proxy-sidecar
-# 3. Add to Vercel env vars (both production and preview)
-#    SIDECAR_URL=http://<vultr-ip>:8080
-#    SIDECAR_SECRET=<same-secret>
-```
-
-Updating after code changes:
-```bash
-git pull && podman build -t proxy-sidecar ./sidecar/ && \
-  podman stop proxy-sidecar && podman rm proxy-sidecar && \
-  podman run -d --restart=always -p 8080:8080 \
-    -e SIDECAR_SECRET=<secret> --name proxy-sidecar proxy-sidecar
-```
-
-There's no Quadlet/systemd unit managing this container — it's run imperatively, so `stop && rm` reliably clears it before the next `run`. If `run` ever fails with "name already in use" repeatedly under different container IDs, that's orphaned containers from earlier failed attempts, not an auto-respawning service — clear them with `podman rm -f $(podman ps -aq --filter name=proxy-sidecar)` and retry once.
+Deployment is CI-driven, on a **Gitea mirror**, not GitHub Actions: GitHub (`origin`) stays primary for Vercel/everything else, but a second remote (`gitea`, `forge.quinefoundation.com/Cold-Air-Networks/proxy`) exists specifically for this — push there to trigger `.gitea/workflows/sidecar-build.yml`, which builds (`linux/amd64` — Chrome has no ARM64 Linux build) and pushes to the forge's own registry, then opens a PR against `petersweb-infra` bumping the pinned image digest. Merging that PR and running `nixos-rebuild switch` on `mainframe-2` is what actually deploys it. Pushing to GitHub `origin` alone does not deploy the sidecar. There is no vendored copy of the sidecar source in `petersweb-infra` anymore and no local `podman build` on the host — don't reintroduce either.
 
 **Castle.io webpack stub (X-specific):** X's bot-detection SDK (`ondemand.castle.*.js`) is a webpack chunk that crashes in the cross-origin iframe context. The proxy intercepts it by filename regex, parses the chunk with `acorn` to extract the webpack chunk array name, chunk IDs, and module IDs, then returns a no-op stub: `(self["webpackChunk_twitter_responsive_web"]=...).push([[chunkId],{moduleId:function(){}}])`. This prevents the `ChunkLoadError` that would otherwise cascade and break the login UI.
 
@@ -277,8 +254,8 @@ Recording uses a batched in-memory flush (500ms) to avoid adding DB connections 
 | Schema errors | `/debug` `schema.missing`; run `scripts/apply-pending-migrations.mjs` |
 | Webview scripts 502, no `[webview] GET` logs | Pool exhausted before handler ran — check that `resolveWebviewBySlug` cache is warm; avoid per-request DB calls in the proxy hot path |
 | Webview upstream fetch failed | Search logs for `upstream fetch failed` to see actual error; if absent, upstream returned non-2xx (forwarded silently) — check `[webview] GET` lines |
-| X login "Please use X.com or official X apps" | Check: (1) `x-vercel-*` / `forwarded` headers stripped ✓; (2) `ct0` cookie set (not deleted) in main page response — if deleted, Cloudflare TLS fingerprinting is blocking us; needs TLS sidecar |
-| X `ct0` deleted on page load | Cloudflare Bot Management detecting Node.js TLS fingerprint; `PROXY_URL` set but TLS still identifies as non-Chrome; sidecar (`SIDECAR_URL`) needed |
+| X login "Please use X.com or official X apps" / "We've temporarily limited your login" | Confirm sidecar `/health` shows `engine=chrome(patchright)` and `proxyOk: true`; see `SETUP_SIDECAR.md` for the full real-Chrome-vs-Chromium-vs-headless breakdown |
+| X `ct0` cookie zeroed on page load | **Not necessarily a problem** — real Chrome also gets `ct0` zeroed on a bare document GET; X only issues a real `ct0` on the first API/GraphQL call. Don't treat this alone as a block signal (see `SETUP_SIDECAR.md`) |
 
 ## Conventions
 

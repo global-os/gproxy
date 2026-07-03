@@ -1,133 +1,75 @@
-# Sidecar setup (Vultr)
+# Sidecar setup (Hetzner / mainframe-2)
 
-The sidecar is a Go HTTP server that makes upstream requests with Chrome 146's TLS fingerprint (the newest profile `bogdanfinn/tls-client` ships — keep this in sync with real Chrome's current version and the `sec-ch-ua`/User-Agent headers set in `src/runtime/webview/proxy.ts`), bypassing Cloudflare Bot Management's JA3/JA4 detection. It lives in `sidecar/` and runs on a cheap Vultr VM.
+The sidecar makes upstream requests through a **real Google Chrome** instance (driven by [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs), a stealth-patched Playwright fork), bypassing Cloudflare Bot Management's JA3/JA4 TLS fingerprinting and behavioral detection. It lives in `sidecar/` and runs on the Hetzner VM `mainframe-2`, managed declaratively through the `petersweb-infra` NixOS repo — see "Deployment" below before touching anything by hand.
 
 To fully bypass X/Instagram detection you need **both**:
-- **Sidecar** — Chrome TLS fingerprint (JA3/JA4 impersonation)
-- **Residential proxy** — non-datacenter IP (Vultr IPs are blocked the same as Vercel/AWS)
+- **Sidecar** — real Chrome (genuine JA3/JA4, no impersonation needed since it's the real thing)
+- **Residential proxy** — non-datacenter IP (Hetzner IPs are blocked the same as Vercel/AWS)
 
-The request chain is: **Vercel → sidecar → residential proxy → upstream**
+The request chain is: **Vercel → sidecar (real Chrome, via CDP) → residential proxy → upstream**
 
-## 1. Create the VM
+## Why real Chrome, not TLS impersonation
 
-In the Vultr dashboard:
-- **Type:** Cloud Compute — Shared CPU
-- **Plan:** vc2-1c-2gb (1 vCPU, 2GB RAM) — smallest available is fine
-- **OS:** NixOS (latest stable ISO/image available in the Vultr marketplace, or a custom NixOS image)
-- **Region:** anything close to Vercel's `iad1` (US East) to minimize latency — New Jersey or Atlanta work well
-- Add your SSH key
+An earlier version of this sidecar used `tls-client` (a Go library impersonating Chrome's TLS ClientHello) instead of a real browser. It worked for basic pages but eventually got blocked on X's login flow ("Please use X.com or official X apps" / `ct0` CSRF cookie zeroed). Local testing (Patchright POC, see git history around the sidecar rewrite) isolated the requirements precisely:
 
-## 2. Enable podman
+| Browser | Mode | Result |
+|---|---|---|
+| Real Google Chrome | headed | pass |
+| Real Google Chrome | headless, default UA (`HeadlessChrome/...`) | **blocked** |
+| Real Google Chrome | headless, UA with "Headless" stripped | pass |
+| Playwright's bundled Chromium | headed or headless | **blocked regardless of UA** |
 
-Podman is enabled declaratively via the NixOS module, not installed with a shell script. Add to `configuration.nix` (or the equivalent flake host config):
+Conclusions:
+- **Real Google Chrome is required** — Chromium (even headed, even with an identical spoofed UA) gets detected by something other than headers (Widevine CDM presence and/or `navigator.userAgentData` brand list are the leading suspects, not confirmed further).
+- **Headless is fine** — no Xvfb/virtual display needed — as long as the UA string doesn't contain the literal substring `"Headless"`. This was the actual, surprisingly simple, root cause of the block in headless mode.
+- WebGL renderer, `userAgentData.brands`, plugins, and codec support were all identical between the passing headed run and the failing headless run on the same machine — ruling out GPU/rendering fingerprinting as the mechanism.
 
-```nix
-virtualisation.podman.enable = true;
-virtualisation.podman.dockerCompat = true; # optional: adds a `docker` alias for muscle memory
-networking.firewall.allowedTCPPorts = [ 8080 ];
-```
+### The CDP header-spoofing wrinkle
 
-Then:
+The webview proxy (`src/runtime/webview/proxy.ts`) deliberately rewrites `Origin`/`Referer` to the bound domain (e.g. `https://x.com`) so upstream doesn't see our proxy subdomain — this is core to how cross-domain embedding works at all. Real browsers refuse to let page JS set these via `fetch()` (they're "forbidden headers"). `server.mjs` works around this by triggering the request from a normal `fetch()` call inside the page, then intercepting it at the **CDP `Fetch` domain** — which sits below the browser's own JS-level header restrictions — and overriding headers there via `Fetch.continueRequest`. See the comment block at the top of `sidecar/server.mjs` for the full mechanism, including how redirects are handled (`redirect: 'manual'` + a server-side follow loop, to avoid ambiguous request-correlation across hops).
 
-```bash
-ssh root@<vultr-ip>
-nixos-rebuild switch
-```
+## Deployment
 
-The container itself (build/run/stop) is still managed imperatively with the `podman` CLI — there's no Quadlet/systemd unit declaring it, so a `podman rm` sticks until you `podman run` again.
+**This is the important part — read before touching the VM directly.**
 
-## 3. Clone the repo and build
+The sidecar is deployed via CI on a **Gitea mirror**, not by hand and not via GitHub Actions:
 
-```bash
-git clone https://github.com/global-os/proxy
-cd proxy
-podman build -t proxy-sidecar ./sidecar/
-```
+- GitHub (`git@github.com:global-os/proxy.git`, `origin` remote) stays the primary repo — Vercel deploys from here, `.github/workflows/vercel-health-check.yml` is unaffected.
+- A mirror lives on the same Gitea forge as `petersweb-infra`: `forge.quinefoundation.com/Cold-Air-Networks/proxy` (`gitea` remote). Push there (`git push gitea main`) to trigger the sidecar build — pushing to GitHub `origin` alone does **not** build/deploy the sidecar.
 
-First build takes ~5 minutes (downloads Go deps). Subsequent builds are faster due to layer caching.
+Flow, once pushed to the `gitea` remote:
 
-## 4. Run the sidecar
+1. `sidecar/**` changes on `main` → Gitea Actions (`.gitea/workflows/sidecar-build.yml`, modeled on `customer-riverside`'s CI) builds the image (`linux/amd64` — Google Chrome has no Linux ARM64 build, and `mainframe-2` is x86_64) using `podman` inside a `quay.io/podman/stable` container, and pushes it to the forge's own container registry: `forge.quinefoundation.com/cold-air-networks/proxy-sidecar`.
+2. The same workflow opens a PR against `petersweb-infra` bumping the pinned `@sha256:...` digest in `nixos/linux.nix`'s `virtualisation.oci-containers.containers."proxy-sidecar"` block.
+3. Once that PR is reviewed and merged, running `nixos-rebuild switch` (or `./apply.sh`) on `mainframe-2` pulls the new pinned image and restarts the container.
 
-Pick a strong random secret (e.g. `openssl rand -hex 32`) and keep it — you'll need it for Vercel too.
+**Required Gitea Actions secrets** (on the `Cold-Air-Networks/proxy` mirror repo, not GitHub): `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`, `INFRA_TOKEN` — same names/purpose as `customer-riverside`'s existing CI, so if those are already configured as org-level secrets on this Gitea instance, no new setup may be needed.
 
-```bash
-podman run -d \
-  --restart=always \
-  -p 8080:8080 \
-  -e SIDECAR_SECRET=<your-secret> \
-  -e PROXY_URL=<residential-proxy-url> \
-  --name proxy-sidecar \
-  proxy-sidecar
-```
+There is **no vendored copy of the sidecar source in `petersweb-infra` anymore** (the old `nixos/proxy-sidecar/` directory holding a copy of `Dockerfile`/`main.go` was removed) and **no local `podman build` on the host** — the NixOS config just references the pinned forge-registry image directly. Don't reintroduce either of those; if you're editing container internals, edit `sidecar/` in this repo and push to the `gitea` remote to let CI handle the rest.
 
-`PROXY_URL` format: `http://user:pass@host:port` or `socks5://user:pass@host:port`. Omit if you don't have one yet — the sidecar still provides TLS impersonation without it.
+## Local development / testing
 
-Verify it's running:
+You don't need the Hetzner VM to iterate on the sidecar. Real Chrome must be installed locally (`npx patchright install chrome`), then:
 
 ```bash
-curl http://localhost:8080/health
-# => ok
-
-podman logs proxy-sidecar
-# => [sidecar] listening :8080  profile=Chrome_146  auth=true  proxy=true
+cd sidecar
+npm install
+node server.mjs
+# in another terminal:
+curl -X POST http://localhost:8080/fetch \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://api.ipify.org","method":"GET","headers":[]}'
 ```
 
-## 5. Add env vars to Vercel
-
-In the Vercel dashboard → Project → Settings → Environment Variables (add to Production and Preview):
-
-| Key | Value |
-|-----|-------|
-| `SIDECAR_URL` | `http://<vultr-ip>:8080` |
-| `SIDECAR_SECRET` | same secret as above |
-
-`PROXY_URL` stays on the sidecar (not Vercel) — the sidecar is now the one making outbound requests.
-
-Then redeploy for the vars to take effect.
-
-## 6. Verify end-to-end
-
-After deploy, check the Vercel function logs for:
-```
-[webview] TLS sidecar active: http://<vultr-ip>:8080
-```
-
-Then open a webview (X, Instagram) and confirm `ct0` is no longer being deleted on page load.
-
-## Updating after code changes
-
-```bash
-ssh root@<vultr-ip>
-cd ~/proxy
-git pull
-podman build -t proxy-sidecar ./sidecar/
-podman stop proxy-sidecar && podman rm proxy-sidecar
-podman run -d \
-  --restart=always \
-  -p 8080:8080 \
-  -e SIDECAR_SECRET=<your-secret> \
-  -e PROXY_URL=<residential-proxy-url> \
-  --name proxy-sidecar \
-  proxy-sidecar
-```
-
-If `podman run` fails with `name "proxy-sidecar" is already in use` even after `stop && rm`, a prior failed/retried `run` likely left an orphaned container under the same name. Clean out everything with that name first, then retry once:
-
-```bash
-podman ps -a --filter name=proxy-sidecar
-podman rm -f $(podman ps -aq --filter name=proxy-sidecar)
-```
-
-(`--replace` on `podman run` also works as a one-step alternative to `stop && rm`.)
+Set `PROXY_URL` and `SIDECAR_SECRET` env vars to match production behavior. To test cross-platform builds locally on an ARM Mac (e.g. before pushing), use `podman build --platform linux/amd64 .` — plain `podman build` will fail on ARM64 since Chrome doesn't ship for that architecture, and even a successful cross-arch build may crash at runtime under local QEMU emulation (ptrace/GPU sandbox issues) — that's an emulation artifact, not a real bug; it'll behave normally on actual x86_64 hardware.
 
 ## Troubleshooting
 
 | Symptom | Check |
 |---------|-------|
-| `podman build` fails with `requires go >= 1.24.1` | Dockerfile must use `golang:1.24-bookworm` — pull latest and rebuild |
-| `podman build` fails with `cannot use upReq... as *fhttp.Request` | Pull latest — fixed in commit d39bbc3 |
-| Vercel logs show `sidecar 502` | Check VM firewall allows port 8080 inbound; `podman logs proxy-sidecar` for errors |
-| `ct0` still deleted after sidecar active | Residential proxy (`PROXY_URL`) not set on sidecar — Vultr datacenter IP is blocked by X |
-| `ct0` still deleted with both set | Check `proxy=true` in sidecar startup logs; verify residential proxy is not a VPN/datacenter range |
-| Sidecar unreachable from Vercel | Vultr firewall may be blocking port 8080 — check `networking.firewall.allowedTCPPorts` includes 8080 and `nixos-rebuild switch` was run |
-| `podman run` says name already in use, repeatedly, under new container IDs each time | Orphaned containers from earlier failed `run` attempts — `podman rm -f $(podman ps -aq --filter name=proxy-sidecar)` then retry once |
+| Build fails: `not supported on Linux Arm64` | You're building on an ARM host without `--platform linux/amd64` — Chrome has no Linux ARM64 build. CI always builds `linux/amd64` explicitly. |
+| Vercel logs show `sidecar 502` | Check `mainframe-2` firewall allows port 8080 inbound; `podman logs proxy-sidecar` for errors |
+| `ct0` still deleted / "Please use X.com" error | Check the sidecar's startup log confirms `engine=chrome(patchright)`; confirm `PROXY_URL` is set and `ipProbe.proxyOk` is true in `/health` |
+| Request hangs / times out | CDP `Fetch.requestPaused` may not be firing for a given resource type — check `sidecar/server.mjs`'s `Fetch.enable` patterns cover the request; each `/fetch` call has a 20s timeout and will reject with `sidecar fetch timeout` |
+| Sidecar unreachable from Vercel | `mainframe-2` firewall may be blocking port 8080 |
+| New sidecar code not showing up in production | Confirm the CI-opened PR against `petersweb-infra` was merged, and `nixos-rebuild switch` was actually run on `mainframe-2` afterward — merging the PR alone doesn't deploy anything |

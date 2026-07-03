@@ -1,0 +1,93 @@
+name: Sidecar Build & Push
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sidecar/**"
+      - ".gitea/workflows/sidecar-build.yml"
+
+env:
+  REGISTRY: forge.quinefoundation.com
+  IMAGE: forge.quinefoundation.com/cold-air-networks/proxy-sidecar
+  INFRA_REPO: Cold-Air-Networks/petersweb-infra
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/podman/stable
+      options: --privileged
+    env:
+      STORAGE_DRIVER: vfs
+    outputs:
+      image_digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - name: Install git
+        run: dnf install -y --quiet git-core
+
+      - name: Checkout
+        run: |
+          git clone --depth=1 \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@${{ env.REGISTRY }}/${{ github.repository }}.git" \
+            .
+          git checkout "${{ github.sha }}"
+
+      - name: Log in to registry
+        env:
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+        run: echo "$REGISTRY_PASSWORD" | podman login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
+
+      - name: Build and push
+        id: push
+        env:
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+        run: |
+          podman build --layers=false --platform linux/amd64 -t "$IMAGE:${{ github.sha }}" ./sidecar
+          podman push "$IMAGE:${{ github.sha }}"
+          DIGEST=$(curl -sf \
+            -u "${REGISTRY_USERNAME}:${REGISTRY_PASSWORD}" \
+            -H "Accept: application/vnd.oci.image.manifest.v1+json" \
+            -I \
+            "https://${{ env.REGISTRY }}/v2/cold-air-networks/proxy-sidecar/manifests/${{ github.sha }}" \
+            | grep -i 'docker-content-digest:' | grep -oE '[a-f0-9]{64}')
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+
+  bump-infra:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bump proxy-sidecar in infra repo
+        env:
+          FORGE_TOKEN: ${{ secrets.INFRA_TOKEN }}
+          FORGE_USER: ${{ secrets.REGISTRY_USERNAME }}
+          SHA: ${{ github.sha }}
+          IMAGE_DIGEST: ${{ needs.build.outputs.image_digest }}
+        run: |
+          git clone "https://${FORGE_USER}:${FORGE_TOKEN}@forge.quinefoundation.com/${{ env.INFRA_REPO }}.git" infra
+          cd infra
+
+          BRANCH="bump-proxy-sidecar-${SHA:0:7}"
+          git checkout -b "$BRANCH"
+
+          sed -i -E "s|(proxy-sidecar@sha256:)[0-9a-f]{64}|\1${IMAGE_DIGEST}|" \
+            nixos/linux.nix
+
+          git config user.email "ci@quinefoundation.com"
+          git config user.name "CI"
+          git add nixos/linux.nix
+          git commit -m "bump proxy-sidecar to ${SHA:0:7}"
+          git push origin "$BRANCH"
+
+          curl -sf -X POST \
+            -H "Authorization: token $FORGE_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://forge.quinefoundation.com/api/v1/repos/${{ env.INFRA_REPO }}/pulls" \
+            -d "{
+              \"title\": \"bump proxy-sidecar to ${SHA:0:7}\",
+              \"head\": \"$BRANCH\",
+              \"base\": \"main\",
+              \"body\": \"Automated bump from Cold-Air-Networks/proxy@$SHA\"
+            }"
