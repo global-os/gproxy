@@ -181,8 +181,9 @@ function rewriteHtmlAttrs(html: string, boundDomain: string): string {
  * in the proxy context. These don't change intent; they fix the mismatch
  * between where the site thinks it's running and where it actually is.
  */
-function buildInterceptScript(): string {
+function buildInterceptScript(boundDomain: string): string {
   return `<script>(function(){
+var _bound="https://${boundDomain}";
 
 /* ── REPLACEMENTS ─────────────────────────────────────────────────────── */
 
@@ -234,6 +235,28 @@ try{
   if(_sd&&_sd.set){var _ss=_sd.set;Object.defineProperty(HTMLScriptElement.prototype,'src',{get:_sd.get,set:function(v){var rw=_p(typeof v==='string'?v:String(v));_ss.call(this,rw!==null?rw:v);},configurable:true});}
 }catch(e){}
 
+// window.location CANNOT be shimmed — confirmed empirically, not just in
+// theory: Object.defineProperty(location, 'origin', ...) throws "Cannot
+// redefine property: origin" in real Chrome. location.origin/href/hostname
+// /host/protocol are non-configurable by design specifically so a page's own
+// JS can never misrepresent its real origin — this is a foundational part of
+// the web security model, not a gap we can code around. The site's own JS
+// genuinely sees the real proxy subdomain here (it's a real property of the
+// real browser tab, unrelated to HTTP header spoofing), and that can leak
+// into things like analytics/onboarding payloads that embed location.href
+// directly. There is no client-side fix for that leak.
+//
+// document.referrer is different — it's a regular configurable accessor on
+// Document.prototype, not a Location property, so it *can* be shimmed. Mask
+// the real proxy subdomain with the bound origin, but only when there really
+// was a referrer (a direct/fresh load should still report no referrer).
+try{
+  var _realReferrer=document.referrer;
+  Object.defineProperty(Document.prototype,'referrer',{configurable:true,get:function(){
+    return _realReferrer?(_bound+'/'):'';
+  }});
+}catch(e){}
+
 })()</script>`
 }
 
@@ -243,7 +266,7 @@ function rewriteHtml(html: string, boundDomain: string): string {
   // our injected inline script the same way HTTP CSP headers do.
   result = result.replace(/<meta[^>]+http-equiv\s*=\s*["']?content-security-policy["']?[^>]*>/gi, '')
   // Inject as the first child of <head> so it runs before any site scripts.
-  const intercept = buildInterceptScript()
+  const intercept = buildInterceptScript(boundDomain)
   const injected = result.replace(/(<head[^>]*>)/i, `$1${intercept}`)
   if (injected !== result) return injected
   // No <head> tag — inject before the first <script>.
