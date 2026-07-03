@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "patchright": "^1.61.1",
+    "proxy-chain": "^3.0.0",
     "undici": "^8.5.0"
   }
 }

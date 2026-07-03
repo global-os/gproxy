@@ -14,6 +14,7 @@
 import { createServer } from 'node:http'
 import { chromium } from 'patchright'
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
+import { anonymizeProxy } from 'proxy-chain'
 
 const PORT = process.env.PORT || 8080
 const SECRET = process.env.SIDECAR_SECRET || ''
@@ -51,16 +52,24 @@ async function probeIps() {
   console.log('[sidecar] ip-probe:', JSON.stringify(ipProbe))
 }
 
-function proxyLaunchOption() {
+// Chrome/Playwright appears to handle authenticated (username/password)
+// upstream proxies via its own internal CDP-level interception, which
+// conflicts with our separate `Fetch.enable` below — the request stage
+// fires fine, but the response-stage event never arrives, hanging forever.
+// Confirmed empirically: the exact same request that resolves instantly
+// with no proxy configured hangs indefinitely once a proxy with
+// credentials is set, for any URL, not just specific sites.
+//
+// Fix (a standard workaround for this exact Puppeteer/Playwright +
+// authenticated-proxy + custom-interception conflict): use proxy-chain to
+// spin up a local anonymous proxy that forwards to the real authenticated
+// upstream. Chrome then connects with zero credentials, so it never
+// engages its own internal proxy-auth handling in the first place.
+async function proxyLaunchOption() {
   if (!PROXY_URL) return {}
-  const u = new URL(PROXY_URL)
-  return {
-    proxy: {
-      server: `${u.protocol}//${u.host}`,
-      username: decodeURIComponent(u.username),
-      password: decodeURIComponent(u.password),
-    },
-  }
+  const anonymizedUrl = await anonymizeProxy(PROXY_URL)
+  console.log('[sidecar] anonymized proxy at', anonymizedUrl)
+  return { proxy: { server: anonymizedUrl } }
 }
 
 const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
@@ -69,7 +78,7 @@ const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
   userAgent: USER_AGENT,
   viewport: { width: 1920, height: 1080 },
   args: ['--no-sandbox'], // required running as root in a container
-  ...proxyLaunchOption(),
+  ...(await proxyLaunchOption()),
 })
 
 // Each /fetch call gets its own page + CDP session, created and torn down
@@ -99,7 +108,9 @@ const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
 // overriding forbidden headers there doesn't retroactively trigger a
 // preflight.
 async function chromeFetchOnce(url, method, headersObj, bodyB64) {
+  const t0 = Date.now()
   const page = await context.newPage()
+  let sawAnyEvent = false
   try {
     const cdp = await context.newCDPSession(page)
     await cdp.send('Fetch.enable', {
@@ -110,22 +121,35 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
     })
 
     return await new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => reject(new Error('sidecar fetch timeout')), FETCH_TIMEOUT_MS)
+      const timeoutId = setTimeout(() => {
+        console.error(
+          `[sidecar] TIMEOUT after ${Date.now() - t0}ms url=${url} sawAnyEvent=${sawAnyEvent}`
+        )
+        reject(new Error('sidecar fetch timeout'))
+      }, FETCH_TIMEOUT_MS)
 
       cdp.on('Fetch.requestPaused', async (event) => {
+        sawAnyEvent = true
         const { requestId, responseStatusCode, responseHeaders, responseErrorReason } = event
         const isResponseStage = 'responseStatusCode' in event || responseErrorReason !== undefined
 
         if (!isResponseStage) {
           const headers = Object.entries(headersObj).map(([name, value]) => ({ name, value }))
-          await cdp.send('Fetch.continueRequest', { requestId, headers }).catch(() => {})
+          try {
+            await cdp.send('Fetch.continueRequest', { requestId, headers })
+          } catch (err) {
+            console.error(`[sidecar] continueRequest (request stage) failed url=${url}:`, err.message)
+          }
           return
         }
 
         clearTimeout(timeoutId)
 
         if (responseErrorReason) {
-          await cdp.send('Fetch.continueRequest', { requestId }).catch(() => {})
+          console.error(`[sidecar] responseErrorReason url=${url}: ${responseErrorReason}`)
+          await cdp.send('Fetch.continueRequest', { requestId }).catch((err) =>
+            console.error(`[sidecar] continueRequest (error cleanup) failed url=${url}:`, err.message)
+          )
           reject(new Error(`network error: ${responseErrorReason}`))
           return
         }
@@ -134,11 +158,16 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
         try {
           const bodyResp = await cdp.send('Fetch.getResponseBody', { requestId })
           bodyB64Resp = bodyResp.base64Encoded ? bodyResp.body : Buffer.from(bodyResp.body, 'utf-8').toString('base64')
-        } catch {
-          // redirects / bodiless responses may not have a body available
+        } catch (err) {
+          console.error(`[sidecar] getResponseBody failed url=${url} status=${responseStatusCode}:`, err.message)
         }
 
-        await cdp.send('Fetch.continueRequest', { requestId }).catch(() => {})
+        try {
+          await cdp.send('Fetch.continueRequest', { requestId })
+        } catch (err) {
+          console.error(`[sidecar] continueRequest (response stage) failed url=${url}:`, err.message)
+        }
+        console.log(`[sidecar] done url=${url} status=${responseStatusCode} ms=${Date.now() - t0}`)
         resolve({
           status: responseStatusCode,
           headers: (responseHeaders || []).map((h) => [h.name, h.value]),
@@ -159,7 +188,7 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
           },
           { url, method, bodyB64 }
         )
-        .catch(() => {}) // the in-page fetch promise is discarded; CDP events carry the real result
+        .catch((err) => console.error(`[sidecar] in-page evaluate() threw url=${url}:`, err.message))
     })
   } finally {
     await page.close().catch(() => {})
@@ -213,12 +242,14 @@ const server = createServer(async (req, res) => {
       const raw = await readBody(req)
       const body = JSON.parse(raw.toString('utf-8'))
       const headersObj = Object.fromEntries((body.headers || []).map(([k, v]) => [k, v]))
+      console.log(`[sidecar] /fetch ${body.method} ${body.url} headerCount=${(body.headers || []).length}`)
 
       const result = await chromeFetch(body.url, body.method, headersObj, body.body || '')
 
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(result))
     } catch (err) {
+      console.error(`[sidecar] /fetch failed:`, err instanceof Error ? err.stack || err.message : String(err))
       res.writeHead(502)
       res.end(`fetch error: ${err instanceof Error ? err.message : String(err)}`)
     }
