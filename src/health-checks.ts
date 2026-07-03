@@ -7,7 +7,16 @@ export type ConfigCheck = { ok: boolean; missing: string[] }
 export type ProxyCheck = { configured: boolean; ok: boolean; error?: string }
 export type BundleCheck = { ok: boolean; missing: string[] }
 export type AuthProbeResult = { ok: boolean; ms: number; status?: number; error?: string }
-export type SidecarProbeResult = { configured: boolean; ok: boolean; ms: number; error?: string }
+export type SidecarProbeResult = {
+  configured: boolean
+  ok: boolean
+  ms: number
+  proxyActive?: boolean
+  proxyOk?: boolean
+  serverIp?: string
+  proxyIp?: string
+  error?: string
+}
 
 const REQUIRED_ENV = ['DATABASE_URL', 'BETTER_AUTH_SECRET'] as const
 
@@ -50,8 +59,22 @@ export async function probeSidecar(timeoutMs = 5_000): Promise<SidecarProbeResul
       fetch(`${url}/health`),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
     ])
-    const ok = res.ok
-    return { configured: true, ok, ms: Date.now() - start, ...(ok ? {} : { error: `status ${res.status}` }) }
+    if (!res.ok) {
+      return { configured: true, ok: false, ms: Date.now() - start, error: `status ${res.status}` }
+    }
+    const body = await res.json().catch(() => null) as {
+      proxyActive?: boolean
+      ipProbe?: { serverIp?: string; proxyIp?: string; proxyOk?: boolean; checked?: boolean }
+    } | null
+    return {
+      configured: true,
+      ok: true,
+      ms: Date.now() - start,
+      proxyActive: body?.proxyActive,
+      proxyOk: body?.ipProbe?.proxyOk,
+      serverIp: body?.ipProbe?.serverIp,
+      proxyIp: body?.ipProbe?.proxyIp,
+    }
   } catch (err) {
     return { configured: true, ok: false, ms: Date.now() - start, error: err instanceof Error ? err.message : String(err) }
   }

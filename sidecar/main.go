@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 
 	fhttp "github.com/bogdanfinn/fhttp"
 	tls_client "github.com/bogdanfinn/tls-client"
@@ -30,10 +32,82 @@ type FetchResp struct {
 	Body    string      `json:"body"` // base64-encoded
 }
 
+type IPProbe struct {
+	ServerIP    string `json:"serverIp"`
+	ProxyIP     string `json:"proxyIp"`
+	ProxyOk     bool   `json:"proxyOk"` // true if proxy is active and IPs differ
+	Checked     bool   `json:"checked"` // false until probe completes
+	ServerError string `json:"serverError,omitempty"`
+	ProxyError  string `json:"proxyError,omitempty"`
+}
+
 var (
-	secret   = os.Getenv("SIDECAR_SECRET")
-	proxyURL = os.Getenv("PROXY_URL")
+	secret      = os.Getenv("SIDECAR_SECRET")
+	proxyURL    = os.Getenv("PROXY_URL")
+	ipProbe     IPProbe
+	ipProbeMu   sync.RWMutex
 )
+
+func newClient(withProxy bool) (tls_client.HttpClient, error) {
+	opts := []tls_client.HttpClientOption{
+		tls_client.WithClientProfile(profiles.Chrome_131),
+		tls_client.WithTimeoutSeconds(15),
+	}
+	if withProxy && proxyURL != "" {
+		opts = append(opts, tls_client.WithProxyUrl(proxyURL))
+	}
+	return tls_client.NewHttpClient(tls_client.NewNoopLogger(), opts...)
+}
+
+func fetchPublicIP(withProxy bool) (string, error) {
+	client, err := newClient(withProxy)
+	if err != nil {
+		return "", err
+	}
+	req, err := fhttp.NewRequest("GET", "https://api.ipify.org", nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(body)), nil
+}
+
+// probeIPs runs at startup in a goroutine. Fetches the server's own public IP
+// (direct) and the IP seen by upstream when going through the residential proxy.
+// If they differ, the proxy is routing correctly.
+func probeIPs() {
+	serverIP, err1 := fetchPublicIP(false)
+	proxyIP, err2 := fetchPublicIP(true)
+
+	probe := IPProbe{Checked: true}
+	if err1 == nil {
+		probe.ServerIP = serverIP
+	} else {
+		probe.ServerError = err1.Error()
+		log.Printf("[sidecar] ip-probe direct failed: %v", err1)
+	}
+	if err2 == nil {
+		probe.ProxyIP = proxyIP
+	} else {
+		probe.ProxyError = err2.Error()
+		log.Printf("[sidecar] ip-probe proxy failed: %v", err2)
+	}
+	probe.ProxyOk = proxyURL != "" && err1 == nil && err2 == nil && serverIP != proxyIP
+
+	ipProbeMu.Lock()
+	ipProbe = probe
+	ipProbeMu.Unlock()
+
+	log.Printf("[sidecar] ip-probe: serverIp=%s proxyIp=%s proxyOk=%v", probe.ServerIP, probe.ProxyIP, probe.ProxyOk)
+}
 
 func handleFetch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -61,15 +135,8 @@ func handleFetch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	opts := []tls_client.HttpClientOption{
-		tls_client.WithClientProfile(profiles.Chrome_131),
-		tls_client.WithTimeoutSeconds(30),
-	}
-	if proxyURL != "" {
-		opts = append(opts, tls_client.WithProxyUrl(proxyURL))
-	}
 	// New client per request — no session state bleeds between proxy requests.
-	client, err := tls_client.NewHttpClient(tls_client.NewNoopLogger(), opts...)
+	client, err := newClient(true)
 	if err != nil {
 		http.Error(w, "client error: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -122,16 +189,29 @@ func handleFetch(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	ipProbeMu.RLock()
+	probe := ipProbe
+	ipProbeMu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
+		"ok":          true,
+		"proxyActive": proxyURL != "",
+		"ipProbe":     probe,
+	})
+}
+
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
+	go probeIPs()
+
 	http.HandleFunc("/fetch", handleFetch)
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok")) //nolint:errcheck
-	})
+	http.HandleFunc("/health", handleHealth)
 
 	log.Printf("[sidecar] listening :%s  profile=Chrome_131  auth=%v  proxy=%v", port, secret != "", proxyURL != "")
 	log.Fatal(http.ListenAndServe(":"+port, nil))
