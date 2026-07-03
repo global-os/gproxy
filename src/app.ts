@@ -400,6 +400,16 @@ app.get('/storybook/*', async (c) => {
   })
 })
 
+app.get('/vite.svg', async (c) => {
+  const filePath = resolveFrontendFile('vite.svg')
+  if (!filePath) return c.notFound()
+
+  return c.body(fs.readFileSync(filePath), 200, {
+    'Content-Type': 'image/svg+xml',
+    'Cache-Control': 'public, max-age=31536000, immutable',
+  })
+})
+
 app.get('/assets/*', async (c) => {
   const relativePath = c.req.path.replace(/^\//, '')
   const filePath = resolveFrontendFile(relativePath)

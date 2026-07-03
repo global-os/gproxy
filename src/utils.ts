@@ -6,7 +6,8 @@ const appPath = (path: string) => {
   if (
     path.startsWith('/assets/') ||
     path.startsWith('/static/') ||
-    path.startsWith('/storybook')
+    path.startsWith('/storybook') ||
+    path === '/vite.svg'
   ) {
     return path
   }
