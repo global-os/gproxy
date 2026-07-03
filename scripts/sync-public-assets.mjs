@@ -18,7 +18,7 @@ if (fs.existsSync(distAssetsDir)) {
 
 // Do not copy index.html to public/ — it would be served for every hostname
 // (including *.app.onetrueos.com) and shadow instance iframes.
-for (const file of ['vite.svg']) {
+for (const file of ['vite.svg', 'favicon.ico']) {
   const source = path.join(distDir, file)
   if (fs.existsSync(source)) {
     fs.copyFileSync(source, path.join(publicDir, file))

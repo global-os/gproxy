@@ -7,7 +7,8 @@ const appPath = (path: string) => {
     path.startsWith('/assets/') ||
     path.startsWith('/static/') ||
     path.startsWith('/storybook') ||
-    path === '/vite.svg'
+    path === '/vite.svg' ||
+    path === '/favicon.ico'
   ) {
     return path
   }
