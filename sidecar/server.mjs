@@ -68,7 +68,8 @@ async function probeIps() {
 // recomputes from real request context regardless of our CDP overrides —
 // see mitm-proxy.mjs for why that needs a real TLS-terminating layer rather
 // than another CDP-level fix.
-const { port: mitmPort } = await startMitmProxy(PROXY_URL || null)
+const mitm = await startMitmProxy(PROXY_URL || null)
+const mitmPort = mitm.port
 
 const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
   channel: 'chrome',
@@ -254,6 +255,29 @@ const server = createServer(async (req, res) => {
       res.writeHead(502)
       res.end(`fetch error: ${err instanceof Error ? err.message : String(err)}`)
     }
+    return
+  }
+
+  // Debug endpoints: record the actual traffic crossing the local MITM
+  // proxy (i.e. after Chrome's own header injection and our Sec-Fetch-*
+  // corrections — ground truth, unlike the app-level HAR recorder which
+  // only ever sees the headers proxy.ts intended to send).
+  if (req.url === '/mitm/start' && req.method === 'POST') {
+    if (SECRET && req.headers.authorization !== `Bearer ${SECRET}`) { res.writeHead(401); res.end('unauthorized'); return }
+    mitm.startRecording()
+    res.writeHead(200); res.end('recording started')
+    return
+  }
+  if (req.url === '/mitm/stop' && req.method === 'POST') {
+    if (SECRET && req.headers.authorization !== `Bearer ${SECRET}`) { res.writeHead(401); res.end('unauthorized'); return }
+    mitm.stopRecording()
+    res.writeHead(200); res.end('recording stopped')
+    return
+  }
+  if (req.url === '/mitm/har' && req.method === 'GET') {
+    if (SECRET && req.headers.authorization !== `Bearer ${SECRET}`) { res.writeHead(401); res.end('unauthorized'); return }
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(mitm.exportHar()))
     return
   }
 
