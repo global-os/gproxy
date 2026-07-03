@@ -12,7 +12,6 @@
 // Fetch.continueRequest can override any header, including the forbidden
 // ones, before the request leaves Chrome.
 import { createServer } from 'node:http'
-import { randomUUID } from 'node:crypto'
 import { chromium } from 'patchright'
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
 
@@ -73,91 +72,98 @@ const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
   ...proxyLaunchOption(),
 })
 
-const page = context.pages()[0] ?? (await context.newPage())
-const cdp = await context.newCDPSession(page)
-await cdp.send('Fetch.enable', {
-  patterns: [
-    { urlPattern: '*', requestStage: 'Request' },
-    { urlPattern: '*', requestStage: 'Response' },
-  ],
-})
-
-// correlationId -> { headersObj, resolve, reject }
-const pending = new Map()
-
-cdp.on('Fetch.requestPaused', async (event) => {
-  const { requestId, request, requestStage, responseStatusCode, responseHeaders, responseErrorReason } = event
-  const corrId = request.headers?.['x-sidecar-correlation-id']
-  const entry = corrId ? pending.get(corrId) : null
-
-  if (requestStage === 'Request') {
-    if (entry) {
-      const headers = Object.entries(entry.headersObj).map(([name, value]) => ({ name, value }))
-      await cdp.send('Fetch.continueRequest', { requestId, headers }).catch(() => {})
-    } else {
-      await cdp.send('Fetch.continueRequest', { requestId }).catch(() => {})
-    }
-    return
-  }
-
-  // requestStage === 'Response'
-  if (!entry) {
-    await cdp.send('Fetch.continueRequest', { requestId }).catch(() => {})
-    return
-  }
-
-  if (responseErrorReason) {
-    pending.delete(corrId)
-    entry.reject(new Error(`network error: ${responseErrorReason}`))
-    await cdp.send('Fetch.continueRequest', { requestId }).catch(() => {})
-    return
-  }
-
-  let bodyB64 = ''
+// Each /fetch call gets its own page + CDP session, created and torn down
+// per call (reused only across a single call's own redirect chain, which is
+// sequential, never concurrent). This used to be one shared page for every
+// call, correlated by a custom "x-sidecar-correlation-id" header injected
+// into the in-page fetch() call — that was broken two ways:
+//
+//   1. Any custom header on a cross-origin fetch() forces a CORS preflight
+//      (OPTIONS). Real upstreams (X, ipify, anything) don't grant CORS
+//      permission for a made-up header, so the browser aborted the *real*
+//      request after the preflight was rejected — only the doomed preflight
+//      ever hit the network. The correlation Promise then just sat there
+//      until our own timeout fired, which is exactly the "Upstream
+//      unreachable" / request-canceled symptom seen in production.
+//   2. `event.requestStage` (used to tell the pre-send pause from the
+//      post-response pause) isn't actually a key on the Fetch.requestPaused
+//      event in practice — confirmed empirically, not just per the CDP spec
+//      docs. The reliable signal is whether `responseStatusCode` is present
+//      on the event at all.
+//
+// Fix: don't add any custom header to the *trigger* fetch() (avoids the
+// preflight for plain GET/POST entirely), and don't rely on requestStage —
+// key off `'responseStatusCode' in event` instead. Header overrides
+// (Origin/Referer/Cookie/whatever proxy.ts wants) still happen at
+// Fetch.continueRequest, which is below the JS-level CORS decision, so
+// overriding forbidden headers there doesn't retroactively trigger a
+// preflight.
+async function chromeFetchOnce(url, method, headersObj, bodyB64) {
+  const page = await context.newPage()
   try {
-    const bodyResp = await cdp.send('Fetch.getResponseBody', { requestId })
-    bodyB64 = bodyResp.base64Encoded ? bodyResp.body : Buffer.from(bodyResp.body, 'utf-8').toString('base64')
-  } catch {
-    // redirects / bodiless responses may not have a body available
+    const cdp = await context.newCDPSession(page)
+    await cdp.send('Fetch.enable', {
+      patterns: [
+        { urlPattern: '*', requestStage: 'Request' },
+        { urlPattern: '*', requestStage: 'Response' },
+      ],
+    })
+
+    return await new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => reject(new Error('sidecar fetch timeout')), FETCH_TIMEOUT_MS)
+
+      cdp.on('Fetch.requestPaused', async (event) => {
+        const { requestId, responseStatusCode, responseHeaders, responseErrorReason } = event
+        const isResponseStage = 'responseStatusCode' in event || responseErrorReason !== undefined
+
+        if (!isResponseStage) {
+          const headers = Object.entries(headersObj).map(([name, value]) => ({ name, value }))
+          await cdp.send('Fetch.continueRequest', { requestId, headers }).catch(() => {})
+          return
+        }
+
+        clearTimeout(timeoutId)
+
+        if (responseErrorReason) {
+          await cdp.send('Fetch.continueRequest', { requestId }).catch(() => {})
+          reject(new Error(`network error: ${responseErrorReason}`))
+          return
+        }
+
+        let bodyB64Resp = ''
+        try {
+          const bodyResp = await cdp.send('Fetch.getResponseBody', { requestId })
+          bodyB64Resp = bodyResp.base64Encoded ? bodyResp.body : Buffer.from(bodyResp.body, 'utf-8').toString('base64')
+        } catch {
+          // redirects / bodiless responses may not have a body available
+        }
+
+        await cdp.send('Fetch.continueRequest', { requestId }).catch(() => {})
+        resolve({
+          status: responseStatusCode,
+          headers: (responseHeaders || []).map((h) => [h.name, h.value]),
+          body: bodyB64Resp,
+        })
+      })
+
+      // No custom headers here on purpose (see comment above) — the real
+      // header set is applied above via Fetch.continueRequest instead.
+      page
+        .evaluate(
+          ({ url, method, bodyB64 }) => {
+            fetch(url, {
+              method,
+              redirect: 'manual',
+              body: bodyB64 ? Uint8Array.from(atob(bodyB64), (c) => c.charCodeAt(0)) : undefined,
+            }).catch(() => {})
+          },
+          { url, method, bodyB64 }
+        )
+        .catch(() => {}) // the in-page fetch promise is discarded; CDP events carry the real result
+    })
+  } finally {
+    await page.close().catch(() => {})
   }
-
-  pending.delete(corrId)
-  entry.resolve({
-    status: responseStatusCode,
-    headers: (responseHeaders || []).map((h) => [h.name, h.value]),
-    body: bodyB64,
-  })
-  await cdp.send('Fetch.continueRequest', { requestId }).catch(() => {})
-})
-
-/** Issue one request through the real Chrome network stack via CDP interception. */
-function chromeFetchOnce(url, method, headersObj, bodyB64) {
-  const corrId = randomUUID()
-  const resultPromise = new Promise((resolve, reject) => {
-    pending.set(corrId, { headersObj, resolve, reject })
-    setTimeout(() => {
-      if (pending.has(corrId)) {
-        pending.delete(corrId)
-        reject(new Error('sidecar fetch timeout'))
-      }
-    }, FETCH_TIMEOUT_MS)
-  })
-
-  page
-    .evaluate(
-      ({ url, method, bodyB64, corrId }) => {
-        fetch(url, {
-          method,
-          redirect: 'manual',
-          headers: { 'x-sidecar-correlation-id': corrId },
-          body: bodyB64 ? Uint8Array.from(atob(bodyB64), (c) => c.charCodeAt(0)) : undefined,
-        }).catch(() => {})
-      },
-      { url, method, bodyB64, corrId }
-    )
-    .catch(() => {}) // the in-page fetch promise is discarded; CDP events carry the real result
-
-  return resultPromise
 }
 
 /** Follow redirects ourselves (page fetch uses redirect:'manual') so callers always get the final response. */
