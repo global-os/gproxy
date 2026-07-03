@@ -30,7 +30,10 @@ type FetchResp struct {
 	Body    string      `json:"body"` // base64-encoded
 }
 
-var secret = os.Getenv("SIDECAR_SECRET")
+var (
+	secret   = os.Getenv("SIDECAR_SECRET")
+	proxyURL = os.Getenv("PROXY_URL")
+)
 
 func handleFetch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -58,11 +61,15 @@ func handleFetch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// New client per request — no session state bleeds between proxy requests.
-	client, err := tls_client.NewHttpClient(tls_client.NewNoopLogger(),
+	opts := []tls_client.HttpClientOption{
 		tls_client.WithClientProfile(profiles.Chrome_131),
 		tls_client.WithTimeoutSeconds(30),
-	)
+	}
+	if proxyURL != "" {
+		opts = append(opts, tls_client.WithProxyUrl(proxyURL))
+	}
+	// New client per request — no session state bleeds between proxy requests.
+	client, err := tls_client.NewHttpClient(tls_client.NewNoopLogger(), opts...)
 	if err != nil {
 		http.Error(w, "client error: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -126,6 +133,6 @@ func main() {
 		w.Write([]byte("ok")) //nolint:errcheck
 	})
 
-	log.Printf("[sidecar] listening :%s  profile=Chrome_131  auth=%v", port, secret != "")
+	log.Printf("[sidecar] listening :%s  profile=Chrome_131  auth=%v  proxy=%v", port, secret != "", proxyURL != "")
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

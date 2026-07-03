@@ -2,6 +2,12 @@
 
 The sidecar is a Go HTTP server that makes upstream requests with Chrome 131's TLS fingerprint, bypassing Cloudflare Bot Management's JA3/JA4 detection. It lives in `sidecar/` and runs on a cheap Vultr VM.
 
+To fully bypass X/Instagram detection you need **both**:
+- **Sidecar** — Chrome TLS fingerprint (JA3/JA4 impersonation)
+- **Residential proxy** — non-datacenter IP (Vultr IPs are blocked the same as Vercel/AWS)
+
+The request chain is: **Vercel → sidecar → residential proxy → upstream**
+
 ## 1. Create the VM
 
 In the Vultr dashboard:
@@ -16,6 +22,7 @@ In the Vultr dashboard:
 ```bash
 ssh root@<vultr-ip>
 curl -fsSL https://get.docker.com | sh
+systemctl enable docker   # auto-start on reboot
 ```
 
 ## 3. Clone the repo and build
@@ -37,9 +44,12 @@ docker run -d \
   --restart=always \
   -p 8080:8080 \
   -e SIDECAR_SECRET=<your-secret> \
+  -e PROXY_URL=<residential-proxy-url> \
   --name proxy-sidecar \
   proxy-sidecar
 ```
+
+`PROXY_URL` format: `http://user:pass@host:port` or `socks5://user:pass@host:port`. Omit if you don't have one yet — the sidecar still provides TLS impersonation without it.
 
 Verify it's running:
 
@@ -48,7 +58,7 @@ curl http://localhost:8080/health
 # => ok
 
 docker logs proxy-sidecar
-# => [sidecar] listening :8080  profile=Chrome_131  auth=true
+# => [sidecar] listening :8080  profile=Chrome_131  auth=true  proxy=true
 ```
 
 ## 5. Add env vars to Vercel
@@ -59,6 +69,8 @@ In the Vercel dashboard → Project → Settings → Environment Variables (add 
 |-----|-------|
 | `SIDECAR_URL` | `http://<vultr-ip>:8080` |
 | `SIDECAR_SECRET` | same secret as above |
+
+`PROXY_URL` stays on the sidecar (not Vercel) — the sidecar is now the one making outbound requests.
 
 Then redeploy for the vars to take effect.
 
@@ -83,6 +95,7 @@ docker run -d \
   --restart=always \
   -p 8080:8080 \
   -e SIDECAR_SECRET=<your-secret> \
+  -e PROXY_URL=<residential-proxy-url> \
   --name proxy-sidecar \
   proxy-sidecar
 ```
@@ -92,6 +105,8 @@ docker run -d \
 | Symptom | Check |
 |---------|-------|
 | `docker build` fails with `requires go >= 1.24.1` | Dockerfile must use `golang:1.24-bookworm` — pull latest and rebuild |
+| `docker build` fails with `cannot use upReq... as *fhttp.Request` | Pull latest — fixed in commit d39bbc3 |
 | Vercel logs show `sidecar 502` | Check VM firewall allows port 8080 inbound; `docker logs proxy-sidecar` for errors |
-| `ct0` still deleted | Confirm `SIDECAR_URL` is set and the redeploy picked it up; check for `TLS sidecar active` in logs |
+| `ct0` still deleted after sidecar active | Residential proxy (`PROXY_URL`) not set on sidecar — Vultr datacenter IP is blocked by X |
+| `ct0` still deleted with both set | Check `proxy=true` in sidecar startup logs; verify residential proxy is not a VPN/datacenter range |
 | Sidecar unreachable from Vercel | Vultr firewall may be blocking port 8080 — add a rule to allow TCP 8080 from anywhere |
