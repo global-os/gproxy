@@ -402,9 +402,17 @@ const cross = extractCrossDomain(upstreamPath)
   }
   forwardHeaders.set(
     'User-Agent',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36',
   )
-  // Match Chrome 131's Accept-Encoding for fingerprint compatibility.
+  // Real Chrome sends these low-entropy client hints on every request; we
+  // stripped the browser's own values above (they'd reveal the cross-origin
+  // iframe context), so replace with values consistent with the User-Agent
+  // and the sidecar's TLS profile. Their absence is a stronger bot signal
+  // than TLS fingerprinting alone — Chrome never omits them.
+  forwardHeaders.set('sec-ch-ua', '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"')
+  forwardHeaders.set('sec-ch-ua-mobile', '?0')
+  forwardHeaders.set('sec-ch-ua-platform', '"macOS"')
+  // Match Chrome's Accept-Encoding for fingerprint compatibility.
   // We manually decompress br below if undici doesn't handle it automatically.
   forwardHeaders.set('Accept-Encoding', 'gzip, deflate, br, zstd')
 

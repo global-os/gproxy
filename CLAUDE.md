@@ -216,22 +216,24 @@ Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides, `PROXY_URL`
 - `forwarded`, `x-forwarded-for/host/proto`, `x-real-ip` — Vercel injects these on every inbound request; forwarding them tells upstream we're a proxy.
 - All `x-vercel-*` headers (matched by prefix) — Vercel injects deployment metadata (e.g. `x-vercel-deployment-url`) that trivially identifies the request as coming from Vercel infrastructure. **This was the root cause of X's "Please use X.com or official X apps" error.**
 
-**Accept-Encoding:** Must be set to `gzip, deflate, br, zstd` to match Chrome 131's fingerprint. Cloudflare uses this value as a bot-detection signal. We send it explicitly (stripping whatever the browser sent) and manually decompress brotli responses in case undici doesn't handle `br` automatically.
+**Accept-Encoding:** Must be set to `gzip, deflate, br, zstd` to match current Chrome's fingerprint. Cloudflare uses this value as a bot-detection signal. We send it explicitly (stripping whatever the browser sent) and manually decompress brotli responses in case undici doesn't handle `br` automatically.
+
+**Client hints (`sec-ch-ua*`):** Real Chrome sends `sec-ch-ua`, `sec-ch-ua-mobile`, `sec-ch-ua-platform` on every single request — these are stripped from the incoming browser request (see `HOP_BY_HOP` above, since the real values would reveal the cross-origin iframe context) but must be **replaced**, not just dropped. A request claiming to be Chrome via `User-Agent` while missing these headers entirely is a stronger, simpler bot signal than TLS JA3/JA4 mismatches. Keep the version numbers in these headers, the `User-Agent` string, and the sidecar's TLS profile (below) all in agreement with a current Chrome release.
 
 **IP-based blocking:** Sites like X and Instagram reject requests from known datacenter IPs (Vercel runs on AWS). Set `PROXY_URL` to an outbound HTTP/SOCKS5 residential proxy. Mullvad and VPN ranges are also typically blocked. The proxy passes `PROXY_URL` as the `dispatcher` to undici's `fetch`. Note: `PROXY_URL` only masks the IP — the TLS handshake still originates from Node.js and carries its own fingerprint (see below).
 
 **TLS fingerprinting:** Cloudflare Bot Management fingerprints the TLS ClientHello (JA3/JA4 — cipher suites, extensions, ordering). Node.js/undici produces a fingerprint that Cloudflare identifies as non-Chrome. Even through a residential proxy, the TLS handshake goes directly from our Node.js process to upstream. Symptoms: X deletes the `ct0` CSRF cookie on every page load, blocking login. Cloudflare returns 403 HTML challenge pages for some endpoints.
 
-**TLS sidecar** (`sidecar/`): Go HTTP server wrapping the `tls-client` library with a Chrome 131 TLS profile. When `SIDECAR_URL` is set, Vercel routes all upstream fetches through it instead of direct undici. Auth via `SIDECAR_SECRET` (Bearer token). The sidecar omits `Accept-Encoding` so Go's http transport sends gzip and auto-decompresses — callers always receive a decoded body with no `Content-Encoding`. Deployed on a Vultr VM; see deployment steps below.
+**TLS sidecar** (`sidecar/`): Go HTTP server wrapping the `tls-client` library with a Chrome 146 TLS profile (`profiles.Chrome_146` — the newest Chrome profile the library ships as of this writing; re-check periodically since real Chrome moves faster than the library adds profiles, and an outdated profile is itself a soft bot signal). When `SIDECAR_URL` is set, Vercel routes all upstream fetches through it instead of direct undici. Auth via `SIDECAR_SECRET` (Bearer token). The sidecar omits `Accept-Encoding` so Go's http transport sends gzip and auto-decompresses — callers always receive a decoded body with no `Content-Encoding`. Deployed on a Vultr VM running **NixOS**, container runtime is **podman** (`virtualisation.podman.enable = true;` in `configuration.nix`, not Docker); see `SETUP_SIDECAR.md` and deployment steps below.
 
 Deploying on Vultr (one-time setup):
 ```bash
-# 1. Create Ubuntu 24.04 VM (1 vCPU / 1GB RAM) in Vultr dashboard
-# 2. SSH in
-curl -fsSL https://get.docker.com | sh
+# 1. Create NixOS VM (1 vCPU / 1GB RAM) in Vultr dashboard
+# 2. SSH in; enable podman via configuration.nix, then `nixos-rebuild switch`
+#    (virtualisation.podman.enable = true; networking.firewall.allowedTCPPorts = [ 8080 ];)
 git clone https://github.com/global-os/proxy && cd proxy
-docker build -t proxy-sidecar ./sidecar/
-docker run -d --restart=always -p 8080:8080 \
+podman build -t proxy-sidecar ./sidecar/
+podman run -d --restart=always -p 8080:8080 \
   -e SIDECAR_SECRET=<strong-random-secret> \
   --name proxy-sidecar proxy-sidecar
 # 3. Add to Vercel env vars (both production and preview)
@@ -241,11 +243,13 @@ docker run -d --restart=always -p 8080:8080 \
 
 Updating after code changes:
 ```bash
-git pull && docker build -t proxy-sidecar ./sidecar/ && \
-  docker stop proxy-sidecar && docker rm proxy-sidecar && \
-  docker run -d --restart=always -p 8080:8080 \
+git pull && podman build -t proxy-sidecar ./sidecar/ && \
+  podman stop proxy-sidecar && podman rm proxy-sidecar && \
+  podman run -d --restart=always -p 8080:8080 \
     -e SIDECAR_SECRET=<secret> --name proxy-sidecar proxy-sidecar
 ```
+
+There's no Quadlet/systemd unit managing this container — it's run imperatively, so `stop && rm` reliably clears it before the next `run`. If `run` ever fails with "name already in use" repeatedly under different container IDs, that's orphaned containers from earlier failed attempts, not an auto-respawning service — clear them with `podman rm -f $(podman ps -aq --filter name=proxy-sidecar)` and retry once.
 
 **Castle.io webpack stub (X-specific):** X's bot-detection SDK (`ondemand.castle.*.js`) is a webpack chunk that crashes in the cross-origin iframe context. The proxy intercepts it by filename regex, parses the chunk with `acorn` to extract the webpack chunk array name, chunk IDs, and module IDs, then returns a no-op stub: `(self["webpackChunk_twitter_responsive_web"]=...).push([[chunkId],{moduleId:function(){}}])`. This prevents the `ChunkLoadError` that would otherwise cascade and break the login UI.
 

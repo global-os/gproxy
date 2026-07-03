@@ -50,7 +50,7 @@ var (
 
 func newClient(withProxy bool) (tls_client.HttpClient, error) {
 	opts := []tls_client.HttpClientOption{
-		tls_client.WithClientProfile(profiles.Chrome_131),
+		tls_client.WithClientProfile(profiles.Chrome_146),
 		tls_client.WithTimeoutSeconds(15),
 	}
 	if withProxy && proxyURL != "" {
@@ -213,6 +213,6 @@ func main() {
 	http.HandleFunc("/fetch", handleFetch)
 	http.HandleFunc("/health", handleHealth)
 
-	log.Printf("[sidecar] listening :%s  profile=Chrome_131  auth=%v  proxy=%v", port, secret != "", proxyURL != "")
+	log.Printf("[sidecar] listening :%s  profile=Chrome_146  auth=%v  proxy=%v", port, secret != "", proxyURL != "")
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

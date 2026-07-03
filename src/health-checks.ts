@@ -88,15 +88,18 @@ export async function probeSidecar(timeoutMs = 5_000): Promise<SidecarProbeResul
       ipProbe?: { serverIp?: string; proxyIp?: string; proxyOk?: boolean; checked?: boolean }
     } | null
     const proxyIp = body?.ipProbe?.proxyIp
+    const ipsMatch = vercelProxyIp != null ? vercelProxyIp === proxyIp : undefined
+    const ok = ipsMatch !== false
     return {
       configured: true,
-      ok: true,
+      ok,
       ms: Date.now() - start,
       proxyActive: body?.proxyActive,
       proxyOk: body?.ipProbe?.proxyOk,
       serverIp: body?.ipProbe?.serverIp,
       proxyIp,
-      ...(vercelProxyIp != null ? { vercelProxyIp, ipsMatch: vercelProxyIp === proxyIp } : {}),
+      ...(vercelProxyIp != null ? { vercelProxyIp, ipsMatch } : {}),
+      ...(ipsMatch === false ? { error: `IP mismatch: vercel proxy egress ${vercelProxyIp} !== sidecar egress ${proxyIp}` } : {}),
     }
   } catch (err) {
     return { configured: true, ok: false, ms: Date.now() - start, error: err instanceof Error ? err.message : String(err) }
