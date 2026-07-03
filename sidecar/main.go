@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 
+	fhttp "github.com/bogdanfinn/fhttp"
 	tls_client "github.com/bogdanfinn/tls-client"
 	"github.com/bogdanfinn/tls-client/profiles"
 )
@@ -72,7 +73,8 @@ func handleFetch(w http.ResponseWriter, r *http.Request) {
 		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
-	upReq, err := http.NewRequest(req.Method, req.URL, bodyReader)
+	// tls-client uses its own fhttp fork — must use fhttp.NewRequest, not net/http.
+	upReq, err := fhttp.NewRequest(req.Method, req.URL, bodyReader)
 	if err != nil {
 		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
 		return
