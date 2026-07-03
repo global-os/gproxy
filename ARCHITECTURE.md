@@ -9,27 +9,17 @@ A `.gapp` can embed a real external site (X, Instagram, YouTube) inside a Global
 ## End-to-end request flow
 
 ```mermaid
-sequenceDiagram
-    participant U as Real user's browser<br/>(iframe on {slug}.app.onetrueos.com)
-    participant V as Vercel (Hono app)<br/>proxyWebviewRequest
-    participant S as Sidecar (Hetzner)<br/>server.mjs
-    participant M as Local MITM proxy<br/>mitm-proxy.mjs
-    participant P as Residential proxy<br/>(Decodo)
-    participant X as Upstream (x.com)
-
-    U->>V: GET/POST to our domain
-    Note over V: Rewrite Origin/Referer to bound domain<br/>strip Vercel/hop-by-hop headers<br/>set sec-ch-ua/UA to match Chrome profile
-    V->>S: POST /fetch {url, method, headers, body}
-    Note over S: New page + CDP session per call.<br/>Trigger fetch() with NO custom headers<br/>(avoids CORS preflight) — real headers<br/>applied via Fetch.continueRequest instead
-    S->>M: Chrome's real network request
-    Note over M: Correct Sec-Fetch-* (Chrome recomputes<br/>these from real context regardless of<br/>CDP overrides — fixed here instead)
-    M->>P: forward (holds real proxy credentials —<br/>Chrome never sees them, avoids CDP/proxy-auth conflict)
-    P->>X: request with residential exit IP
-    X-->>P-->>M-->>S: response
-    S-->>V: {status, headers, body}
-    Note over V: Rewrite Set-Cookie, strip CSP/X-Frame-Options,<br/>inject intercept script into HTML
-    V-->>U: response
+flowchart LR
+    U[Real user's browser<br/>iframe on our domain] <--> V["Vercel<br/>webview proxy"]
+    subgraph H[Hetzner · NixOS]
+        direction LR
+        S[Sidecar<br/>real Chrome + CDP] --> M[MITM proxy]
+    end
+    V <--> S
+    M <--> O[Outside world<br/>residential proxy → x.com]
 ```
+
+Vercel spoofs headers (Origin/Referer/UA/sec-ch-ua) and rewrites paths, then hands the request to the sidecar. The sidecar's real Chrome does the actual fetch over CDP; its outbound traffic passes through the local MITM proxy, which corrects headers Chrome recomputes on its own (see below) and holds the real residential-proxy credentials so Chrome never has to. The response flows back the same way, and Vercel rewrites `Set-Cookie`/strips CSP before it reaches the iframe.
 
 ## Why a sidecar at all
 
