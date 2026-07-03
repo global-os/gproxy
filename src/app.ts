@@ -40,7 +40,7 @@ import { frontendDistRoot, readFrontendFile, resolveFrontendFile } from './front
 import { resolveStorybookFile } from './storybook-paths.js'
 import { benchmarkScrypt } from './crypto/password.js'
 import { checkAppTables, checkAuthTables, pingDatabase, pingPool, pool, probeDrizzleUserLookup, probeUserLookup } from './db/index.js'
-import { checkConfig, checkFrontendBundle, checkProxyUrl, probeAuthHandler } from './health-checks.js'
+import { checkConfig, checkFrontendBundle, checkProxyUrl, probeAuthHandler, probeSidecar } from './health-checks.js'
 import { LaunchError } from './services/errors.js'
 import { deleteWorkspace } from './services/workspace-access.js'
 import { readRegistryLib } from './gapp/resolve-lib-deps.js'
@@ -215,13 +215,14 @@ app.get('/health', async (c) => {
   const frontend = checkFrontendBundle()
   const proxy = checkProxyUrl()
 
-  const [direct, pooled, authTables, appTables, userLookup, authProbe] = await Promise.all([
+  const [direct, pooled, authTables, appTables, userLookup, authProbe, sidecar] = await Promise.all([
     pingDatabase(),
     pingPool(),
     checkAuthTables(),
     checkAppTables(),
     probeUserLookup(),
     probeAuthHandler(c.req.url),
+    probeSidecar(),
   ])
 
   const ok =
@@ -233,7 +234,8 @@ app.get('/health', async (c) => {
     authTables.ok &&
     appTables.ok &&
     userLookup.ok &&
-    authProbe.ok
+    authProbe.ok &&
+    sidecar.ok
 
   return c.json(
     {
@@ -241,6 +243,7 @@ app.get('/health', async (c) => {
       config,
       frontend,
       proxy,
+      sidecar,
       database: direct,
       pool: pooled,
       authTables,

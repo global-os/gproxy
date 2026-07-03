@@ -7,6 +7,7 @@ export type ConfigCheck = { ok: boolean; missing: string[] }
 export type ProxyCheck = { configured: boolean; ok: boolean; error?: string }
 export type BundleCheck = { ok: boolean; missing: string[] }
 export type AuthProbeResult = { ok: boolean; ms: number; status?: number; error?: string }
+export type SidecarProbeResult = { configured: boolean; ok: boolean; ms: number; error?: string }
 
 const REQUIRED_ENV = ['DATABASE_URL', 'BETTER_AUTH_SECRET'] as const
 
@@ -38,6 +39,22 @@ export function checkFrontendBundle(): BundleCheck {
     path.relative(process.cwd(), filePath)
   )
   return { ok: missing.length === 0, missing }
+}
+
+export async function probeSidecar(timeoutMs = 5_000): Promise<SidecarProbeResult> {
+  const url = process.env.SIDECAR_URL?.replace(/\/$/, '')
+  if (!url) return { configured: false, ok: true, ms: 0 }
+  const start = Date.now()
+  try {
+    const res = await Promise.race([
+      fetch(`${url}/health`),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+    ])
+    const ok = res.ok
+    return { configured: true, ok, ms: Date.now() - start, ...(ok ? {} : { error: `status ${res.status}` }) }
+  } catch (err) {
+    return { configured: true, ok: false, ms: Date.now() - start, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 export async function probeAuthHandler(baseUrl: string, timeoutMs = 5_000): Promise<AuthProbeResult> {
