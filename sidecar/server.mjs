@@ -14,7 +14,7 @@
 import { createServer } from 'node:http'
 import { chromium } from 'patchright'
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
-import { anonymizeProxy } from 'proxy-chain'
+import { startMitmProxy } from './mitm-proxy.mjs'
 
 const PORT = process.env.PORT || 8080
 const SECRET = process.env.SIDECAR_SECRET || ''
@@ -60,25 +60,26 @@ async function probeIps() {
 // with no proxy configured hangs indefinitely once a proxy with
 // credentials is set, for any URL, not just specific sites.
 //
-// Fix (a standard workaround for this exact Puppeteer/Playwright +
-// authenticated-proxy + custom-interception conflict): use proxy-chain to
-// spin up a local anonymous proxy that forwards to the real authenticated
-// upstream. Chrome then connects with zero credentials, so it never
-// engages its own internal proxy-auth handling in the first place.
-async function proxyLaunchOption() {
-  if (!PROXY_URL) return {}
-  const anonymizedUrl = await anonymizeProxy(PROXY_URL)
-  console.log('[sidecar] anonymized proxy at', anonymizedUrl)
-  return { proxy: { server: anonymizedUrl } }
-}
+// Fix: run a local MITM proxy (mitm-proxy.mjs) that itself holds the real
+// upstream proxy credentials (as a plain Node process, not Chrome — no CDP
+// conflict there) and forwards to it. Chrome connects to this local,
+// unauthenticated proxy and never engages its own internal proxy-auth
+// handling. The same proxy also corrects Sec-Fetch-* headers that Chrome
+// recomputes from real request context regardless of our CDP overrides —
+// see mitm-proxy.mjs for why that needs a real TLS-terminating layer rather
+// than another CDP-level fix.
+const { port: mitmPort } = await startMitmProxy(PROXY_URL || null)
 
 const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
   channel: 'chrome',
   headless: true,
   userAgent: USER_AGENT,
   viewport: { width: 1920, height: 1080 },
-  args: ['--no-sandbox'], // required running as root in a container
-  ...(await proxyLaunchOption()),
+  args: [
+    '--no-sandbox', // required running as root in a container
+    '--ignore-certificate-errors', // trust our local MITM proxy's self-signed certs
+  ],
+  proxy: { server: `http://127.0.0.1:${mitmPort}` },
 })
 
 // Each /fetch call gets its own page + CDP session, created and torn down

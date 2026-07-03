@@ -10,3 +10,5 @@ src/frontend/storybook-static
 fixtures/tar-examples/**
 !fixtures/tar-examples/.gitkeep
 src/gapp/registry/*.js
+*.har
+sidecar/.http-mitm-proxy
