@@ -12,3 +12,4 @@ fixtures/tar-examples/**
 src/gapp/registry/*.js
 *.har
 sidecar/.http-mitm-proxy
+.DS_Store
