@@ -34,14 +34,6 @@ window.addEventListener('message', function(event) {
   }
 
   if (data.type === 'webview:create:complete' && data.requestId === pendingRequestId) {
-    window.parent.postMessage({
-      type: 'save',
-      filename: '.webview-state',
-      content: JSON.stringify({ webviewId: data.webviewId }),
-      webviewId: data.webviewId,
-      domain: data.domain,
-      proxyOrigin: data.proxyOrigin,
-    }, '*')
     showFrame(data.proxyOrigin)
     return
   }
