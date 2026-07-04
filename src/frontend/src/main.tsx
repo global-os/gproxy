@@ -40,6 +40,20 @@ function RouteError({ error, reset }: ErrorComponentProps) {
   )
 }
 
+// Stale client after a deploy: the already-loaded index.html references JS
+// chunks by content hash, which a new build changes/removes, so a later
+// dynamic import (route-level code splitting) 404s with exactly this event.
+// Vite dispatches this specifically for that case — reload once to pick up
+// the current index.html referencing the current hashes. Guarded by
+// sessionStorage so a genuinely broken deploy (not just a stale client)
+// fails loudly via RouteError below instead of reload-looping forever.
+window.addEventListener('vite:preloadError', () => {
+  const key = 'globalos:reloaded-after-preload-error'
+  if (sessionStorage.getItem(key)) return
+  sessionStorage.setItem(key, '1')
+  window.location.reload()
+})
+
 console.log('main.tsx')
 
 const router = createRouter({
@@ -67,3 +81,13 @@ root.render(
     <RouterProvider router={router} />
   </StrictMode>
 )
+
+// If we got this far without hitting another preload error, this load (be it
+// the first one or a post-reload retry) is healthy — clear the guard so a
+// later, unrelated preload error (a subsequent deploy, much later in this
+// same long-lived tab) can still trigger its own single auto-reload rather
+// than being silently blocked by a flag from an incident that already
+// resolved.
+window.setTimeout(() => {
+  sessionStorage.removeItem('globalos:reloaded-after-preload-error')
+}, 5000)
