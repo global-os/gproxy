@@ -552,14 +552,20 @@ const cross = extractCrossDomain(upstreamPath)
   const isHtml = contentType.includes('text/html')
 
   if (!isHtml) {
-    // Castle.io is X's bot-detection SDK. It crashes inside the proxy iframe
-    // context (cross-origin parent access), which prevents login. We intercept
-    // the chunk, preserve the webpack registration wrapper so the bundle doesn't
-    // throw ChunkLoadError, but replace every module body with a no-op so the
-    // fingerprinting code never runs.
+    // Castle.io is X's bot-detection SDK. Per the (unconfirmed, see
+    // CASTLE_TOKEN.md) original investigation, it crashes inside the proxy
+    // iframe context (cross-origin parent access), which prevents login. We
+    // intercept the chunk, preserve the webpack registration wrapper so the
+    // bundle doesn't throw ChunkLoadError, but replace every module body
+    // with a no-op so the fingerprinting code never runs. Side effect: this
+    // also means Castle never generates the $castle_token X's begin_login
+    // endpoint expects, which is the likely actual cause of the "Please use
+    // X.com or official X apps" login error — see CASTLE_TOKEN.md.
+    // CASTLE_DEBUG_REAL=1 serves the real, unstubbed script instead, for
+    // testing whether the crash still reproduces.
     if (/castle\.[a-f0-9]+\.js$/.test(upstreamPath)) {
       const realScript = await upstreamResponse.text()
-      const stub = extractWebpackChunkStub(realScript)
+      const stub = process.env.CASTLE_DEBUG_REAL === '1' ? null : extractWebpackChunkStub(realScript)
       console.log('[castle] stub:', stub ? stub.slice(0, 120) : 'none — returning real script')
       responseHeaders.set('Content-Type', 'application/javascript')
       responseHeaders.delete('content-length')

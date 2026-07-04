@@ -91,6 +91,15 @@ didn't fix anything — worth deciding whether to keep skipping the title
 screen as a UX choice on its own merits, or revert now that it's not
 serving a diagnostic purpose.
 
+**Reconfirmed a fourth time**, first occurrence caught in real Chrome rather
+than Firefox (`Chrome/150.0.0.0`, still `inIframe: true`) — same exact
+site and call stack (`P_PlayerThink` → `P_Ticker` → ... → `dynCall_v` →
+`wrapper` → `iterFunc` → `callUserCallback`), same timing pattern (boot at
+`12:27:15`, `Running...`/game-start print around `12:27:31`, crash shortly
+after). Two Firefox + two Chrome occurrences now, all identical — about as
+thoroughly cross-engine-confirmed as this gets without a deterministic
+repro.
+
 **It is not reliably reproducible.** Many identical-looking runs complete
 fine; one run (with debug logging added, which changes per-frame JS timing
 slightly) crashed within the first tic. This smells like a genuine,
