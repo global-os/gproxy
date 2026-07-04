@@ -1,0 +1,78 @@
+diff --git a/configure.ac b/configure.ac
+index ae1320b..c456188 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -115,7 +115,7 @@ AS_IF([test "x$with_libpng" != xno], [
+ 
+ # TODO: We currently link everything against libraries that don't need it.
+ # Use the specific library CFLAGS/LIBS variables instead of setting them here.
+-EMFLAGS="-gsource-map -s INVOKE_RUN=1 -s USE_SDL=2 -s USE_SDL_MIXER=2 -s LEGACY_GL_EMULATION=0 -s USE_SDL_NET=2 -s ASSERTIONS=0 -s WASM=1 -s ALLOW_MEMORY_GROWTH=0 -s FORCE_FILESYSTEM=1 -s EXTRA_EXPORTED_RUNTIME_METHODS=[['FS','ccall']] -s SAFE_HEAP=1 -s EXIT_RUNTIME=1 -s STACK_OVERFLOW_CHECK=1 -s PROXY_POSIX_SOCKETS=0 -s USE_PTHREADS=0 -s PROXY_TO_PTHREAD=0 -s TOTAL_MEMORY=64MB -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s ASYNCIFY -O3 --source-map-base /"
++EMFLAGS="-gsource-map -s INVOKE_RUN=1 -s USE_SDL=2 -s USE_SDL_MIXER=2 -s LEGACY_GL_EMULATION=0 -s USE_SDL_NET=2 -s ASSERTIONS=0 -s WASM=1 -s ALLOW_MEMORY_GROWTH=0 -s FORCE_FILESYSTEM=1 -s EXPORTED_RUNTIME_METHODS=['FS','ccall'] -s EXIT_RUNTIME=1 -s STACK_OVERFLOW_CHECK=1 -s PROXY_POSIX_SOCKETS=0 -s USE_PTHREADS=0 -s PROXY_TO_PTHREAD=0 -s TOTAL_MEMORY=64MB -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s ASYNCIFY -O3 --source-map-base /"
+ 
+ CFLAGS="$CFLAGS $SDL_CFLAGS ${SAMPLERATE_CFLAGS:-} ${PNG_CFLAGS:-} $EMFLAGS"
+ LDFLAGS="$LDFLAGS $SDL_LIBS ${SAMPLERATE_LIBS:-} ${PNG_LIBS:-} $EMFLAGS -lwebsocket.js"
+diff --git a/src/doom/p_user.c b/src/doom/p_user.c
+index 772871e..39a9439 100644
+--- a/src/doom/p_user.c
++++ b/src/doom/p_user.c
+@@ -27,6 +27,7 @@
+ #include "p_local.h"
+ 
+ #include "doomstat.h"
++#include "r_state.h"
+ 
+ 
+ 
+@@ -264,7 +265,14 @@ void P_PlayerThink (player_t* player)
+     
+     P_CalcHeight (player);
+ 
+-    if (player->mo->subsector->sector->special)
++    // Defensive bounds check: mo->subsector has intermittently been observed
++    // holding an invalid pointer here in the WASM build (out-of-bounds
++    // memory trap dereferencing it), root cause not yet confirmed. Skip
++    // rather than crash if it's not a valid subsectors[] entry.
++    if (player->mo->subsector != NULL
++	&& player->mo->subsector >= subsectors
++	&& player->mo->subsector < subsectors + numsubsectors
++	&& player->mo->subsector->sector->special)
+ 	P_PlayerInSpecialSector (player);
+     
+     // Check for weapon change.
+diff --git a/src/doom/r_things.c b/src/doom/r_things.c
+index b9e879c..4410bdd 100644
+--- a/src/doom/r_things.c
++++ b/src/doom/r_things.c
+@@ -32,6 +32,7 @@
+ #include "w_wad.h"
+ 
+ #include "r_local.h"
++#include "r_state.h"
+ 
+ #include "doomstat.h"
+ 
+@@ -742,9 +743,21 @@ void R_DrawPlayerSprites (void)
+     pspdef_t*	psp;
+     
+     // get light level
+-    lightnum =
+-	(viewplayer->mo->subsector->sector->lightlevel >> LIGHTSEGSHIFT) 
+-	+extralight;
++    // Defensive bounds check: same intermittent invalid mo->subsector issue
++    // as p_user.c's P_PlayerThink (root cause not yet confirmed) — fall back
++    // to light level 0 rather than crash if it's not a valid subsectors[] entry.
++    if (viewplayer->mo->subsector != NULL
++	&& viewplayer->mo->subsector >= subsectors
++	&& viewplayer->mo->subsector < subsectors + numsubsectors)
++    {
++	lightnum =
++	    (viewplayer->mo->subsector->sector->lightlevel >> LIGHTSEGSHIFT)
++	    +extralight;
++    }
++    else
++    {
++	lightnum = extralight;
++    }
+ 
+     if (lightnum < 0)		
+ 	spritelights = scalelight[0];

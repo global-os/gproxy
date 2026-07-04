@@ -120,15 +120,39 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
   let imageId = row.image_id
   let checksum = row.directory_checksum
 
-  // Detect stale image: verify the stored checksum matches the current directory.
+  // Detect stale image: verify the stored checksum matches the current directory,
+  // AND that the image was actually built under the current compiler/build SHA.
   // This must run before the bundle cache check — the cache uses the stored checksum
   // and would incorrectly serve a stale bundle if the directory has since changed.
+  //
+  // Directory-content staleness alone isn't enough: getOrCreateImage's own
+  // cache_key is scoped to imageCacheKey(sha, dirHash), correctly rebuilding
+  // when the compiler changes even if the .gapp's own files haven't — but that
+  // only helps if getOrCreateImage actually gets called again. Once an
+  // instance's image_id is set, it was previously reused forever as long as
+  // the directory hash matched, silently pinning it to whatever compileGappTree
+  // output existed the first time this instance's image was built — a fix to
+  // compileGappTree (or the registry it reads from) would never reach an
+  // already-launched instance until its .gapp directory *also* happened to
+  // change, even though a correctly-recompiled image was one getOrCreateImage
+  // call away. Comparing the image's own stored cache_key here closes that gap.
   if (imageId && checksum !== PENDING_INSTANCE_CHECKSUM) {
     const currentHash = await hashDir(processRow.directory_id)
     if (currentHash !== checksum) {
       console.log(`[instance] directory changed for ${instanceId}, rebuilding image`)
       imageId = null
       checksum = PENDING_INSTANCE_CHECKSUM
+    } else {
+      const [imageMeta] = await db
+        .select({ cache_key: schema.image.cache_key })
+        .from(schema.image)
+        .where(eq(schema.image.id, imageId))
+        .limit(1)
+      if (imageMeta?.cache_key !== imageCacheKey(checksum)) {
+        console.log(`[instance] image cache_key stale for ${instanceId} (build changed), rebuilding image`)
+        imageId = null
+        checksum = PENDING_INSTANCE_CHECKSUM
+      }
     }
   }
 
