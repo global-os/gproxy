@@ -49,6 +49,14 @@ V8 hitting the *exact same crash site* means this is almost certainly a real
 out-of-bounds access in the compiled game code itself, not something
 specific to one WASM implementation's timing or JIT behavior.
 
+**Reconfirmed a third time**, same instance, same site (`P_PlayerThink`,
+called from the `MainLoop_runner`/`iterFunc` scheduler this time rather than
+directly off `dynCall_v` — same simulation code, just caught mid-tic via a
+different Asyncify entry point), same ~5s-after-`emscripten_set_main_loop()`
+timing. Consistent enough now to stop treating this as a fluke; the open
+question is still *which* struct/field access in `player_t`/`mobj_t` is
+unaligned or out of bounds, not *whether* one exists.
+
 This happened ~100ms after boot (`P_PlayerThink` runs every game tic — the
 title screen's automatic demo playback drives a live player object through
 the real simulation, same as actual gameplay) — consistent with reports of
