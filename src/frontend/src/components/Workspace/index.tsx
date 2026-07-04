@@ -235,6 +235,19 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
       })
   }, [])
 
+  const onDeleteItem = useCallback((item: DesktopItem) => {
+    if (!window.confirm(`Delete "${item.name}"? This can't be undone.`)) return
+    setContextMenu(null)
+    void fetch('/api/syscalls', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'fs.delete', entryType: item.type, id: item.id }),
+    }).then((r) => {
+      if (r.ok) window.dispatchEvent(new CustomEvent('globalos:desktop-updated'))
+    })
+  }, [])
+
   const { data: desktopData } = useQuery<DesktopApiResponse>({
     queryKey: ['desktop', workspaceId],
     queryFn: async () => {
@@ -443,8 +456,23 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
         <ContextMenu x={contextMenu.x} y={contextMenu.y}>
           <div style={{ fontWeight: 600, marginBottom: '4px', userSelect: 'none' }}>{contextMenu.item.name}</div>
           <div style={{ color: '#888', marginBottom: '2px', userSelect: 'none' }}>checksum</div>
-          <div style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+          <div style={{ fontFamily: 'monospace', wordBreak: 'break-all', marginBottom: '8px' }}>
             {contextMenu.checksum ?? '…'}
+          </div>
+          <div
+            onClick={() => onDeleteItem(contextMenu.item)}
+            style={{
+              margin: '0 -12px -8px',
+              padding: '6px 12px',
+              borderTop: '1px solid #eee',
+              color: '#c0392b',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#f5f5f5' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+          >
+            Delete
           </div>
         </ContextMenu>
       )}
