@@ -7,13 +7,23 @@ import { getActiveSessionId, captureResponseBody, recordTraffic } from './record
 const brotliDecompressAsync = promisify(brotliDecompress)
 
 let outboundProxy: ProxyAgent | null = null
+let outboundProxyUrlRedacted: string | null = null
 if (process.env.PROXY_URL) {
   try {
     outboundProxy = new ProxyAgent(process.env.PROXY_URL)
-    console.log('[webview] outbound proxy active:', process.env.PROXY_URL.replace(/:([^@]+)@/, ':***@'))
+    outboundProxyUrlRedacted = process.env.PROXY_URL.replace(/:([^@]+)@/, ':***@')
+    console.log('[webview] outbound proxy active:', outboundProxyUrlRedacted)
   } catch (err) {
     console.error('[webview] PROXY_URL is invalid, outbound proxy disabled:', err)
   }
+}
+
+// Built once at module load from the static PROXY_URL env var — does NOT
+// reflect admin-panel changes (those only update the DB-backed proxy_config
+// row, which the sidecar polls but this direct-fetch path never rereads).
+// Exposed for /debug so that gap is visible instead of silently confusing.
+export function getActiveOutboundProxyUrl(): string | null {
+  return outboundProxyUrlRedacted
 }
 
 const sidecarUrl = process.env.SIDECAR_URL?.replace(/\/$/, '') ?? null

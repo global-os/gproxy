@@ -9,6 +9,7 @@ import { getPath } from 'hono/utils/url'
 import { eq } from 'drizzle-orm'
 
 import * as schema from './db/schema.js'
+import * as dbSchema from './db/schema.js'
 import * as middleware from './middleware.js'
 import { Env } from './types'
 import { replaceDomainInHTML } from './replace.js'
@@ -24,7 +25,7 @@ import webviewRoutes from './routes/webviews.js'
 import visitsRoutes from './routes/visits.js'
 import proxyRecordingRoutes from './routes/proxy-recording.js'
 import { resolveWebviewBySlug } from './runtime/webview/resolve.js'
-import { proxyWebviewRequest, probeOutboundProxy } from './runtime/webview/proxy.js'
+import { proxyWebviewRequest, probeOutboundProxy, getActiveOutboundProxyUrl } from './runtime/webview/proxy.js'
 import { ensureGlobalPcForUser } from './services/global-pc.js'
 import { isBundleCached } from './runtime/cache/store.js'
 import { resolveInstanceBundleFile } from './runtime/cache/serve.js'
@@ -182,11 +183,27 @@ app.get('/debug', async (c) => {
     probeOutboundProxy('https://x.com/'),
   ])
 
+  const [proxyConfigRow] = await db.select().from(dbSchema.proxyConfig).where(eq(dbSchema.proxyConfig.id, 1))
+  const dbProxyUrlRedacted = proxyConfigRow?.proxy_url?.replace(/:([^@]+)@/, ':***@') ?? null
+
   return c.json({
     pool: { ok: poolOk, ms: poolMs, ...(poolError ? { error: poolError } : {}) },
     userLookup,
     drizzleUserLookup,
     scrypt,
+    // Three separate sources of truth for the outbound proxy — surfaced
+    // together because they can and do diverge. envProxyUrl is what Vercel's
+    // env config says right now; activeOutboundProxyUrl is what this app's
+    // direct-fetch client (proxy.ts) actually built its ProxyAgent from at
+    // cold-start (frozen — never rereads); dbProxyUrl is the admin-panel/
+    // sidecar-polled value. If dbProxyUrl != activeOutboundProxyUrl, changing
+    // it in the admin panel has NOT taken effect on this app's own direct
+    // fetches (only the sidecar picks up DB changes, on its own poll cycle).
+    proxySources: {
+      envProxyUrl: process.env.PROXY_URL?.replace(/:([^@]+)@/, ':***@') ?? null,
+      activeOutboundProxyUrl: getActiveOutboundProxyUrl(),
+      dbProxyUrl: dbProxyUrlRedacted,
+    },
     authProbe,
     twimagProbe,
     xcomProbe,
