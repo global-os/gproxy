@@ -1,5 +1,5 @@
 {
-  "name": "proxy-sidecar",
+  "name": "gproxy-sidecar",
   "private": true,
   "type": "module",
   "main": "server.mjs",
