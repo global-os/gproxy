@@ -46,6 +46,20 @@
                 width: 800px;
                 height: 600px;
             }
+
+            #debug-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.92);
+                color: #0f0;
+                font-family: monospace;
+                font-size: 13px;
+                white-space: pre-wrap;
+                padding: 1.5em;
+                overflow: auto;
+                z-index: 9999;
+            }
         </style>
         <meta name="viewport" content="width=device-width,initial-scale=1" />
     </head>
@@ -53,7 +67,61 @@
         <div id="container" class="noselect">
             <canvas class="frame" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
         </div>
+        <pre id="debug-overlay"></pre>
         <script>
+            // Debug instrumentation: this app has crashed intermittently in real
+            // deployment with a WASM "index out of bounds" RuntimeError inside the
+            // Asyncify-wrapped emscripten_set_main_loop callback, but never
+            // reproduced locally across many variations (wrong MIME type, idle
+            // demo playback, iframe embedding, the real dev backend's own serving
+            // pipeline — all byte-identical, all crash-free). This overlay makes
+            // the *next* real occurrence self-documenting without needing devtools
+            // already open, since we don't yet know what differs about the
+            // environment where it actually happens.
+            var debugLog = [];
+            function logDebug(label, data) {
+                var line = "[" + new Date().toISOString() + "] " + label + (data !== undefined ? ": " + (typeof data === "string" ? data : JSON.stringify(data)) : "");
+                debugLog.push(line);
+                console.log(line);
+            }
+            function showDebugOverlay(title, details) {
+                var overlay = document.getElementById("debug-overlay");
+                overlay.style.display = "block";
+                overlay.textContent =
+                    "=== " + title + " ===\n\n" +
+                    details + "\n\n" +
+                    "=== environment ===\n" +
+                    JSON.stringify(envInfo, null, 2) + "\n\n" +
+                    "=== log ===\n" +
+                    debugLog.join("\n");
+            }
+
+            var envInfo = {
+                href: location.href,
+                inIframe: window.top !== window.self,
+                userAgent: navigator.userAgent,
+                hardwareConcurrency: navigator.hardwareConcurrency,
+                deviceMemory: navigator.deviceMemory,
+                wasmStreamingSupported: typeof WebAssembly !== "undefined" && typeof WebAssembly.instantiateStreaming === "function",
+                sharedArrayBufferAvailable: typeof SharedArrayBuffer !== "undefined",
+            };
+            logDebug("boot", envInfo);
+
+            window.addEventListener("error", function (e) {
+                var err = e.error;
+                showDebugOverlay(
+                    "window error",
+                    (err && err.stack) ? err.stack : (e.message || String(e))
+                );
+            });
+            window.addEventListener("unhandledrejection", function (e) {
+                var reason = e.reason;
+                showDebugOverlay(
+                    "unhandled promise rejection",
+                    (reason && reason.stack) ? reason.stack : String(reason)
+                );
+            });
+
             var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare"];
 
             var Module = {
@@ -67,7 +135,7 @@
                 },
                 printErr: function (text) {
                     if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(" ");
-                    console.error(text);
+                    logDebug("printErr", text);
                 },
                 canvas: (function () {
                     var canvas = document.getElementById("canvas");
@@ -82,10 +150,10 @@
                     return canvas;
                 })(),
                 print: function (text) {
-                    console.log(text);
+                    logDebug("print", text);
                 },
                 setStatus: function (text) {
-                    console.log(text);
+                    logDebug("status", text);
                 },
                 totalDependencies: 0,
                 monitorRunDependencies: function (left) {
