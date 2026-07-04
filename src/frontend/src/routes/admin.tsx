@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Page } from '../components/Page'
 import { VerticalFrame } from '../components/VerticalFrame'
 import { PageTitle } from '../components/PageTitle'
@@ -26,6 +27,90 @@ async function fetchAdminUsers(): Promise<AdminUsersResponse> {
   if (r.status === 403) throw new Error('Forbidden')
   if (!r.ok) throw new Error(`Failed to load users (${r.status})`)
   return r.json()
+}
+
+type ProxyConfigResponse = {
+  proxyUrl: string | null
+  updatedAt: string | null
+}
+
+async function fetchProxyConfig(): Promise<ProxyConfigResponse> {
+  const r = await fetch('/api/admin/proxy-config', { credentials: 'include' })
+  if (r.status === 403) throw new Error('Forbidden')
+  if (!r.ok) throw new Error(`Failed to load proxy config (${r.status})`)
+  return r.json()
+}
+
+async function saveProxyConfig(proxyUrl: string): Promise<ProxyConfigResponse> {
+  const r = await fetch('/api/admin/proxy-config', {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ proxyUrl: proxyUrl || null }),
+  })
+  if (!r.ok) throw new Error(`Failed to save proxy config (${r.status})`)
+  return r.json()
+}
+
+function ProxyConfigSection() {
+  const queryClient = useQueryClient()
+  const { data, isPending } = useQuery<ProxyConfigResponse>({
+    queryKey: ['admin', 'proxy-config'],
+    queryFn: fetchProxyConfig,
+    retry: false,
+  })
+  const [draft, setDraft] = useState<string | null>(null)
+  const mutation = useMutation({
+    mutationFn: saveProxyConfig,
+    onSuccess: (result) => {
+      queryClient.setQueryData(['admin', 'proxy-config'], result)
+      setDraft(null)
+    },
+  })
+
+  const value = draft ?? data?.proxyUrl ?? ''
+
+  return (
+    <div className="mb-8 rounded-xl border border-gray-200 p-5">
+      <h2 className="m-0 mb-1 text-sm font-semibold text-gray-900">Residential proxy URL</h2>
+      <p className="m-0 mb-3 text-xs text-gray-500">
+        Used by the sidecar (mainframe-2) for outbound webview traffic. The sidecar polls this
+        periodically and applies changes on its own — no redeploy needed.
+        {data?.updatedAt && (
+          <> Last updated {new Date(data.updatedAt).toLocaleString()}.</>
+        )}
+      </p>
+      {isPending ? (
+        <p className="text-sm text-gray-400">Loading…</p>
+      ) : (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="http://user:pass@host:port"
+            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono"
+          />
+          <button
+            type="button"
+            disabled={mutation.isPending || draft === null}
+            onClick={() => draft !== null && mutation.mutate(draft)}
+            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            {mutation.isPending ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      )}
+      {mutation.isError && (
+        <p className="mt-2 text-xs text-red-600">
+          {mutation.error instanceof Error ? mutation.error.message : 'Failed to save'}
+        </p>
+      )}
+      {mutation.isSuccess && draft === null && (
+        <p className="mt-2 text-xs text-green-700">Saved.</p>
+      )}
+    </div>
+  )
 }
 
 function AdminPage() {
@@ -55,6 +140,8 @@ function AdminPage() {
             Storybook ↗
           </a>
         </div>
+
+        <ProxyConfigSection />
 
         {isPending && (
           <p className="py-8 text-center text-gray-400 text-sm">Loading…</p>

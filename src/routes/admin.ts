@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { desc } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import * as middleware from '../middleware.js'
 import * as schema from '../db/schema.js'
 import { Env } from '../types.js'
@@ -8,6 +8,36 @@ import { isAdminEmail } from '../constants/admin.js'
 const router = new Hono<Env>()
 
 router.use('*', middleware.provideDb, middleware.parseCookies, middleware.betterAuthMiddleware)
+
+router.get('/proxy-config', async (c) => {
+  const user = c.get('user')
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+  if (!isAdminEmail(user.email)) return c.json({ message: 'Forbidden' }, 403)
+
+  const db = c.get('db')
+  const [row] = await db.select().from(schema.proxyConfig).where(eq(schema.proxyConfig.id, 1))
+  return c.json({ proxyUrl: row?.proxy_url ?? null, updatedAt: row?.updated_at ?? null })
+})
+
+router.put('/proxy-config', async (c) => {
+  const user = c.get('user')
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+  if (!isAdminEmail(user.email)) return c.json({ message: 'Forbidden' }, 403)
+
+  const body = await c.req.json().catch(() => null) as { proxyUrl?: string | null } | null
+  if (!body || (body.proxyUrl != null && typeof body.proxyUrl !== 'string')) {
+    return c.json({ message: 'Expected { proxyUrl: string | null }' }, 400)
+  }
+
+  const db = c.get('db')
+  const [row] = await db
+    .update(schema.proxyConfig)
+    .set({ proxy_url: body.proxyUrl || null, updated_at: new Date() })
+    .where(eq(schema.proxyConfig.id, 1))
+    .returning()
+
+  return c.json({ proxyUrl: row?.proxy_url ?? null, updatedAt: row?.updated_at ?? null })
+})
 
 router.get('/users', async (c) => {
   const user = c.get('user')

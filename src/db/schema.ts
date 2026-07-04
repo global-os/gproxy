@@ -281,6 +281,13 @@ export const webviewRule = pgTable('webview_rule', {
   index('webview_rule_webview_id_ord_idx').on(table.webview_id, table.ord),
 ])
 
+/** Single-row table: admin-editable settings that the sidecar polls for. */
+export const proxyConfig = pgTable('proxy_config', {
+  id: integer('id').primaryKey().default(1),
+  proxy_url: text('proxy_url'),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
 export const proxyRecordingSession = pgTable('proxy_recording_session', {
   id: serial('id').primaryKey(),
   started_at: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),

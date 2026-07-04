@@ -39,7 +39,7 @@ import { getBuildVersion } from './build-version.js'
 import { frontendDistRoot, readFrontendFile, resolveFrontendFile } from './frontend-paths.js'
 import { resolveStorybookFile } from './storybook-paths.js'
 import { benchmarkScrypt } from './crypto/password.js'
-import { checkAppTables, checkAuthTables, pingDatabase, pingPool, pool, probeDrizzleUserLookup, probeUserLookup } from './db/index.js'
+import { checkAppTables, checkAuthTables, db, pingDatabase, pingPool, pool, probeDrizzleUserLookup, probeUserLookup } from './db/index.js'
 import { checkConfig, checkFrontendBundle, checkProxyUrl, probeAuthHandler, probeSidecar } from './health-checks.js'
 import { LaunchError } from './services/errors.js'
 import { deleteWorkspace } from './services/workspace-access.js'
@@ -292,6 +292,20 @@ app.basePath('/app/api/webviews').route('/', webviewRoutes)
 app.basePath('/app/api/visits').route('/', visitsRoutes)
 app.basePath('/app/api/proxy-recording').route('/', proxyRecordingRoutes)
 app.basePath('/app/api').route('/', programsRoutes)
+
+// Machine-to-machine endpoint the sidecar polls for admin-editable config
+// (currently just PROXY_URL) — not a browser session, so it authenticates
+// with the same shared SIDECAR_SECRET both sides already have configured,
+// not cookies/admin-email like the rest of /app/api/admin.
+app.get('/app/api/sidecar-config', async (c) => {
+  const secret = process.env.SIDECAR_SECRET
+  if (secret && c.req.header('authorization') !== `Bearer ${secret}`) {
+    return c.json({ message: 'Unauthorized' }, 401)
+  }
+
+  const [row] = await db.select().from(schema.proxyConfig).where(eq(schema.proxyConfig.id, 1))
+  return c.json({ proxyUrl: row?.proxy_url ?? null })
+})
 
 app.get('/app/api/workspaces', async (c) => {
   const db = c.get('db')

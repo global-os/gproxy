@@ -9,7 +9,10 @@ RUN npm install
 # installs Chrome plus whatever system libs it needs to run in this image.
 RUN npx patchright install --with-deps chrome
 
-COPY server.mjs mitm-proxy.mjs ./
+# Wildcard, not an explicit file list — we've already been bitten once by a
+# forgotten COPY entry for a new .mjs file silently crash-looping the
+# container in production (ERR_MODULE_NOT_FOUND) with no build-time warning.
+COPY *.mjs ./
 
 EXPOSE 8080
 CMD ["node", "server.mjs"]

@@ -1,0 +1,7 @@
+CREATE TABLE proxy_config (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  proxy_url TEXT,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+INSERT INTO proxy_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
