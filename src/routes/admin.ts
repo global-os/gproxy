@@ -16,7 +16,17 @@ router.get('/proxy-config', async (c) => {
 
   const db = c.get('db')
   const [row] = await db.select().from(schema.proxyConfig).where(eq(schema.proxyConfig.id, 1))
-  return c.json({ proxyUrl: row?.proxy_url ?? null, updatedAt: row?.updated_at ?? null })
+
+  // Sidecar has its own tiny status page, gated by the same shared secret —
+  // no session cookie support there, so the secret rides along as a query
+  // param (only ever sent to an already-admin-gated page).
+  const sidecarUrl = process.env.SIDECAR_URL
+  const sidecarSecret = process.env.SIDECAR_SECRET
+  const sidecarAdminUrl = sidecarUrl
+    ? `${sidecarUrl.replace(/\/$/, '')}/admin${sidecarSecret ? `?secret=${encodeURIComponent(sidecarSecret)}` : ''}`
+    : null
+
+  return c.json({ proxyUrl: row?.proxy_url ?? null, updatedAt: row?.updated_at ?? null, sidecarAdminUrl })
 })
 
 router.put('/proxy-config', async (c) => {

@@ -32,6 +32,7 @@ async function fetchAdminUsers(): Promise<AdminUsersResponse> {
 type ProxyConfigResponse = {
   proxyUrl: string | null
   updatedAt: string | null
+  sidecarAdminUrl: string | null
 }
 
 async function fetchProxyConfig(): Promise<ProxyConfigResponse> {
@@ -108,6 +109,18 @@ function ProxyConfigSection() {
       )}
       {mutation.isSuccess && draft === null && (
         <p className="mt-2 text-xs text-green-700">Saved.</p>
+      )}
+      {data?.sidecarAdminUrl && (
+        <p className="m-0 mt-3 text-xs">
+          <a
+            href={data.sidecarAdminUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-violet-600 no-underline hover:text-violet-800"
+          >
+            Open sidecar admin panel ↗
+          </a>
+        </p>
       )}
     </div>
   )

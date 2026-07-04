@@ -34,6 +34,21 @@ RuntimeError: memory access out of bounds
     at callUserCallback (websockets-doom.js:3745)
 ```
 
+**Confirmed cross-engine**, via the on-page debug overlay's first real catch, live on the
+deployed instance in Firefox (`Gecko/20100101 Firefox/152.0`, cross-origin
+iframe, `sharedArrayBufferAvailable: false`): identical crash site,
+`P_PlayerThink`, same call chain down through `TryRunTics`/`D_RunFrame`/
+Asyncify's `dynCall_v` → `wrapper` → `doRewind`/`handleSleep` machinery.
+Timing: boot logs show `Running emscripten_set_main_loop()` at `10:51:13.200Z`,
+crash (`Exception thrown, see JavaScript console`) at `10:51:18.164Z` — right
+around 5s in, consistent with the title screen's automatic demo playback
+kicking off a real simulated player via `P_PlayerThink`.
+
+This rules out "browser/engine quirk" — Firefox's SpiderMonkey and Chrome's
+V8 hitting the *exact same crash site* means this is almost certainly a real
+out-of-bounds access in the compiled game code itself, not something
+specific to one WASM implementation's timing or JIT behavior.
+
 This happened ~100ms after boot (`P_PlayerThink` runs every game tic — the
 title screen's automatic demo playback drives a live player object through
 the real simulation, same as actual gameplay) — consistent with reports of

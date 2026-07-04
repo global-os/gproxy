@@ -229,15 +229,62 @@ function readBody(req) {
   })
 }
 
+// Accepts either the usual `Authorization: Bearer <secret>` header (used by
+// the main app calling in programmatically) or a `?secret=` query param
+// (used by the admin-panel link to this page, since a plain browser
+// navigation can't set custom headers).
+function isAuthorized(req, url) {
+  if (!SECRET) return true
+  if (req.headers.authorization === `Bearer ${SECRET}`) return true
+  return url.searchParams.get('secret') === SECRET
+}
+
+function renderAdminPage() {
+  const rows = [
+    ['Proxy active', PROXY_URL ? 'yes' : 'no'],
+    ['Server IP', ipProbe.serverIp ?? '(unchecked)'],
+    ['Proxy IP', ipProbe.proxyIp ?? '(unchecked)'],
+    ['Proxy routing OK', String(ipProbe.proxyOk ?? false)],
+    ['MITM port', String(mitmPort)],
+    ['Uptime', `${Math.floor(process.uptime())}s`],
+  ]
+  const tableRows = rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('\n')
+  return `<!DOCTYPE html>
+<html><head><title>Sidecar admin</title>
+<style>
+  body { font-family: monospace; background: #111; color: #0f0; padding: 2em; }
+  table { border-collapse: collapse; }
+  th, td { text-align: left; padding: 0.3em 1em; border-bottom: 1px solid #333; }
+  th { color: #6f6; }
+</style></head>
+<body>
+<h1>Sidecar status</h1>
+<table>${tableRows}</table>
+</body></html>`
+}
+
 const server = createServer(async (req, res) => {
-  if (req.url === '/health' && req.method === 'GET') {
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
+
+  if (url.pathname === '/health' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ ok: true, proxyActive: !!PROXY_URL, ipProbe }))
     return
   }
 
-  if (req.url === '/fetch' && req.method === 'POST') {
-    if (SECRET && req.headers.authorization !== `Bearer ${SECRET}`) {
+  if (url.pathname === '/admin' && req.method === 'GET') {
+    if (!isAuthorized(req, url)) {
+      res.writeHead(401)
+      res.end('unauthorized')
+      return
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    res.end(renderAdminPage())
+    return
+  }
+
+  if (url.pathname === '/fetch' && req.method === 'POST') {
+    if (!isAuthorized(req, url)) {
       res.writeHead(401)
       res.end('unauthorized')
       return
@@ -265,20 +312,20 @@ const server = createServer(async (req, res) => {
   // proxy (i.e. after Chrome's own header injection and our Sec-Fetch-*
   // corrections — ground truth, unlike the app-level HAR recorder which
   // only ever sees the headers proxy.ts intended to send).
-  if (req.url === '/mitm/start' && req.method === 'POST') {
-    if (SECRET && req.headers.authorization !== `Bearer ${SECRET}`) { res.writeHead(401); res.end('unauthorized'); return }
+  if (url.pathname === '/mitm/start' && req.method === 'POST') {
+    if (!isAuthorized(req, url)) { res.writeHead(401); res.end('unauthorized'); return }
     mitm.startRecording()
     res.writeHead(200); res.end('recording started')
     return
   }
-  if (req.url === '/mitm/stop' && req.method === 'POST') {
-    if (SECRET && req.headers.authorization !== `Bearer ${SECRET}`) { res.writeHead(401); res.end('unauthorized'); return }
+  if (url.pathname === '/mitm/stop' && req.method === 'POST') {
+    if (!isAuthorized(req, url)) { res.writeHead(401); res.end('unauthorized'); return }
     mitm.stopRecording()
     res.writeHead(200); res.end('recording stopped')
     return
   }
-  if (req.url === '/mitm/har' && req.method === 'GET') {
-    if (SECRET && req.headers.authorization !== `Bearer ${SECRET}`) { res.writeHead(401); res.end('unauthorized'); return }
+  if (url.pathname === '/mitm/har' && req.method === 'GET') {
+    if (!isAuthorized(req, url)) { res.writeHead(401); res.end('unauthorized'); return }
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify(mitm.exportHar()))
     return
