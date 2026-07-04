@@ -53,6 +53,15 @@ export async function replaceBundleCache(
     content,
   }))
 
+  // A cold cache means every concurrent request for this instance's assets
+  // (a webview page load fires 10-20 of them at once, per the pool-exhaustion
+  // note elsewhere in this file's callers) can independently decide the
+  // cache needs populating and race to get here. Concurrent transactions can
+  // both pass the delete step and then collide on the insert — the loser
+  // hits a duplicate-key error on the (instance_id, path) primary key.
+  // Since every racing caller is inserting the same rows (same source tar,
+  // same checksum), onConflictDoNothing makes the loser a no-op instead of a
+  // thrown error.
   await db.transaction(async (tx) => {
     await tx
       .delete(schema.instanceBundleFile)
@@ -65,6 +74,7 @@ export async function replaceBundleCache(
       await tx
         .insert(schema.instanceBundleFile)
         .values(fileRows.slice(i, i + INSERT_CHUNK_SIZE))
+        .onConflictDoNothing()
     }
 
     await tx.insert(schema.instanceBundleCache).values({
@@ -72,7 +82,7 @@ export async function replaceBundleCache(
       directory_checksum: checksum,
       last_used_at: new Date(),
       byte_size: byteSize,
-    })
+    }).onConflictDoNothing()
   })
 
   return byteSize
