@@ -2,6 +2,16 @@
 
 Context for AI assistants working in this repo.
 
+**Naming note:** the repo/directory was renamed `PROXY` → `gproxy` (GitHub:
+`global-os/gproxy`, Gitea mirror: `Cold-Air-Networks/gproxy`; npm package
+names in `package.json` files updated to `gproxy-*` too). The sidecar's
+*deployed container image* is deliberately still named `proxy-sidecar`
+(hardcoded independently in `.gitea/workflows/sidecar-build.yml` and
+`petersweb-infra`) — don't be confused if that name shows up in logs/image
+tags/bump-PR titles while everything else says `gproxy`; it wasn't
+renamed on purpose, since that would mean re-tagging a live image across
+two repos.
+
 ## What this is
 
 GlobalOS PROXY is the monorepo for the GlobalOS web desktop:
@@ -96,6 +106,7 @@ Add new platform capabilities by implementing a handler in `src/syscalls/`, regi
 | Twitter / X | `fixtures/.../twitter.gapp/` | `webview:create` → kernel → `POST /api/webviews` → proxy iframe |
 | Instagram | `fixtures/.../instagram.gapp/` | same webview pattern, `domain: 'instagram.com'` |
 | YouTube | `fixtures/.../youtube.gapp/` | same webview pattern, `domain: 'youtube.com'` |
+| Doom | `fixtures/by-user/*/~/Desktop/doom.gapp/` | Chocolate Doom compiled to WASM via Emscripten ([cloudflare/doom-wasm](https://github.com/cloudflare/doom-wasm)), Freedoom Phase 1 as the IWAD (not id Software's shareware WAD, to avoid licensing ambiguity); fully static, no kernel/syscall integration. **Has an open, intermittent WASM crash** (`P_PlayerThink`, out-of-bounds memory access, reproduces across both Chrome and Firefox) — see `DOOM_GAPP.md` before touching the build or assuming it's fixed. |
 
 ### Webview `.gapp` pattern
 
@@ -164,7 +175,8 @@ For local dev (`npm run dev:backend`), only layers 1–2 matter (no Vercel stati
 | Gapp compile | `src/gapp/compile-gapp.ts`, `src/gapp/registry/` |
 | Fixtures | `fixtures/by-user/`, `src/db/seed.ts` |
 | Health | `src/health-checks.ts`, `src/db/index.ts` (`checkAppTables`, etc.) |
-| Frontend workspace | `src/frontend/src/components/Workspace/`, `src/frontend/src/routes/session.$sessionId.tsx` |
+| Admin panel | `src/routes/admin.ts`, `src/frontend/src/routes/admin.tsx`, `src/constants/admin.ts` (single hardcoded `isAdminEmail`, no roles table) — currently just the users list and the admin-editable `PROXY_URL` (`proxy_config` table; see Vercel pitfall #6 for the three-sources-of-truth gotcha) |
+| Frontend workspace | `src/frontend/src/components/Workspace/`, `src/frontend/src/routes/workspace.$workspaceId.tsx` |
 | Schema | `src/db/schema.ts`, `drizzle/` |
 | Migrations script | `scripts/apply-pending-migrations.mjs` |
 
@@ -190,7 +202,7 @@ npm run db:migrate   # local; also runs automatically in vercel-build on deploy
 - `BETTER_AUTH_SECRET`
 - `BETTER_AUTH_URL` (production)
 
-Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides, `PROXY_URL` (outbound residential proxy), `SIDECAR_URL` (real-Chrome sidecar, see `SETUP_SIDECAR.md`).
+Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides, `PROXY_URL` (outbound residential proxy — see pitfall #6 below for why this env var alone doesn't tell the whole story), `SIDECAR_URL` (real-Chrome sidecar, see `SETUP_SIDECAR.md`), `SIDECAR_SECRET` (shared bearer secret, also used for `/app/api/sidecar-config`).
 
 ## Vercel / serverless pitfalls (read before changing auth, launch, or DB code)
 
@@ -205,6 +217,8 @@ Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides, `PROXY_URL`
 4. **Function limit:** `maxDuration: 30` in `vercel.json`. Instance first-load can approach this if tar build/extract is slow.
 
 5. **Health vs debug:** `/health` is for monitors (includes auth probe). `/debug` is operator diagnostics — do not expose secrets there.
+
+6. **Three separate PROXY_URL sources of truth, and they diverge.** The admin panel (`/app/api/admin/proxy-config`, backed by the `proxy_config` DB table) is *not* a live config for this Vercel app itself — it's polled by the **sidecar** (`sidecar/config.mjs`, every 60s) and only affects the sidecar's own outbound routing. This app's own direct-fetch outbound proxy (`src/runtime/webview/proxy.ts`'s `outboundProxy`) is built **once at module load** from the static `process.env.PROXY_URL` env var and never rereads the DB — changing the URL in the admin panel does nothing for this app's own fetches, only the sidecar's. `/debug`'s `proxySources` field shows all three (`envProxyUrl`, `activeOutboundProxyUrl`, `dbProxyUrl`) side by side specifically so this divergence is visible instead of silently confusing whoever's chasing a proxy IP mismatch. See `sidecar/config.mjs`'s header comment for why the sidecar itself does a poll-then-restart rather than a live in-process reload (Chrome doesn't support changing its proxy config after launch).
 
 ## Webview proxy
 
@@ -231,9 +245,15 @@ Optional: `DATABASE_SSL=true`, `POSTMARK_*`, `INSTANCE_*` overrides, `PROXY_URL`
 
 **TLS fingerprinting:** Cloudflare Bot Management fingerprints the TLS ClientHello (JA3/JA4 — cipher suites, extensions, ordering). Node.js/undici produces a fingerprint that Cloudflare identifies as non-Chrome. Even through a residential proxy, the TLS handshake goes directly from our Node.js process to upstream. Symptoms: X deletes the `ct0` CSRF cookie on every page load, blocking login. Cloudflare returns 403 HTML challenge pages for some endpoints.
 
-**TLS sidecar** (`sidecar/`): Node server driving **real Google Chrome** via Patchright (a stealth-patched Playwright), not TLS impersonation — see `SETUP_SIDECAR.md` for why Chromium/impersonation don't hold up and real Chrome does. When `SIDECAR_URL` is set, Vercel routes all upstream fetches through it instead of direct undici. Auth via `SIDECAR_SECRET` (Bearer token). Because browsers refuse to let page JS set `Origin`/`Referer`/`Cookie` via `fetch()` (forbidden headers), the sidecar intercepts at the CDP `Fetch` domain to override them before the request leaves Chrome — this is what lets `proxy.ts`'s Origin/Referer spoofing keep working with a real browser underneath. If `PROXY_URL` is also set, it's wrapped with `proxy-chain` (local anonymous forwarding proxy) before being handed to Playwright — passing the authenticated upstream URL directly causes every request to hang forever, since Chrome's own internal proxy-auth handling conflicts with our `Fetch` domain interception (see `SETUP_SIDECAR.md`). Deployed on a Hetzner VM (`mainframe-2`) running NixOS, managed via the `petersweb-infra` repo — **do not deploy by hand**, see `SETUP_SIDECAR.md` § Deployment.
+**TLS sidecar** (`sidecar/`): Node server driving **real Google Chrome** via Patchright (a stealth-patched Playwright), not TLS impersonation — see `SETUP_SIDECAR.md` for why Chromium/impersonation don't hold up and real Chrome does. When `SIDECAR_URL` is set, Vercel routes all upstream fetches through it instead of direct undici. Auth via `SIDECAR_SECRET` (Bearer token, or `?secret=` query param on the sidecar's own `/admin` status page and MITM endpoints, since a plain browser navigation can't set an Authorization header). Because browsers refuse to let page JS set `Origin`/`Referer`/`Cookie` via `fetch()` (forbidden headers), the sidecar intercepts at the CDP `Fetch` domain to override them before the request leaves Chrome — this is what lets `proxy.ts`'s Origin/Referer spoofing keep working with a real browser underneath. If `PROXY_URL` is also set, Chrome is pointed at a local MITM proxy (`sidecar/mitm-proxy.mjs`, `http-mitm-proxy`) that itself holds the real upstream proxy credentials and forwards to it — **not** `proxy-chain` anymore (that was the original fix; replaced because passing an authenticated upstream URL directly to Playwright's own `proxy:` option hangs every request, since Chrome's internal proxy-auth handling conflicts with our `Fetch` domain interception — see `SETUP_SIDECAR.md`). The same MITM layer also corrects `Sec-Fetch-*` headers, which Chrome recomputes from real request context regardless of CDP overrides.
 
-Deployment is CI-driven, on a **Gitea mirror**, not GitHub Actions: GitHub (`origin`) stays primary for Vercel/everything else, but a second remote (`gitea`, `forge.quinefoundation.com/Cold-Air-Networks/proxy`) exists specifically for this — push there to trigger `.gitea/workflows/sidecar-build.yml`, which builds (`linux/amd64` — Chrome has no ARM64 Linux build) and pushes to the forge's own registry, then opens a PR against `petersweb-infra` bumping the pinned image digest. Merging that PR and running `nixos-rebuild switch` on `mainframe-2` is what actually deploys it. Pushing to GitHub `origin` alone does not deploy the sidecar. There is no vendored copy of the sidecar source in `petersweb-infra` anymore and no local `podman build` on the host — don't reintroduce either.
+**Sidecar's own `PROXY_URL`** is admin-panel-driven, not an env var: `sidecar/config.mjs` polls `GET /app/api/sidecar-config` (the main app, bearer-gated by the shared `SIDECAR_SECRET`, AES-256-GCM-encrypting the value in transit) every 60s, and on a change writes it to a local bind-mounted file (`/var/proxy-sidecar/config.json` on `mainframe-2`) then exits — the container's restart policy brings up a fresh process that reads the new value, since Chrome doesn't support changing its proxy config after launch. There's no env var fallback anymore; see Vercel pitfall #6 for why this doesn't affect the main app's own outbound fetches.
+
+**Sidecar's `/admin` page** (`sidecar/server.mjs`): a small status page (proxy URL in use, IP probe, MITM port, uptime) plus Start/Stop/Download buttons for the MITM traffic recorder (`/mitm/start`, `/mitm/stop`, `/mitm/har`) that used to be curl-only. Linked from the main app's admin panel (`sidecarAdminUrl` in `/app/api/admin/proxy-config`, built server-side so the frontend never assembles the secret itself).
+
+Deployed on a Hetzner VM (`mainframe-2`) running NixOS, managed via the `petersweb-infra` repo — **do not deploy by hand**, see `SETUP_SIDECAR.md` § Deployment.
+
+Deployment is CI-driven, on a **Gitea mirror**, not GitHub Actions: GitHub (`origin`) stays primary for Vercel/everything else, but a second remote (`gitea`, `forge.quinefoundation.com/Cold-Air-Networks/gproxy`) exists specifically for this — push there to trigger `.gitea/workflows/sidecar-build.yml`, which builds (`linux/amd64` — Chrome has no ARM64 Linux build) and pushes to the forge's own registry, then opens a PR against `petersweb-infra` bumping the pinned image digest. Merging that PR and running `nixos-rebuild switch` on `mainframe-2` is what actually deploys it. Pushing to GitHub `origin` alone does not deploy the sidecar. There is no vendored copy of the sidecar source in `petersweb-infra` anymore and no local `podman build` on the host — don't reintroduce either.
 
 **Castle.io webpack stub (X-specific):** X's bot-detection SDK (`ondemand.castle.*.js`) is a webpack chunk that crashes in the cross-origin iframe context. The proxy intercepts it by filename regex, parses the chunk with `acorn` to extract the webpack chunk array name, chunk IDs, and module IDs, then returns a no-op stub: `(self["webpackChunk_twitter_responsive_web"]=...).push([[chunkId],{moduleId:function(){}}])`. This prevents the `ChunkLoadError` that would otherwise cascade and break the login UI.
 
