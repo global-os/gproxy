@@ -304,7 +304,20 @@ app.get('/app/api/sidecar-config', async (c) => {
   }
 
   const [row] = await db.select().from(schema.proxyConfig).where(eq(schema.proxyConfig.id, 1))
-  return c.json({ proxyUrl: row?.proxy_url ?? null })
+  const proxyUrl = row?.proxy_url ?? null
+
+  if (!secret || proxyUrl === null) {
+    return c.json({ proxyUrl })
+  }
+
+  const { createCipheriv, createHash, randomBytes } = await import('node:crypto')
+  const key = createHash('sha256').update(secret).digest()
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const ct = Buffer.concat([cipher.update(proxyUrl, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  const encrypted = [iv, ct, tag].map((b) => b.toString('hex')).join(':')
+  return c.json({ proxyUrl: encrypted, encrypted: true })
 })
 
 app.get('/app/api/workspaces', async (c) => {

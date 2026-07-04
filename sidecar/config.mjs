@@ -18,6 +18,7 @@
 // reimplement Chrome/MITM startup as a hot-reloadable subsystem.
 import fs from 'node:fs'
 import path from 'node:path'
+import { createDecipheriv, createHash } from 'node:crypto'
 
 const CONFIG_PATH = process.env.CONFIG_PATH || '/data/config.json'
 const MAIN_APP_URL = (process.env.MAIN_APP_URL || '').replace(/\/$/, '')
@@ -64,7 +65,15 @@ export function startConfigPolling(envProxyUrl) {
         console.error(`[config] poll got status ${res.status}`)
         return
       }
-      const { proxyUrl } = await res.json()
+      const data = await res.json()
+      let proxyUrl = data.proxyUrl
+      if (data.encrypted && proxyUrl && SECRET) {
+        const [ivHex, ctHex, tagHex] = proxyUrl.split(':')
+        const key = createHash('sha256').update(SECRET).digest()
+        const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(ivHex, 'hex'))
+        decipher.setAuthTag(Buffer.from(tagHex, 'hex'))
+        proxyUrl = Buffer.concat([decipher.update(Buffer.from(ctHex, 'hex')), decipher.final()]).toString('utf8')
+      }
       const effective = proxyUrl || envProxyUrl || ''
       if (effective !== current) {
         console.log('[config] proxy_url changed via admin panel — writing local config and restarting to apply')
