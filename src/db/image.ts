@@ -80,7 +80,10 @@ async function buildTar(dirName: string, dirs: DirEntry[], files: FileEntry[]): 
   pack.end();
 
   await new Promise<void>((resolve, reject) => {
-    out.on("finish", resolve);
+    // "end" (readable side fully drained) rather than "finish" (writable
+    // side done writing into out) — the latter isn't guaranteed to fire only
+    // after every "data" event has reached our chunks.push() listener below.
+    out.on("end", resolve);
     out.on("error", reject);
     pack.on("error", reject);
   });

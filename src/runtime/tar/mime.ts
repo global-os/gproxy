@@ -7,4 +7,5 @@ export const INSTANCE_MIME: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.txt': 'text/plain; charset=utf-8',
+  '.wasm': 'application/wasm',
 }
