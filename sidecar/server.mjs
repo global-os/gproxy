@@ -254,13 +254,72 @@ function renderAdminPage() {
 <html><head><title>Sidecar admin</title>
 <style>
   body { font-family: monospace; background: #111; color: #0f0; padding: 2em; }
-  table { border-collapse: collapse; }
+  table { border-collapse: collapse; margin-bottom: 1.5em; }
   th, td { text-align: left; padding: 0.3em 1em; border-bottom: 1px solid #333; }
   th { color: #6f6; }
+  button {
+    font-family: monospace; background: #1a1a1a; color: #0f0; border: 1px solid #363;
+    padding: 0.5em 1em; margin-right: 0.5em; cursor: pointer;
+  }
+  button:hover { background: #232; }
+  #mitm-status { margin-top: 0.8em; color: #6f6; }
 </style></head>
 <body>
 <h1>Sidecar status</h1>
 <table>${tableRows}</table>
+
+<h2>MITM traffic recording</h2>
+<button id="mitm-start">Start recording HAR</button>
+<button id="mitm-stop">Stop recording HAR</button>
+<button id="mitm-download">Download HAR</button>
+<div id="mitm-status"></div>
+
+<script>
+  var secret = new URLSearchParams(location.search).get('secret')
+  function withSecret(path) {
+    var url = new URL(path, location.origin)
+    if (secret) url.searchParams.set('secret', secret)
+    return url.toString()
+  }
+  function setStatus(text) {
+    document.getElementById('mitm-status').textContent = text
+  }
+
+  document.getElementById('mitm-start').addEventListener('click', function () {
+    setStatus('starting...')
+    fetch(withSecret('/mitm/start'), { method: 'POST' })
+      .then(function (r) { return r.text() })
+      .then(function (t) { setStatus(t) })
+      .catch(function (e) { setStatus('error: ' + e.message) })
+  })
+
+  document.getElementById('mitm-stop').addEventListener('click', function () {
+    setStatus('stopping...')
+    fetch(withSecret('/mitm/stop'), { method: 'POST' })
+      .then(function (r) { return r.text() })
+      .then(function (t) { setStatus(t) })
+      .catch(function (e) { setStatus('error: ' + e.message) })
+  })
+
+  document.getElementById('mitm-download').addEventListener('click', function () {
+    setStatus('downloading...')
+    fetch(withSecret('/mitm/har'))
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status)
+        return r.blob()
+      })
+      .then(function (blob) {
+        var a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = 'sidecar-traffic-' + Date.now() + '.har'
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        setStatus('downloaded')
+      })
+      .catch(function (e) { setStatus('error: ' + e.message) })
+  })
+</script>
 </body></html>`
 }
 
