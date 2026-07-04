@@ -1,4 +1,3 @@
-import { parse as acornParse } from 'acorn'
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
 import { brotliDecompress } from 'node:zlib'
 import { promisify } from 'node:util'
@@ -301,99 +300,6 @@ function rewriteHtml(html: string, boundDomain: string): string {
   return result.replace(/(<script[\s>])/i, `${intercept}$1`)
 }
 
-/**
- * Parse a webpack chunk script and return a no-op stub that preserves the
- * chunk registration so webpack doesn't throw ChunkLoadError, but replaces
- * every module body with an empty function.
- *
- * Handles UMD wrappers where the webpack push is inside an IIFE and the
- * global/module map may be accessed via a local variable — we walk the AST
- * rather than executing the script or relying on regex.
- */
-function extractWebpackChunkStub(script: string): string | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type ASTNode = Record<string, any>
-
-  let ast: ASTNode
-  try {
-    ast = acornParse(script, { ecmaVersion: 'latest', sourceType: 'script' }) as unknown as ASTNode
-  } catch (err) {
-    console.log('[castle] acorn parse failed:', err instanceof Error ? err.message.slice(0, 120) : String(err))
-    return null
-  }
-
-  // Generic depth-first walker — visits every node once.
-  function walk(node: unknown, visit: (n: ASTNode) => void) {
-    if (!node || typeof node !== 'object') return
-    if (Array.isArray(node)) { node.forEach(n => walk(n, visit)); return }
-    const n = node as ASTNode
-    if (n.type) visit(n)
-    for (const val of Object.values(n)) walk(val, visit)
-  }
-
-  // Castle finds the webpack chunk array by iterating window properties at
-  // runtime rather than using the name as a literal — so acorn won't see it in
-  // the push call. The name DOES appear verbatim somewhere in the script body
-  // (module 164079's own code), so a plain regex is reliable here.
-  const globalNameMatch = script.match(/(webpackChunk_[A-Za-z0-9_]+)/)
-  let globalName = globalNameMatch?.[1] ?? ''
-  let chunkIds: number[] = []
-  let moduleIds: string[] = []
-
-  walk(ast, (n) => {
-    // Global name via AST as secondary signal (castle may not expose it this way).
-    if (!globalName && n.type === 'Literal' && typeof n.value === 'string' && n.value.startsWith('webpackChunk_')) {
-      globalName = n.value
-    }
-
-    // Module map: an ObjectExpression where every key is a large integer AND
-    // every value is a function. This distinguishes the webpack module map
-    // `{164079: function(e,t,r){...}}` from other numeric-keyed objects
-    // (config tables, lookup maps, etc.) that castle includes in the same script.
-    if (n.type === 'ObjectExpression' && n.properties?.length > 0 && moduleIds.length === 0) {
-      const props = n.properties as ASTNode[]
-      const allModuleLike = props.every(p => {
-        const k = p.key as ASTNode
-        const v = p.value as ASTNode
-        const keyOk = (k?.type === 'Literal' && /^\d{4,}$/.test(String(k.value))) ||
-                      (k?.type === 'Identifier' && /^\d{4,}$/.test(k.name as string))
-        const valOk = v?.type === 'FunctionExpression' || v?.type === 'ArrowFunctionExpression'
-        return keyOk && valOk
-      })
-      if (allModuleLike) {
-        moduleIds = props.map(p => {
-          const k = p.key as ASTNode
-          return k.type === 'Literal' ? String(k.value) : k.name as string
-        })
-      }
-    }
-
-    // Chunk IDs: .push([[id, ...], moduleMapOrRef])
-    if (
-      n.type === 'CallExpression' &&
-      n.callee?.type === 'MemberExpression' &&
-      n.callee.property?.name === 'push' &&
-      n.arguments?.length === 1 &&
-      n.arguments[0]?.type === 'ArrayExpression' &&
-      n.arguments[0].elements?.length === 2 &&
-      n.arguments[0].elements[0]?.type === 'ArrayExpression'
-    ) {
-      chunkIds = (n.arguments[0].elements[0].elements as ASTNode[])
-        .map((e: ASTNode) => (e?.type === 'Literal' && typeof e.value === 'number' ? e.value : null))
-        .filter(Boolean) as number[]
-    }
-  })
-
-  console.log('[castle] acorn extracted: globalName=', globalName || '(none)', 'chunkIds=', chunkIds, 'moduleIds=', moduleIds)
-  if (!globalName || chunkIds.length === 0) return null
-
-  const modules = moduleIds.length > 0
-    ? moduleIds.map(id => `${id}:function(){}`).join(',')
-    : '0:function(){}'
-
-  return `(self["${globalName}"]=self["${globalName}"]||[]).push([[${chunkIds.join(',')}],{${modules}}])`
-}
-
 /** Probe a URL through the configured fetch path (sidecar → outboundProxy → direct) — used by /debug. */
 export async function probeOutboundProxy(url: string, timeoutMs = 8_000): Promise<{ ok: boolean; status?: number; ms: number; proxyActive: boolean; sidecarActive: boolean; error?: string }> {
   const t = Date.now()
@@ -552,39 +458,16 @@ const cross = extractCrossDomain(upstreamPath)
   const isHtml = contentType.includes('text/html')
 
   if (!isHtml) {
-    // Castle.io is X's bot-detection SDK. Per the (unconfirmed, see
-    // CASTLE_TOKEN.md) original investigation, it crashes inside the proxy
-    // iframe context (cross-origin parent access), which prevents login. We
-    // intercept the chunk, preserve the webpack registration wrapper so the
-    // bundle doesn't throw ChunkLoadError, but replace every module body
-    // with a no-op so the fingerprinting code never runs. Side effect: this
-    // also means Castle never generates the $castle_token X's begin_login
-    // endpoint expects, which is the likely actual cause of the "Please use
-    // X.com or official X apps" login error — see CASTLE_TOKEN.md.
-    // CASTLE_DEBUG_REAL=1 serves the real, unstubbed script instead, for
-    // testing whether the crash still reproduces.
-    if (/castle\.[a-f0-9]+\.js$/.test(upstreamPath)) {
-      const realScript = await upstreamResponse.text()
-      const stub = process.env.CASTLE_DEBUG_REAL === '1' ? null : extractWebpackChunkStub(realScript)
-      console.log('[castle] stub:', stub ? stub.slice(0, 120) : 'none — returning real script')
-      responseHeaders.set('Content-Type', 'application/javascript')
-      responseHeaders.delete('content-length')
-      const castleBody = stub ?? realScript
-      if (sessionId != null) {
-        recordTraffic({
-          sessionId, slug, method, upstreamUrl: upstream,
-          requestHeaders: headersToArray(forwardHeaders),
-          requestBody: body ? Buffer.from(body).toString('base64') : null,
-          responseStatus: 200,
-          responseHeaders: headersToArray(responseHeaders),
-          responseBody: castleBody.slice(0, 512 * 1024),
-          responseBodyEncoding: null,
-          durationMs: Date.now() - t0,
-        })
-      }
-      return new Response(castleBody, { status: 200, headers: responseHeaders })
-    }
-
+    // Castle.io (X's bot-detection SDK, ondemand.castle.*.js) used to be
+    // intercepted here and fully stubbed out (every module body replaced
+    // with a no-op) because it was reported to crash in the cross-origin
+    // iframe context — but that also meant it never generates the
+    // $castle_token X's begin_login endpoint expects, which is the likely
+    // actual cause of the "Please use X.com or official X apps" login
+    // error, and the crash it worked around didn't reproduce in repeated
+    // local testing. Removed — it's just served like any other JS file now.
+    // See CASTLE_TOKEN.md. If it turns out to genuinely crash, patch the
+    // specific thing that breaks, not the whole module again.
     if (sessionId != null) {
       const { body: buf, text: respText, encoding: respEncoding } = await captureResponseBody(upstreamResponse)
       recordTraffic({
