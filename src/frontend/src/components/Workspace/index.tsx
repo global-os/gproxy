@@ -274,6 +274,15 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
   }, [actions])
 
   const hydratedWorkspace = useRef<string | null>(null)
+  // Window IDs opened locally (via openProgram) since the last workspaceId
+  // change, before the one-time hydration below has run for it yet. The
+  // initial workspace-windows fetch races a fast launch: if a user opens an
+  // app before that fetch resolves, hydration used to blow away the
+  // just-opened window with a stale (pre-launch) server snapshot. Preserving
+  // only IDs recorded here (not just "anything in state.windows") avoids
+  // instead leaking stale windows from a *previous* workspace across a
+  // switch, since this component isn't remounted per workspaceId.
+  const pendingLocalWindowIds = useRef<Set<number>>(new Set())
 
   const { data: workspaceWindows } = useQuery<ServerWindow[]>({
     queryKey: ['workspace-windows', workspaceId],
@@ -290,13 +299,20 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
 
   useEffect(() => {
     hydratedWorkspace.current = null
+    pendingLocalWindowIds.current = new Set()
   }, [workspaceId])
 
   useEffect(() => {
     if (!workspaceWindows || hydratedWorkspace.current === workspaceId) return
     hydratedWorkspace.current = workspaceId
-    actions.setWindows(workspaceWindows.map(serverWindowToAppWindow))
-  }, [workspaceId, workspaceWindows, actions])
+    const serverWindows = workspaceWindows.map(serverWindowToAppWindow)
+    const serverIds = new Set(serverWindows.map((w) => w.id))
+    const locallyOpened = state.windows.filter(
+      (w) => pendingLocalWindowIds.current.has(w.id) && !serverIds.has(w.id),
+    )
+    actions.setWindows([...serverWindows, ...locallyOpened])
+    pendingLocalWindowIds.current = new Set()
+  }, [workspaceId, workspaceWindows, actions, state.windows])
 
   // Stable iframe refs read win from a ref map; sync each render so mount + trace see current metadata.
   for (const win of state.windows) {
@@ -365,6 +381,7 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
       if (result.action === 'focus') {
         actions.focusWindow(appWindow.id, appWindow.zIndex)
       } else {
+        pendingLocalWindowIds.current.add(appWindow.id)
         actions.openWindow(appWindow)
       }
       setLaunchMessage(null)
