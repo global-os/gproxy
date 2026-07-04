@@ -1,0 +1,5 @@
+{
+  "name": "doom",
+  "icon": "/.Resources/icons/16x16/doom.bmp",
+  "entry": "index.html"
+}
