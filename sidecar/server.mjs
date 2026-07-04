@@ -240,8 +240,9 @@ function isAuthorized(req, url) {
 }
 
 function renderAdminPage() {
+  const redactedProxyUrl = PROXY_URL ? PROXY_URL.replace(/:([^@]+)@/, ':***@') : '(none)'
   const rows = [
-    ['Proxy active', PROXY_URL ? 'yes' : 'no'],
+    ['Proxy URL', redactedProxyUrl],
     ['Server IP', ipProbe.serverIp ?? '(unchecked)'],
     ['Proxy IP', ipProbe.proxyIp ?? '(unchecked)'],
     ['Proxy routing OK', String(ipProbe.proxyOk ?? false)],

@@ -62,6 +62,35 @@ title screen's automatic demo playback drives a live player object through
 the real simulation, same as actual gameplay) — consistent with reports of
 it happening "immediately," not requiring any menu navigation or actual play.
 
+### Tested and ruled out: demo-sequence/gameversion mismatch
+
+Freedoom Phase 1 is a "retail"-mode WAD, and Chocolate Doom's version
+detection unconditionally treats any retail-mode WAD as `exe_ultimate`
+(`d_main.c` ~987, no override for Freedoom specifically at that point).
+"Ultimate Doom" mode extends the title-screen demo cycle from 6 states to 7
+(`d_main.c:504`, `% 7` vs `% 6`), adding a `demo4` lump playback — and the
+source's own comments describe exactly this failure class for a different
+IWAD: "Final Doom was based on Ultimate, so also includes this change;
+however, the Final Doom IWADs do not include a DEMO4 lump, so the game
+bombs out." Freedoom seemed like a good candidate for the same problem.
+
+**Tested by adding `-warp 1 1 -skill 3` to `commonArgs`** in `index.html` —
+jumps straight into a map, skipping the title screen and the entire demo
+sequence (`D_DoAdvanceDemo`) that would ever touch a demo lump. **Crash
+still happened**, same site (`P_PlayerThink`, same stack), with no demo
+playback involved at all and no human input yet (headless, freshly
+spawned). This cleanly rules out demo-lump-format mismatch as the cause —
+the bug is in ordinary per-tic player simulation itself, not anything
+demo-specific. If anything this makes it a *more* promising target now:
+it should reproduce on every real play session, not just idle-timeout demo
+playback, which makes the SAFE_HEAP-reenable-and-catch-it approach (see
+Next steps) more tractable than when it seemed demo-only.
+
+The `-warp` args are currently still in `index.html` even though they
+didn't fix anything — worth deciding whether to keep skipping the title
+screen as a UX choice on its own merits, or revert now that it's not
+serving a diagnostic purpose.
+
 **It is not reliably reproducible.** Many identical-looking runs complete
 fine; one run (with debug logging added, which changes per-frame JS timing
 slightly) crashed within the first tic. This smells like a genuine,

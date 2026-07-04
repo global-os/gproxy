@@ -122,7 +122,18 @@
                 );
             });
 
-            var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare"];
+            // -warp 1 1 -skill 3: jump straight into a map, skipping the title
+            // screen's automatic attract-mode demo playback entirely. Working
+            // theory (see DOOM_GAPP.md): Freedoom is a "retail"-mode WAD, which
+            // Chocolate Doom's version detection unconditionally treats as
+            // "Ultimate Doom" (d_main.c ~987) — that adds a 7th demo-sequence
+            // state (a demo4 lump) beyond the usual 6, and Freedoom's bundled
+            // demo lumps may not actually be compatible with what that mode
+            // expects, feeding bad recorded input into the simulation and
+            // producing the intermittent P_PlayerThink out-of-bounds crash.
+            // This sidesteps the whole demo sequence rather than fixing the
+            // underlying mismatch.
+            var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare", "-warp", "1", "1", "-skill", "3"];
 
             var Module = {
                 onRuntimeInitialized: () => {
