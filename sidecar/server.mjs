@@ -19,10 +19,9 @@ import { resolveProxyUrl, startConfigPolling } from './config.mjs'
 
 const PORT = process.env.PORT || 8080
 const SECRET = process.env.SIDECAR_SECRET || ''
-// Local config file (set via the main app's admin panel) overrides the env
-// var default — see config.mjs for why this is poll-and-restart rather than
-// a live hot-reload.
-const PROXY_URL = resolveProxyUrl(process.env.PROXY_URL || '')
+// Proxy URL comes exclusively from the admin panel (polled from Vercel, stored
+// in /data/config.json) — see config.mjs. No env var fallback.
+const PROXY_URL = resolveProxyUrl()
 const FETCH_TIMEOUT_MS = 20_000
 const MAX_REDIRECTS = 10
 
@@ -294,5 +293,5 @@ server.listen(PORT, () => {
     `[sidecar] listening :${PORT}  engine=chrome(patchright)  auth=${!!SECRET}  proxy=${!!PROXY_URL}`
   )
   probeIps()
-  startConfigPolling(process.env.PROXY_URL || '')
+  startConfigPolling()
 })

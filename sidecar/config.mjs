@@ -42,19 +42,18 @@ function writeLocalConfig(config) {
   }
 }
 
-/** The effective PROXY_URL to actually use: local file (once set) overrides the env var default. */
-export function resolveProxyUrl(envProxyUrl) {
-  const local = readLocalConfig()
-  return (local.proxyUrl ?? envProxyUrl) || ''
+/** The effective PROXY_URL to use: read from local config file only (set via admin panel poll). */
+export function resolveProxyUrl() {
+  return readLocalConfig().proxyUrl || ''
 }
 
-export function startConfigPolling(envProxyUrl) {
+export function startConfigPolling() {
   if (!MAIN_APP_URL) {
     console.log('[config] MAIN_APP_URL not set, admin-panel config polling disabled')
     return
   }
 
-  const current = resolveProxyUrl(envProxyUrl)
+  const current = resolveProxyUrl()
 
   setInterval(async () => {
     try {
@@ -74,7 +73,7 @@ export function startConfigPolling(envProxyUrl) {
         decipher.setAuthTag(Buffer.from(tagHex, 'hex'))
         proxyUrl = Buffer.concat([decipher.update(Buffer.from(ctHex, 'hex')), decipher.final()]).toString('utf8')
       }
-      const effective = proxyUrl || envProxyUrl || ''
+      const effective = proxyUrl || ''
       if (effective !== current) {
         console.log('[config] proxy_url changed via admin panel — writing local config and restarting to apply')
         writeLocalConfig({ proxyUrl: proxyUrl || null })
