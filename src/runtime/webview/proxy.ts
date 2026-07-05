@@ -326,6 +326,31 @@ function headersToArray(h: Headers): { name: string; value: string }[] {
   return out
 }
 
+/**
+ * Wraps Castle.io's environment-tampering checks with a console.log of their
+ * return value, so a real occurrence of the login-limit error can be
+ * correlated against what these checks actually observed in that browser.
+ * Matches the shape empirically found in one snapshot of the real script
+ * (`function uN(){try{return EXPR}catch{return!1}}`, checking whether
+ * globals like Element/AudioContext have been monkey-patched via a
+ * .toString() signature comparison) — matched generically by shape, not by
+ * the specific minified names found in that snapshot, since those are
+ * arbitrary and could shift in a different build. No-op (returns the script
+ * unchanged) if the shape doesn't match at all, e.g. if X ships a
+ * differently-structured bundle later.
+ */
+function instrumentCastleTamperChecks(script: string): string {
+  return script.replace(
+    /function (u\d+)\(\)\{try\{return ([^;]{5,80}?)\}catch\{return!1\}\}/g,
+    (_match, name: string, expr: string) =>
+      `function ${name}(){try{`
+      + `var __v=(${expr});`
+      + `console.log("[castle-probe] ${name} =",__v);`
+      + `return __v`
+      + `}catch(__e){console.log("[castle-probe] ${name} threw",__e&&__e.message);return!1}}`,
+  )
+}
+
 export async function proxyWebviewRequest(
   boundDomain: string,
   upstreamPath: string,
@@ -465,9 +490,34 @@ const cross = extractCrossDomain(upstreamPath)
     // $castle_token X's begin_login endpoint expects, which is the likely
     // actual cause of the "Please use X.com or official X apps" login
     // error, and the crash it worked around didn't reproduce in repeated
-    // local testing. Removed — it's just served like any other JS file now.
-    // See CASTLE_TOKEN.md. If it turns out to genuinely crash, patch the
+    // local testing. Now served as-is (below), with one addition: its
+    // environment-tampering checks (functions shaped like
+    // `function uN(){try{return EXPR}catch{return!1}}`, checking whether
+    // globals like Element/AudioContext have been monkey-patched, via
+    // .toString() signature comparison) get instrumented with a
+    // console.log so real occurrences of the login-limit error can be
+    // correlated against what these checks actually see — see
+    // CASTLE_TOKEN.md. If it turns out to genuinely crash, patch the
     // specific thing that breaks, not the whole module again.
+    if (/castle\.[a-f0-9]+\.js$/.test(upstreamPath)) {
+      const realScript = await upstreamResponse.text()
+      const instrumented = instrumentCastleTamperChecks(realScript)
+      responseHeaders.delete('content-length')
+      if (sessionId != null) {
+        recordTraffic({
+          sessionId, slug, method, upstreamUrl: upstream,
+          requestHeaders: headersToArray(forwardHeaders),
+          requestBody: body ? Buffer.from(body).toString('base64') : null,
+          responseStatus: upstreamResponse.status,
+          responseHeaders: headersToArray(responseHeaders),
+          responseBody: instrumented.slice(0, 512 * 1024),
+          responseBodyEncoding: null,
+          durationMs: Date.now() - t0,
+        })
+      }
+      return new Response(instrumented, { status: upstreamResponse.status, headers: responseHeaders })
+    }
+
     if (sessionId != null) {
       const { body: buf, text: respText, encoding: respEncoding } = await captureResponseBody(upstreamResponse)
       recordTraffic({
