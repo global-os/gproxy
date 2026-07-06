@@ -40,7 +40,7 @@
     "@types/pg": "^8.16.0",
     "@types/tar": "^7.0.87",
     "@vercel/functions": "^2.2.13",
-    "better-auth": "^1.4.7",
+    "better-auth": "^1.6.11",
     "bunx": "^0.1.0",
     "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.10",
