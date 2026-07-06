@@ -1,28 +1,60 @@
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
 import { brotliDecompress } from 'node:zlib'
 import { promisify } from 'node:util'
+import { eq } from 'drizzle-orm'
+import { db } from '../../db/index.js'
+import * as schema from '../../db/schema.js'
 import { getActiveSessionId, captureResponseBody, recordTraffic } from './recording.js'
 
 const brotliDecompressAsync = promisify(brotliDecompress)
 
-let outboundProxy: ProxyAgent | null = null
-let outboundProxyUrlRedacted: string | null = null
-if (process.env.PROXY_URL) {
-  try {
-    outboundProxy = new ProxyAgent(process.env.PROXY_URL)
-    outboundProxyUrlRedacted = process.env.PROXY_URL.replace(/:([^@]+)@/, ':***@')
-    console.log('[webview] outbound proxy active:', outboundProxyUrlRedacted)
-  } catch (err) {
-    console.error('[webview] PROXY_URL is invalid, outbound proxy disabled:', err)
-  }
+function redactProxyUrl(url: string): string {
+  return url.replace(/:([^@]+)@/, ':***@')
 }
 
-// Built once at module load from the static PROXY_URL env var — does NOT
-// reflect admin-panel changes (those only update the DB-backed proxy_config
-// row, which the sidecar polls but this direct-fetch path never rereads).
-// Exposed for /debug so that gap is visible instead of silently confusing.
-export function getActiveOutboundProxyUrl(): string | null {
-  return outboundProxyUrlRedacted
+// No env var, single source of truth: the same DB-backed proxy_config row
+// the admin panel writes to and the sidecar polls (previously this read a
+// separate, static PROXY_URL env var that only ever reflected whatever was
+// set at last deploy — a real gap, since admin-panel changes never reached
+// this path; see CLAUDE.md's "Vercel pitfall #6", now resolved by removing
+// the env var entirely rather than trying to keep two sources in sync).
+// Cached briefly to avoid a DB round trip on every proxied request; on a
+// read failure, falls back to no proxy and retries sooner rather than
+// caching the failure for the same TTL as a success.
+const CACHE_TTL_MS = 30_000
+const RETRY_TTL_MS = 5_000
+let cachedProxyUrl: string | null = null
+let cachedProxyAgent: ProxyAgent | null = null
+let cacheExpiresAt = 0
+let lastError: string | null = null
+
+export async function resolveOutboundProxy(): Promise<{ agent: ProxyAgent | null; urlRedacted: string | null; error: string | null }> {
+  if (Date.now() < cacheExpiresAt) {
+    return { agent: cachedProxyAgent, urlRedacted: cachedProxyUrl ? redactProxyUrl(cachedProxyUrl) : null, error: lastError }
+  }
+  try {
+    const [row] = await db.select().from(schema.proxyConfig).where(eq(schema.proxyConfig.id, 1))
+    const url = row?.proxy_url || null
+    if (url !== cachedProxyUrl) {
+      cachedProxyAgent = url ? new ProxyAgent(url) : null
+      cachedProxyUrl = url
+      console.log(url ? `[webview] outbound proxy active: ${redactProxyUrl(url)}` : '[webview] outbound proxy disabled (no proxy_url in db)')
+    }
+    lastError = null
+    cacheExpiresAt = Date.now() + CACHE_TTL_MS
+  } catch (err) {
+    lastError = err instanceof Error ? err.message : String(err)
+    console.error('[webview] failed to read proxy config from db, using no proxy until next check:', err)
+    cachedProxyAgent = null
+    cachedProxyUrl = null
+    cacheExpiresAt = Date.now() + RETRY_TTL_MS
+  }
+  return { agent: cachedProxyAgent, urlRedacted: cachedProxyUrl ? redactProxyUrl(cachedProxyUrl) : null, error: lastError }
+}
+
+/** Current outbound proxy URL (redacted), read live from the db — used by /debug. */
+export async function getActiveOutboundProxyUrl(): Promise<string | null> {
+  return (await resolveOutboundProxy()).urlRedacted
 }
 
 const sidecarUrl = process.env.SIDECAR_URL?.replace(/\/$/, '') ?? null
@@ -303,6 +335,7 @@ function rewriteHtml(html: string, boundDomain: string): string {
 /** Probe a URL through the configured fetch path (sidecar → outboundProxy → direct) — used by /debug. */
 export async function probeOutboundProxy(url: string, timeoutMs = 8_000): Promise<{ ok: boolean; status?: number; ms: number; proxyActive: boolean; sidecarActive: boolean; error?: string }> {
   const t = Date.now()
+  const { agent: outboundProxy } = await resolveOutboundProxy()
   try {
     const fetchInit = { method: 'GET', headers: new Headers(), body: null, redirect: 'follow' as const }
     const res = await Promise.race([
@@ -415,6 +448,7 @@ const cross = extractCrossDomain(upstreamPath)
       body,
       redirect: 'follow' as const,
     }
+    const { agent: outboundProxy } = await resolveOutboundProxy()
     if (sidecarUrl) {
       upstreamResponse = await fetchViaSidecar(upstream, fetchInit)
     } else if (outboundProxy) {

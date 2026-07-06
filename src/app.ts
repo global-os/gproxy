@@ -9,7 +9,6 @@ import { getPath } from 'hono/utils/url'
 import { eq } from 'drizzle-orm'
 
 import * as schema from './db/schema.js'
-import * as dbSchema from './db/schema.js'
 import * as middleware from './middleware.js'
 import { Env } from './types'
 import { replaceDomainInHTML } from './replace.js'
@@ -183,27 +182,16 @@ app.get('/debug', async (c) => {
     probeOutboundProxy('https://x.com/'),
   ])
 
-  const [proxyConfigRow] = await db.select().from(dbSchema.proxyConfig).where(eq(dbSchema.proxyConfig.id, 1))
-  const dbProxyUrlRedacted = proxyConfigRow?.proxy_url?.replace(/:([^@]+)@/, ':***@') ?? null
-
   return c.json({
     pool: { ok: poolOk, ms: poolMs, ...(poolError ? { error: poolError } : {}) },
     userLookup,
     drizzleUserLookup,
     scrypt,
-    // Three separate sources of truth for the outbound proxy — surfaced
-    // together because they can and do diverge. envProxyUrl is what Vercel's
-    // env config says right now; activeOutboundProxyUrl is what this app's
-    // direct-fetch client (proxy.ts) actually built its ProxyAgent from at
-    // cold-start (frozen — never rereads); dbProxyUrl is the admin-panel/
-    // sidecar-polled value. If dbProxyUrl != activeOutboundProxyUrl, changing
-    // it in the admin panel has NOT taken effect on this app's own direct
-    // fetches (only the sidecar picks up DB changes, on its own poll cycle).
-    proxySources: {
-      envProxyUrl: process.env.PROXY_URL?.replace(/:([^@]+)@/, ':***@') ?? null,
-      activeOutboundProxyUrl: getActiveOutboundProxyUrl(),
-      dbProxyUrl: dbProxyUrlRedacted,
-    },
+    // Single source of truth now: the db-backed proxy_config row, read
+    // live (short-cached) by proxy.ts itself — no more env var to diverge
+    // from it. null means either nothing configured, or a db read failure
+    // (falls back to no proxy rather than a stale/wrong cached value).
+    activeOutboundProxyUrl: await getActiveOutboundProxyUrl(),
     authProbe,
     twimagProbe,
     xcomProbe,
@@ -230,7 +218,7 @@ app.get('/debug', async (c) => {
 app.get('/health', async (c) => {
   const config = checkConfig()
   const frontend = checkFrontendBundle()
-  const proxy = checkProxyUrl()
+  const proxy = await checkProxyUrl()
 
   const [direct, pooled, authTables, appTables, userLookup, authProbe, sidecar] = await Promise.all([
     pingDatabase(),

@@ -1,7 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { ProxyAgent, fetch as undiciFetch } from 'undici'
+import { fetch as undiciFetch } from 'undici'
 import { auth } from './auth.js'
+import { resolveOutboundProxy } from './runtime/webview/proxy.js'
 
 export type ConfigCheck = { ok: boolean; missing: string[] }
 export type ProxyCheck = { configured: boolean; ok: boolean; error?: string }
@@ -27,17 +28,10 @@ const BUNDLE_FILES = [
   path.join(process.cwd(), 'src/build-version.json'),
 ]
 
-export function checkProxyUrl(): ProxyCheck {
-  const url = process.env.PROXY_URL
-  if (!url?.trim()) return { configured: false, ok: true }
-  try {
-    new ProxyAgent(url)
-    return { configured: true, ok: true }
-  } catch (err) {
-    const redacted = url.replace(/:([^@]+)@/, ':***@')
-    console.error('[health] PROXY_URL invalid. Redacted value:', redacted, 'Length:', url.length)
-    return { configured: true, ok: false, error: err instanceof Error ? err.message : String(err) }
-  }
+export async function checkProxyUrl(): Promise<ProxyCheck> {
+  const { urlRedacted, error } = await resolveOutboundProxy()
+  if (error) return { configured: true, ok: false, error }
+  return { configured: urlRedacted != null, ok: true }
 }
 
 export function checkConfig(): ConfigCheck {
@@ -53,10 +47,9 @@ export function checkFrontendBundle(): BundleCheck {
 }
 
 async function fetchIpViaProxy(timeoutMs: number): Promise<string | null> {
-  const proxyUrl = process.env.PROXY_URL
-  if (!proxyUrl) return null
+  const { agent } = await resolveOutboundProxy()
+  if (!agent) return null
   try {
-    const agent = new ProxyAgent(proxyUrl)
     const res = await Promise.race([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       undiciFetch('https://api.ipify.org', { dispatcher: agent } as any),
