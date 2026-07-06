@@ -85,6 +85,30 @@ Possible explanations, none confirmed:
   **deleting the stub entirely** and letting Castle's real SDK run — worth
   confirming deliberately rather than assuming, given how confidently the
   original comment described the crash.
-- Fix the `Sec-Fetch-Site: same-site` vs `same-origin` bug in
-  `sidecar/mitm-proxy.mjs`'s `isSameSite()` regardless — smaller, but a
-  real, confirmed bug independent of the castle_token question.
+- ~~Fix the `Sec-Fetch-Site: same-site` vs `same-origin` bug in
+  `sidecar/mitm-proxy.mjs`'s `isSameSite()`~~ — moot, the whole MITM layer
+  was removed (see `CLAUDE.md`'s TLS sidecar section). It was requiring
+  Chrome's TLS connection to be terminated and re-established from Node's
+  own TLS stack to fix Sec-Fetch-*, which produces a non-Chrome JA3/JA4
+  fingerprint for the one connection the whole sidecar exists to keep
+  genuinely Chrome-flavored — confirmed via a real side-by-side test (a
+  direct Chrome session through the identical proxy IP succeeded at login
+  where the MITM'd pipeline failed every time). Wrong Sec-Fetch-Site was
+  judged the smaller cost.
+
+## Update: stub removal confirmed working, but a separate issue surfaced
+
+Removing the stub worked as intended — a real HAR capture (`sidecar-traffic-
+1783318799376.har`) confirmed `$castle_token` present and complete in
+`begin_login` (matched `Content-Length` exactly), and the castle-probe
+instrumentation showed all 5 tamper-detection checks returning the
+"untampered" value. But the request still got X's "We've temporarily
+limited your login" response. Traced (with the user's help) to the MITM
+proxy's TLS termination as above, not Castle at all — see `CLAUDE.md` for
+the current state (MITM removed, `proxy-chain` in its place, no more
+Sec-Fetch-* correction). Deployed but not yet reconfirmed working end to
+end as of this writing; if the TLS fingerprint theory is wrong too, the
+next escalation under discussion is patching Chromium's own header
+computation logic (fixes Sec-Fetch-* without needing TLS termination at
+all, since that logic runs before the handshake) — a much bigger
+undertaking, not started.

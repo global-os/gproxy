@@ -9,13 +9,13 @@
 // The env var PROXY_URL is only the initial default before anything's ever
 // been set via the admin panel.
 //
-// Applying a change: rather than hot-swapping Chrome's proxy config and the
-// MITM proxy's upstream agent in-process (real Chrome doesn't support
-// changing its proxy after launch at all), write the new value to the local
-// file and exit — the container's restart policy brings up a fresh process
-// that reads the updated file at startup. A few seconds of downtime on a
-// rare, manual admin action is an acceptable trade for not having to
-// reimplement Chrome/MITM startup as a hot-reloadable subsystem.
+// Applying a change: rather than hot-swapping Chrome's proxy config
+// in-process (real Chrome doesn't support changing its proxy after launch
+// at all), write the new value to the local file and exit — the
+// container's restart policy brings up a fresh process that reads the
+// updated file at startup. A few seconds of downtime on a rare, manual
+// admin action is an acceptable trade for not having to reimplement
+// Chrome startup as a hot-reloadable subsystem.
 import fs from 'node:fs'
 import path from 'node:path'
 import { createDecipheriv, createHash } from 'node:crypto'

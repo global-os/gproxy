@@ -14,7 +14,7 @@
 import { createServer } from 'node:http'
 import { chromium } from 'patchright'
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
-import { startMitmProxy } from './mitm-proxy.mjs'
+import { anonymizeProxy } from 'proxy-chain'
 import { resolveProxyUrl, startConfigPolling } from './config.mjs'
 
 const PORT = process.env.PORT || 8080
@@ -63,16 +63,25 @@ async function probeIps() {
 // with no proxy configured hangs indefinitely once a proxy with
 // credentials is set, for any URL, not just specific sites.
 //
-// Fix: run a local MITM proxy (mitm-proxy.mjs) that itself holds the real
-// upstream proxy credentials (as a plain Node process, not Chrome — no CDP
-// conflict there) and forwards to it. Chrome connects to this local,
-// unauthenticated proxy and never engages its own internal proxy-auth
-// handling. The same proxy also corrects Sec-Fetch-* headers that Chrome
+// Fix: proxy-chain's anonymizeProxy() holds the real upstream proxy
+// credentials itself (a plain Node process, not Chrome — no CDP conflict
+// there) and forwards to it via a local, unauthenticated proxy. Chrome
+// never engages its own internal proxy-auth handling.
+//
+// This used to also run through a local MITM proxy (mitm-proxy.mjs,
+// removed) that additionally corrected Sec-Fetch-* headers Chrome
 // recomputes from real request context regardless of our CDP overrides —
-// see mitm-proxy.mjs for why that needs a real TLS-terminating layer rather
-// than another CDP-level fix.
-const mitm = await startMitmProxy(PROXY_URL || null)
-const mitmPort = mitm.port
+// but that correction required *terminating* Chrome's TLS connection and
+// re-establishing a new one from Node's own TLS stack to the upstream,
+// which produces a Node/OpenSSL TLS fingerprint instead of Chrome's, for
+// the one connection this whole sidecar exists to keep genuinely
+// Chrome-flavored. Confirmed empirically: a direct Chrome session through
+// the exact same upstream IP (no MITM, no interception at all) reached a
+// login flow that failed every time through the MITM'd pipeline. Wrong
+// Sec-Fetch-Site is the smaller cost — anonymizeProxy() just tunnels the
+// bytes through, no termination, so Chrome's real TLS handshake reaches
+// the upstream untouched.
+const anonymizedProxyUrl = PROXY_URL ? await anonymizeProxy(PROXY_URL) : null
 
 const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
   channel: 'chrome',
@@ -81,9 +90,8 @@ const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
   viewport: { width: 1920, height: 1080 },
   args: [
     '--no-sandbox', // required running as root in a container
-    '--ignore-certificate-errors', // trust our local MITM proxy's self-signed certs
   ],
-  proxy: { server: `http://127.0.0.1:${mitmPort}` },
+  ...(anonymizedProxyUrl ? { proxy: { server: anonymizedProxyUrl } } : {}),
 })
 
 // Each /fetch call gets its own page + CDP session, created and torn down
@@ -246,7 +254,6 @@ function renderAdminPage() {
     ['Server IP', ipProbe.serverIp ?? '(unchecked)'],
     ['Proxy IP', ipProbe.proxyIp ?? '(unchecked)'],
     ['Proxy routing OK', String(ipProbe.proxyOk ?? false)],
-    ['MITM port', String(mitmPort)],
     ['Uptime', `${Math.floor(process.uptime())}s`],
   ]
   const tableRows = rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('\n')
@@ -254,72 +261,13 @@ function renderAdminPage() {
 <html><head><title>Sidecar admin</title>
 <style>
   body { font-family: monospace; background: #111; color: #0f0; padding: 2em; }
-  table { border-collapse: collapse; margin-bottom: 1.5em; }
+  table { border-collapse: collapse; }
   th, td { text-align: left; padding: 0.3em 1em; border-bottom: 1px solid #333; }
   th { color: #6f6; }
-  button {
-    font-family: monospace; background: #1a1a1a; color: #0f0; border: 1px solid #363;
-    padding: 0.5em 1em; margin-right: 0.5em; cursor: pointer;
-  }
-  button:hover { background: #232; }
-  #mitm-status { margin-top: 0.8em; color: #6f6; }
 </style></head>
 <body>
 <h1>Sidecar status</h1>
 <table>${tableRows}</table>
-
-<h2>MITM traffic recording</h2>
-<button id="mitm-start">Start recording HAR</button>
-<button id="mitm-stop">Stop recording HAR</button>
-<button id="mitm-download">Download HAR</button>
-<div id="mitm-status"></div>
-
-<script>
-  var secret = new URLSearchParams(location.search).get('secret')
-  function withSecret(path) {
-    var url = new URL(path, location.origin)
-    if (secret) url.searchParams.set('secret', secret)
-    return url.toString()
-  }
-  function setStatus(text) {
-    document.getElementById('mitm-status').textContent = text
-  }
-
-  document.getElementById('mitm-start').addEventListener('click', function () {
-    setStatus('starting...')
-    fetch(withSecret('/mitm/start'), { method: 'POST' })
-      .then(function (r) { return r.text() })
-      .then(function (t) { setStatus(t) })
-      .catch(function (e) { setStatus('error: ' + e.message) })
-  })
-
-  document.getElementById('mitm-stop').addEventListener('click', function () {
-    setStatus('stopping...')
-    fetch(withSecret('/mitm/stop'), { method: 'POST' })
-      .then(function (r) { return r.text() })
-      .then(function (t) { setStatus(t) })
-      .catch(function (e) { setStatus('error: ' + e.message) })
-  })
-
-  document.getElementById('mitm-download').addEventListener('click', function () {
-    setStatus('downloading...')
-    fetch(withSecret('/mitm/har'))
-      .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status)
-        return r.blob()
-      })
-      .then(function (blob) {
-        var a = document.createElement('a')
-        a.href = URL.createObjectURL(blob)
-        a.download = 'sidecar-traffic-' + Date.now() + '.har'
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-        setStatus('downloaded')
-      })
-      .catch(function (e) { setStatus('error: ' + e.message) })
-  })
-</script>
 </body></html>`
 }
 
@@ -365,29 +313,6 @@ const server = createServer(async (req, res) => {
       res.writeHead(502)
       res.end(`fetch error: ${err instanceof Error ? err.message : String(err)}`)
     }
-    return
-  }
-
-  // Debug endpoints: record the actual traffic crossing the local MITM
-  // proxy (i.e. after Chrome's own header injection and our Sec-Fetch-*
-  // corrections — ground truth, unlike the app-level HAR recorder which
-  // only ever sees the headers proxy.ts intended to send).
-  if (url.pathname === '/mitm/start' && req.method === 'POST') {
-    if (!isAuthorized(req, url)) { res.writeHead(401); res.end('unauthorized'); return }
-    mitm.startRecording()
-    res.writeHead(200); res.end('recording started')
-    return
-  }
-  if (url.pathname === '/mitm/stop' && req.method === 'POST') {
-    if (!isAuthorized(req, url)) { res.writeHead(401); res.end('unauthorized'); return }
-    mitm.stopRecording()
-    res.writeHead(200); res.end('recording stopped')
-    return
-  }
-  if (url.pathname === '/mitm/har' && req.method === 'GET') {
-    if (!isAuthorized(req, url)) { res.writeHead(401); res.end('unauthorized'); return }
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(mitm.exportHar()))
     return
   }
 
