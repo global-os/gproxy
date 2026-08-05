@@ -7,6 +7,9 @@ if (mount) {
     <RotatingText
       phrases={['public computers', 'your laptop', 'your phone', 'the cloud']}
       class="text-white font-medium"
+      onReady={() => {
+        document.getElementById('hero-line')?.classList.remove('opacity-0')
+      }}
     />,
     mount
   )
