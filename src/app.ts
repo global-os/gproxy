@@ -65,6 +65,7 @@ app.get('/www', async (c) => {
   const html = fs
     .readFileSync(htmlPath, 'utf-8')
     .replace('<!-- GLOBALOS_VERSION -->', getBuildVersion().label)
+    .replace('<!-- GLOBALOS_SHA -->', getBuildVersion().sha)
   return c.html(html)
 })
 
