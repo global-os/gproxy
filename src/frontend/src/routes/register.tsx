@@ -55,11 +55,11 @@ function RouteComponent() {
   return (
     <AuthLayout>
       <AuthCard>
-        <h1 className="m-0 text-xl font-semibold text-gray-800 mb-6">Create your account</h1>
+        <h1 className="m-0 text-xl font-semibold text-gray-100 mb-6">Create your account</h1>
 
         <form onSubmit={handleSubmit} className="grid gap-4">
           {error && (
-            <p className="m-0 text-sm text-red-600" role="alert">
+            <p className="m-0 text-sm text-red-400" role="alert">
               {error}
             </p>
           )}
@@ -79,7 +79,7 @@ function RouteComponent() {
           </div>
           <div className="grid gap-1.5">
             <label htmlFor="name" className={authLabelCls}>
-              Name <span className="text-gray-400 font-normal">(optional)</span>
+              Name <span className="text-gray-500 font-normal">(optional)</span>
             </label>
             <input
               id="name"
@@ -123,7 +123,7 @@ function RouteComponent() {
           </button>
         </form>
 
-        <div className="mt-6 pt-5 border-t border-gray-200 text-center text-sm text-gray-500">
+        <div className="mt-6 pt-5 border-t border-white/10 text-center text-sm text-gray-400">
           Already have an account?{' '}
           <Link to="/login" className={authLinkCls}>
             Log in

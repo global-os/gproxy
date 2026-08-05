@@ -35,11 +35,11 @@ function RouteComponent() {
   return (
     <AuthLayout>
       <AuthCard>
-        <h1 className="m-0 text-xl font-semibold text-gray-800 mb-2">Reset password</h1>
+        <h1 className="m-0 text-xl font-semibold text-gray-100 mb-2">Reset password</h1>
 
         {submitted ? (
           <div className="mt-4 grid gap-4">
-            <p className="m-0 text-sm text-gray-600 leading-relaxed">
+            <p className="m-0 text-sm text-gray-400 leading-relaxed">
               If an account exists for <strong>{email}</strong>, you&apos;ll receive a reset link shortly.
             </p>
             <Link to="/login" className={authLinkCls}>
@@ -48,12 +48,12 @@ function RouteComponent() {
           </div>
         ) : (
           <>
-            <p className="mt-2 mb-6 text-sm text-gray-500 leading-relaxed">
+            <p className="mt-2 mb-6 text-sm text-gray-400 leading-relaxed">
               Enter your email and we&apos;ll send you a link to reset your password.
             </p>
             <form onSubmit={handleSubmit} className="grid gap-4">
               {error && (
-                <p className="m-0 text-sm text-red-600">{error}</p>
+                <p className="m-0 text-sm text-red-400">{error}</p>
               )}
               <div className="grid gap-1.5">
                 <label htmlFor="email" className={authLabelCls}>
