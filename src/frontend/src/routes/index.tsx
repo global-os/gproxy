@@ -44,8 +44,8 @@ function Index() {
   return (
     <AuthLayout>
       <AuthCard>
-        <h1 className="m-0 text-xl font-semibold text-gray-800">Welcome to GlobalOS</h1>
-        <p className="mt-2 mb-8 text-sm text-gray-500 leading-relaxed">
+        <h1 className="m-0 text-xl font-medium text-gray-100">Welcome to GlobalOS</h1>
+        <p className="mt-2 mb-8 text-sm text-gray-400 leading-relaxed">
           Your workspace desktop, anywhere globally.
         </p>
         <div className="grid gap-3">
