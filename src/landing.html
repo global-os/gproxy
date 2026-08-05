@@ -12,17 +12,22 @@
 </head>
 <body class="bg-slate-950 text-white min-h-screen flex flex-col">
 
+  <!-- Flow field background -->
+  <canvas id="flow-bg" class="fixed inset-0 w-full h-full pointer-events-none"></canvas>
+
   <!-- Nav -->
-  <nav class="px-8 py-6 flex items-center justify-between max-w-6xl mx-auto w-full relative z-10">
-    <span class="text-lg font-semibold tracking-tight" style="border-bottom: 2px solid #a855f7; padding-bottom: 1px;">GlobalOS</span>
-    <a
-      href="https://app.app.onetrueos.com"
-      class="text-sm text-slate-400 hover:text-white transition-colors"
-    >Sign in →</a>
+  <nav class="relative z-10 w-full bg-black/90 border-b border-white/10">
+    <div class="px-8 py-6 flex items-center justify-between max-w-6xl mx-auto w-full">
+      <span class="text-lg font-semibold tracking-tight" style="border-bottom: 2px solid #a855f7; padding-bottom: 1px;">GlobalOS</span>
+      <a
+        href="https://app.app.onetrueos.com"
+        class="text-sm text-slate-400 hover:text-white transition-colors"
+      >Sign in →</a>
+    </div>
   </nav>
 
   <!-- Hero -->
-  <main class="flex-1 flex flex-col items-center justify-center text-center px-6 -mt-16">
+  <main class="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-6 -mt-16">
     <h1 class="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight leading-tight max-w-3xl">
       Your workspace.<br />Anywhere globally.
     </h1>
@@ -41,10 +46,118 @@
   </main>
 
   <!-- Footer -->
-  <footer class="px-8 py-6 text-center text-sm">
-    <p class="text-slate-700/80 text-xs mb-2"><!-- GLOBALOS_VERSION --></p>
-    <p class="text-slate-600">© 2026 Cold Air Networks</p>
+  <footer class="relative z-10 px-8 py-6 flex justify-center">
+    <div class="inline-block bg-black/60 border border-white/10 rounded-lg backdrop-blur-sm px-6 py-3 text-center text-sm">
+      <p class="text-slate-700/80 text-xs mb-2"><!-- GLOBALOS_VERSION --></p>
+      <p class="text-slate-600">© 2026 Cold Air Networks</p>
+    </div>
   </footer>
+
+  <script>
+    (function () {
+      var canvas = document.getElementById('flow-bg')
+      var ctx = canvas.getContext('2d', { alpha: false })
+
+      var TAU = Math.PI * 2
+      var FIELD_SCALE = 0.0045
+      var PARTICLE_COUNT = 900
+      var TRAIL_ALPHA = 0.12
+
+      var width = 0
+      var height = 0
+      var dpr = 1
+      var time = 0
+
+      function fieldAt(x, y, t) {
+        var nx = x * FIELD_SCALE
+        var ny = y * FIELD_SCALE
+        var a = Math.sin(nx * 1.3 + t * 0.55) + Math.cos(ny * 0.9 - t * 0.35)
+        var b = Math.cos(nx * 0.8 - t * 0.42) - Math.sin(ny * 1.1 + t * 0.5)
+        return {
+          vx: Math.sin(a) * 1.15 + Math.cos(b) * 0.55,
+          vy: Math.cos(a) * 1.15 - Math.sin(b) * 0.55,
+        }
+      }
+
+      var particles = Array.from({ length: PARTICLE_COUNT }, function () {
+        return { x: Math.random(), y: Math.random(), life: Math.random() }
+      })
+
+      function resize() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2)
+        width = window.innerWidth
+        height = window.innerHeight
+        canvas.width = Math.floor(width * dpr)
+        canvas.height = Math.floor(height * dpr)
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      }
+
+      function spawnParticle(p) {
+        p.x = Math.random()
+        p.y = Math.random()
+        p.life = 1
+      }
+
+      function stepParticle(p, dt) {
+        var px = p.x * width
+        var py = p.y * height
+        var v = fieldAt(px, py, time)
+        var speed = Math.hypot(v.vx, v.vy)
+        var step = (0.35 + speed * 0.12) * dt
+
+        p.x += (v.vx * step) / width
+        p.y += (v.vy * step) / height
+        p.life -= dt * (0.08 + speed * 0.04)
+
+        if (p.life <= 0 || p.x < -0.02 || p.x > 1.02 || p.y < -0.02 || p.y > 1.02) {
+          spawnParticle(p)
+        }
+      }
+
+      function drawParticle(p) {
+        var px = p.x * width
+        var py = p.y * height
+        var v = fieldAt(px, py, time)
+        var speed = Math.hypot(v.vx, v.vy)
+        var hue = ((Math.atan2(v.vy, v.vx) / TAU) + 0.5) * 360
+        var alpha = Math.min(0.5, 0.12 + speed * 0.12) * p.life
+
+        ctx.strokeStyle = 'hsla(' + hue + ', 80%, 60%, ' + alpha + ')'
+        ctx.lineWidth = 1 + speed * 0.3
+        ctx.beginPath()
+        ctx.moveTo(px, py)
+        ctx.lineTo(px - v.vx * 7, py - v.vy * 7)
+        ctx.stroke()
+      }
+
+      function fadeFrame() {
+        ctx.fillStyle = 'rgba(2, 6, 23, ' + TRAIL_ALPHA + ')'
+        ctx.fillRect(0, 0, width, height)
+      }
+
+      var last = performance.now()
+
+      function frame(now) {
+        var dt = Math.min(0.05, (now - last) / 1000)
+        last = now
+        time += dt
+
+        fadeFrame()
+        for (var i = 0; i < particles.length; i++) {
+          stepParticle(particles[i], dt)
+          drawParticle(particles[i])
+        }
+
+        requestAnimationFrame(frame)
+      }
+
+      window.addEventListener('resize', resize)
+      resize()
+      ctx.fillStyle = '#020617'
+      ctx.fillRect(0, 0, width, height)
+      requestAnimationFrame(frame)
+    })()
+  </script>
 
   <script src="/www-assets/rotating.js?v=<!-- GLOBALOS_SHA -->"></script>
 </body>
