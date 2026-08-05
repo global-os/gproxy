@@ -50,6 +50,7 @@ export function RotatingText({ phrases, interval = 2500, class: className }: Pro
     nextSpan.textContent = phrase
     nextSpan.style.transition = 'none'
     nextSpan.style.transform = 'translateY(120%)'
+    nextSpan.style.top = phrase === 'the cloud' ? '-1px' : '0'
 
     setWidth(measure(phrase))
 
@@ -64,12 +65,23 @@ export function RotatingText({ phrases, interval = 2500, class: className }: Pro
   }
 
   useEffect(() => {
-    tick()
     let id: ReturnType<typeof setInterval>
-    const t = setTimeout(() => {
-      setAnimateWidth(true)
-      id = setInterval(tick, interval)
-    }, 50)
+    let t: ReturnType<typeof setTimeout>
+
+    const start = () => {
+      tick()
+      t = setTimeout(() => {
+        setAnimateWidth(true)
+        id = setInterval(tick, interval)
+      }, 50)
+    }
+
+    if (document.fonts && !document.fonts.status.startsWith('loaded')) {
+      document.fonts.ready.then(start)
+    } else {
+      start()
+    }
+
     return () => {
       clearTimeout(t)
       clearInterval(id)
