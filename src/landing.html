@@ -13,7 +13,7 @@
 <body class="bg-slate-950 text-white min-h-screen flex flex-col">
 
   <!-- Flow field background -->
-  <canvas id="flow-bg" class="fixed inset-0 w-full h-full pointer-events-none" style="filter: blur(1.5px) saturate(1.3);"></canvas>
+  <canvas id="flow-bg" class="fixed inset-0 w-full h-full pointer-events-none"></canvas>
 
   <!-- Nav -->
   <nav class="px-8 py-6 flex items-center justify-between max-w-6xl mx-auto w-full relative z-20">
@@ -60,10 +60,13 @@
       var TRAIL_ALPHA = 0.12
       var GROW_TIME = 0.35
 
+      var MOBILE_BREAKPOINT = 640
+
       var width = 0
       var height = 0
       var dpr = 1
       var time = 0
+      var isMobile = false
 
       function fieldAt(x, y, t) {
         var nx = x * FIELD_SCALE
@@ -87,6 +90,9 @@
         canvas.width = Math.floor(width * dpr)
         canvas.height = Math.floor(height * dpr)
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+
+        isMobile = width <= MOBILE_BREAKPOINT
+        canvas.style.filter = isMobile ? 'blur(0.3px) saturate(1.3)' : 'blur(1.5px) saturate(1.3)'
       }
 
       function spawnParticle(p) {
@@ -138,7 +144,7 @@
       var last = performance.now()
 
       function frame(now) {
-        var dt = Math.min(0.05, (now - last) / 1000)
+        var dt = Math.min(0.05, (now - last) / 1000) * (isMobile ? 2 : 1)
         last = now
         time += dt
 
