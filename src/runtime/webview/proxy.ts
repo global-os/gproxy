@@ -2,6 +2,7 @@ import { ProxyAgent, fetch as undiciFetch } from 'undici'
 import { brotliDecompress } from 'node:zlib'
 import { promisify } from 'node:util'
 import { eq } from 'drizzle-orm'
+import { getDomain } from 'tldts'
 import { db } from '../../db/index.js'
 import * as schema from '../../db/schema.js'
 import { getActiveSessionId, captureResponseBody, recordTraffic } from './recording.js'
@@ -145,6 +146,59 @@ function extractCrossDomain(upstreamPath: string): { domain: string; rest: strin
   return { domain: candidate, rest: m[2] || '/' }
 }
 
+// Public-suffix-list-aware eTLD+1 comparison (tldts) — correctly treats
+// e.g. example.co.uk and evil.co.uk as different sites, unlike a naive
+// last-two-labels split (.co.uk is a shared registry suffix, not a domain
+// either party owns).
+function isSameSite(a: string, b: string): boolean {
+  const domainA = getDomain(a)
+  const domainB = getDomain(b)
+  return domainA !== null && domainA === domainB
+}
+
+/**
+ * Computes Sec-Fetch-Site the way a real, non-proxied visit to `boundDomain`
+ * would see it: same-origin for a request to the bound domain itself,
+ * same-site for a same-registrable-domain resource (e.g. api.x.com from
+ * x.com), cross-site otherwise (e.g. a cross-domain remap partner on an
+ * unrelated domain, per the `cross` handling in proxyWebviewRequest).
+ *
+ * Sec-Fetch-Mode/-Dest/-User are taken from the incoming request as-is:
+ * they describe the request itself (fetch/XHR/navigate, resource type, user
+ * gesture), not the site relationship, and the real end-user's browser
+ * already computes them correctly for its actual request to our proxy
+ * origin — which, thanks to the REPLACEMENTS URL-rewriting, has the same
+ * mode/dest/user-activation shape as the equivalent unproxied request would.
+ *
+ * Whether these survive intact all the way to the upstream depends on the
+ * outbound path: undici/direct fetch send them as given, but the sidecar's
+ * driven Chrome recomputes and overwrites them unless it's running the
+ * patched Chromium build with PreserveOverriddenSecFetchHeaders enabled —
+ * see PROPOSALS/custom-chromium-build.md and sidecar/server.mjs.
+ */
+function computeSecFetchHeaders(
+  boundDomain: string,
+  fetchDomain: string,
+  incomingRequest: Request,
+): Record<string, string> {
+  const site = fetchDomain === boundDomain
+    ? 'same-origin'
+    : isSameSite(fetchDomain, boundDomain)
+      ? 'same-site'
+      : 'cross-site'
+
+  const headers: Record<string, string> = { 'Sec-Fetch-Site': site }
+
+  const mode = incomingRequest.headers.get('sec-fetch-mode')
+  const dest = incomingRequest.headers.get('sec-fetch-dest')
+  const user = incomingRequest.headers.get('sec-fetch-user')
+  if (mode) headers['Sec-Fetch-Mode'] = mode
+  if (dest) headers['Sec-Fetch-Dest'] = dest
+  if (user) headers['Sec-Fetch-User'] = user
+
+  return headers
+}
+
 // Headers that must not be forwarded to the upstream.
 const HOP_BY_HOP = new Set([
   'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
@@ -154,8 +208,11 @@ const HOP_BY_HOP = new Set([
   // We buffer the body, so let fetch() compute the correct length.
   'content-length',
   // Browser security metadata that reveals the cross-origin iframe context
-  // to the upstream. Sites like X use these to detect proxy/WebView access
-  // and serve error pages instead of normal content.
+  // to the upstream. The incoming values reflect a same-origin request to
+  // our own proxy subdomain (REPLACEMENTS rewrites all outgoing site JS
+  // calls to relative paths), not a real visit to the bound domain, so they
+  // can't be forwarded as-is — stripped here and replaced below with values
+  // computed for the bound-domain relationship instead.
   'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'sec-fetch-user',
   'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform',
   'sec-ch-ua-arch', 'sec-ch-ua-bitness', 'sec-ch-ua-full-version',
@@ -427,6 +484,11 @@ const cross = extractCrossDomain(upstreamPath)
   forwardHeaders.set('sec-ch-ua', '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"')
   forwardHeaders.set('sec-ch-ua-mobile', '?0')
   forwardHeaders.set('sec-ch-ua-platform', '"macOS"')
+  // Sec-Fetch-Site/-Mode/-Dest/-User for the bound-domain relationship — see
+  // computeSecFetchHeaders() for why these can't just be forwarded as-is.
+  for (const [name, value] of Object.entries(computeSecFetchHeaders(boundDomain, fetchDomain, incomingRequest))) {
+    forwardHeaders.set(name, value)
+  }
   // Match Chrome's Accept-Encoding for fingerprint compatibility.
   // We manually decompress br below if undici doesn't handle it automatically.
   forwardHeaders.set('Accept-Encoding', 'gzip, deflate, br, zstd')

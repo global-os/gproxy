@@ -81,6 +81,17 @@ async function probeIps() {
 // Sec-Fetch-Site is the smaller cost — anonymizeProxy() just tunnels the
 // bytes through, no termination, so Chrome's real TLS handshake reaches
 // the upstream untouched.
+//
+// Longer-term fix in progress instead of re-adding the MITM: a patch in
+// the `chromium-fork` repo (services/network/sec_header_helpers.cc, behind
+// the PreserveOverriddenSecFetchHeaders feature) makes Chrome's network
+// stack leave Sec-Fetch-* alone when Fetch.continueRequest already set a
+// value, so proxy.ts's computeSecFetchHeaders() output would survive
+// without any TLS-terminating layer. See PROPOSALS/custom-chromium-build.md.
+// The flag below is harmless but inert against stock `channel: 'chrome'` —
+// unregistered feature names are silently ignored — until this sidecar
+// launches the patched binary via `executablePath` instead. That swap, and
+// the CI build/deploy pipeline to produce the binary, hasn't happened yet.
 const anonymizedProxyUrl = PROXY_URL ? await anonymizeProxy(PROXY_URL) : null
 
 const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
@@ -90,6 +101,7 @@ const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
   viewport: { width: 1920, height: 1080 },
   args: [
     '--no-sandbox', // required running as root in a container
+    '--enable-features=PreserveOverriddenSecFetchHeaders',
   ],
   ...(anonymizedProxyUrl ? { proxy: { server: anonymizedProxyUrl } } : {}),
 })
