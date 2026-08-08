@@ -24,6 +24,9 @@ const SECRET = process.env.SIDECAR_SECRET || ''
 const PROXY_URL = resolveProxyUrl()
 const FETCH_TIMEOUT_MS = 20_000
 const MAX_REDIRECTS = 10
+// Optional path to a custom-built Chromium binary (see PROPOSALS/custom-chromium-build.md).
+// When set, the sidecar uses this binary instead of stock Google Chrome.
+const CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH || null
 
 // Real Chrome's UA with "Headless" stripped — see header comment above.
 const USER_AGENT =
@@ -95,7 +98,11 @@ async function probeIps() {
 const anonymizedProxyUrl = PROXY_URL ? await anonymizeProxy(PROXY_URL) : null
 
 const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
-  channel: 'chrome',
+  // Use custom-built Chromium if CHROMIUM_EXECUTABLE_PATH is set,
+  // otherwise fall back to stock Google Chrome.
+  ...(CHROMIUM_EXECUTABLE_PATH
+    ? { executablePath: CHROMIUM_EXECUTABLE_PATH }
+    : { channel: 'chrome' }),
   headless: true,
   userAgent: USER_AGENT,
   viewport: { width: 1920, height: 1080 },

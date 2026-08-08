@@ -4,7 +4,8 @@
   "type": "module",
   "main": "server.mjs",
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "build:chromium": "echo 'See PROPOSALS/custom-chromium-build.md for build instructions'"
   },
   "dependencies": {
     "patchright": "^1.61.1",
