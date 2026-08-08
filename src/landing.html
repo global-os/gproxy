@@ -126,7 +126,8 @@
         var speed = Math.hypot(v.vx, v.vy)
         var hue = ((Math.atan2(v.vy, v.vx) / TAU) + 0.5) * 360
         var alpha = Math.min(0.5, 0.12 + speed * 0.12) * p.life
-        var growth = Math.min(1, p.age / GROW_TIME)
+        var growthLinear = Math.min(1, p.age / GROW_TIME)
+        var growth = 1 - Math.pow(1 - growthLinear, 2)
 
         ctx.strokeStyle = 'hsla(' + hue + ', 80%, 60%, ' + alpha + ')'
         ctx.lineWidth = 2 + speed * 0.5
