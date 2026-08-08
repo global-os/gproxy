@@ -92,7 +92,7 @@
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
         isMobile = width <= MOBILE_BREAKPOINT
-        canvas.style.filter = isMobile ? 'blur(0.3px) saturate(1.3)' : 'blur(1.5px) saturate(1.3)'
+        canvas.style.filter = isMobile ? 'blur(0.6px) saturate(1.3)' : 'blur(1.5px) saturate(1.3)'
       }
 
       function spawnParticle(p) {
@@ -144,7 +144,7 @@
       var last = performance.now()
 
       function frame(now) {
-        var dt = Math.min(0.05, (now - last) / 1000) * (isMobile ? 2 : 1)
+        var dt = Math.min(0.05, (now - last) / 1000) * (isMobile ? 2 * 0.8 : 1)
         last = now
         time += dt
 
