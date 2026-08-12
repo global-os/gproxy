@@ -60,6 +60,13 @@ const app = new Hono<Env>({
 
 app.use(logger())
 
+app.use(async (c, next) => {
+  if (process.env.VERCEL && c.req.header('host')?.startsWith('app.app.dev.onetrueos.com')) {
+    return c.text('This is the Vercel deployment — use localhost:3443 for local dev.', 200)
+  }
+  await next()
+})
+
 app.get('/www', async (c) => {
   const htmlPath = path.join(process.cwd(), 'src/landing.html')
   const html = fs

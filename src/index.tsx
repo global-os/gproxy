@@ -30,8 +30,7 @@ async function main() {
   if (!process.env.VERCEL) {
     const prompts = (await import('prompts'))?.default
 
-    const value = await confirmTimeout(prompts, "Apply pending migrations?", 5_000, false);
-    console.log('pendingMigs=', value)
+    const value = await confirmTimeout(prompts, "Seed user fixtures?", 5_000, false);
     if (value) {
       await seedUserFixtures()
     }
