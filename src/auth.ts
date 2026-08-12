@@ -71,6 +71,7 @@ export const auth = betterAuth({
   trustedOrigins: [
     'http://localhost:5173',
     'http://app.app.dev.onetrueos.com:5173',
+    'https://app.app.dev.onetrueos.com',
     'http://127.0.0.1:3000',
     'https://app.onetrueos.com',
     'https://app.app.onetrueos.com',

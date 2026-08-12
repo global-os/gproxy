@@ -5,9 +5,38 @@ import { seedUserFixtures } from './db/seed.js'
 import app from './app.js'
 import { startRuntimeMaintenance } from './runtime/instance/manager.js'
 
+export async function confirmTimeout(
+  prompts: (config: any) => Promise<any>,
+  message: string,
+  timeoutMs: number,
+  default_: boolean = false,
+): Promise<boolean> {
+  const result = await Promise.race([
+    prompts({ type: "confirm", name: "value", message }) as Promise<{ value: boolean }>,
+    new Promise<{ value: boolean }>((resolve) =>
+      setTimeout(() => resolve({ value: default_ }), timeoutMs),
+    ),
+  ]);
+  if (result.value === default_) {
+    console.log(`Timed out, defaulting to ${default_ ? "yes" : "no"}`);
+  }
+  return result.value;
+}
+
+
 async function main() {
   await testConnection()
-  await seedUserFixtures()
+
+  if (!process.env.VERCEL) {
+    const prompts = (await import('prompts'))?.default
+
+    const value = await confirmTimeout(prompts, "Apply pending migrations?", 5_000, false);
+    console.log('pendingMigs=', value)
+    if (value) {
+      await seedUserFixtures()
+    }
+  }
+
   startRuntimeMaintenance()
 
   serve(

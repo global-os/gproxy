@@ -63,7 +63,8 @@ export function hashTree(dirs: DirEntry[], files: FileEntry[]): string {
 }
 
 export async function hashDir(dirId: number): Promise<string> {
-  // TODO should this second argument really be "" always?
+  // Pass "" as dirPath because hashTree ignores paths entirely (only uses name+content).
+  // The other caller in image.ts passes the real dirName because buildTar needs paths.
   const { dirs, files } = await collectTree(dirId, "");
 
   return hashTree(dirs, files);
