@@ -195,3 +195,8 @@ Only relevant if Phase 2 succeeds and this becomes a real dependency:
   maintenance burden proves unsustainable — better to fall back to the
   current accepted tradeoff than to run a stale, unpatched, or broken custom
   build in production.
+
+## Review feedback (2026-08-08)
+
+- This proposal is appropriately gated. The key risk remains whether self-built Chromium can pass the same detection checks that real Google Chrome passes.
+- I could not verify the local `chromium-fork` status from this checkout; `CLAUDE.md` says it lives at `~/Code/chromium-fork`, not inside this repo. Keep that location/status explicit so readers do not expect the fork to be present here.

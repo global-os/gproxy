@@ -83,7 +83,6 @@ export default defineConfig({
       },
       '/api': {
         target: 'http://127.0.0.1:3000',
-        // Changed to 127.0.0.1
         changeOrigin: true,
         configure: (proxy, options) => {
           proxy.on('error', (err, req, res) => {

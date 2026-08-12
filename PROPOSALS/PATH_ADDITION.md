@@ -133,3 +133,8 @@ Optional later: virtual `~/bin` as PATH-like exec dirs; registry remains the dis
 ## One-line summary
 
 **Short name** is what you type; **canonical** is what the platform chose; **exec** is how it starts. PATH (or launch/syscall) stays the execution primitive underneath.
+
+## Review feedback (2026-08-08)
+
+- No blocking issues found in the proposal. It is consistent with the project rule that discovery/command routing should stay above execution primitives instead of replacing `.gapp` launch or syscalls.
+- When implemented, keep registry precedence explicit and visible in UI/debug output; accidental PATH-like ordering would undermine the main benefit of canonical command identity.

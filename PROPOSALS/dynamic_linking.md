@@ -369,3 +369,8 @@ Load order:
 | App logic | User writes `app.cljs`; platform emits `app.js` at image build |
 
 This gives declarative dynamic linking without trusting brittle CDN paths, while fitting the existing `.gapp` → `image` → instance serve pipeline. Users author source; GlobalOS compiles and links.
+
+## Review feedback (2026-08-08)
+
+- `source: "bundled"` is currently overloaded. The layout section says synthesized registry artifacts such as `yjs.js` are produced when `source = "bundled"`, but the dependency spec later defines `bundled` as a file already present in the `.gapp` tree. Current code only injects registry artifacts for `source: "platform"` (`src/gapp/resolve-dependencies.ts`). Tighten the vocabulary so `bundled` means user-provided file and `platform` means registry-provided artifact.
+- The serve-time `502` for a missing IIFE global is not achievable with pure server-side HTML rewriting, because the server cannot observe whether browser-executed scripts created globals. That guarantee needs a client bootstrap/loader with timeout/error reporting, or the proposal should drop the `502` claim for v1.

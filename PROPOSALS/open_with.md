@@ -152,3 +152,9 @@ If File Browser is already open:
 - **Nested files:** extend desktop API or add `fs.resolve` syscall so `openWith` for a file includes `parentId`
 - **Default app preferences:** user-chosen handler per MIME/type
 - **Launch body `openWith`:** optional echo through API for logging or multi-client sync (not required for v1)
+
+## Review feedback (2026-08-08)
+
+- The implementation file names are stale. The current frontend kernel is `WorkspaceKernel` / `useWorkspaceKernel`, not `SessionKernel` / `useSessionKernel`.
+- The launch endpoint wording should use the current workspace route (`/api/workspaces/:workspaceId/launch`) rather than the older session route.
+- The proposal still matches the project direction: keep the kernel app-agnostic, stage process-scoped launch context in the shell, and let File Browser own the `openWith` payload schema.

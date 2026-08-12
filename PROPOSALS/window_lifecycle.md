@@ -240,3 +240,8 @@ Optional app **controller** script in `.gapp` is out of scope for v1; prefer CEL
 - **Exactly one**, **one-or-zero**, **many**, and **zero always** are distinct product patterns with different launch/close/platform needs.
 - **Zero windows on a process** is valid for desk-local, often-temporary states; **zero windows forever** for PC-wide headless work → **task**.
 - Declare behavior in **`gapp.json`** (`windows.mode`, `runtime`, `lifecycle`) and enforce in a per-process **controller** with CEL policy and hard timeouts.
+
+## Review feedback (2026-08-08)
+
+- Task-owned instances need a schema change before the task/embed parts can work. The current `instances` table has `process_id` but no `task_id`; `docs/architecture.md` lists `process_id | task_id` as the target model.
+- The proposal is otherwise aligned with the canonical architecture: windows belong to processes, processes belong to workspaces, and PC-wide zero-window work belongs on tasks.

@@ -22,7 +22,7 @@ export type GappManifest = {
   entry?: string
   type?: 'classic' | 'module'
   compile?: {
-    squint?: SquintCompileSpec
+    squint: SquintCompileSpec
   }
   dependencies?: Record<string, GappDependencySpec>
   /** ESM platform libs resolved via import map. Values are semver ranges. */

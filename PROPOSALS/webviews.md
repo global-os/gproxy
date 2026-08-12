@@ -204,3 +204,9 @@ These are inherent to any web proxy, not specific to this design. For controlled
 - CSS/JS content rewriting — rules apply to HTML responses only; non-HTML passes through or gets blocked
 - Per-WebView request headers (custom User-Agent, etc.) — could be a rule action later
 - WebView-to-WebView communication
+
+## Review feedback (2026-08-08)
+
+- This proposal is broadly consistent with the current webview schema and hot path (`webview`, `webview_rule`, `resolveWebviewBySlug`, `proxyWebviewRequest`).
+- Keep the serverless pool warning from `CLAUDE.md` attached to any implementation plan: do not add per-request DB work in the webview proxy hot path. Slug/rule lookups need caching or batching.
+- The companion subdomain-routing proposal should resolve the wildcard certificate/routing constraint before replacing the path-based cross-domain fallback described here.

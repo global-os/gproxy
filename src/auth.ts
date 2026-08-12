@@ -8,7 +8,19 @@ import { seedFixturesForUser } from './db/seed.js'
 import { ensureGlobalPcForUser } from './services/global-pc.js'
 import * as schema from './db/schema.js'
 
+const isNonProduction =
+  process.env.IS_LOCALHOST === 'true'
+  || (typeof process.env.VERCEL_ENV === 'string' && process.env.VERCEL_ENV !== 'production')
+
 export const auth = betterAuth({
+  advanced: {
+    trustedProxyHeaders: true,
+  },
+
+  logger: {
+    level: isNonProduction ? 'warn' : 'error',
+  },
+
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL ?? 'https://app.app.onetrueos.com',
   basePath: '/api/auth',
@@ -62,6 +74,7 @@ export const auth = betterAuth({
   trustedOrigins: [
     'http://localhost:5173',
     'http://app.app.dev.onetrueos.com:5173',
+    'http://127.0.0.1:3000',
     'https://app.onetrueos.com',
     'https://app.app.onetrueos.com',
   ],

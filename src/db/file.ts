@@ -63,6 +63,8 @@ export function hashTree(dirs: DirEntry[], files: FileEntry[]): string {
 }
 
 export async function hashDir(dirId: number): Promise<string> {
+  // TODO should this second argument really be "" always?
   const { dirs, files } = await collectTree(dirId, "");
+
   return hashTree(dirs, files);
 }

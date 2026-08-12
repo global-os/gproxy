@@ -1,4 +1,5 @@
 node_modules
+.aider*
 dist
 .env
 .vercel

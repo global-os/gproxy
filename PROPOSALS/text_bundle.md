@@ -219,6 +219,11 @@ Semicolon suffix on path is reserved for v2; v1 parsers must reject `;` in paths
 | `@@` only path (`@@@` header) | `invalid path` (path must start with non-`@` char) |
 | Invalid UTF-8 | `invalid utf-8` |
 
+## Review feedback (2026-08-08)
+
+- No blocking issues found in the format proposal. It matches the existing parser layout in `src/bundle/tbundle/`.
+- One implementation detail to keep documented: current path validation rejects any path containing `..`, not only `..` as a path segment. That is stricter than the prose examples but fine as a conservative v1 rule.
+
 ---
 
 ## Comparison to tar

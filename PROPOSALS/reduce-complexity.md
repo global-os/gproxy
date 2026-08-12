@@ -49,3 +49,8 @@ The squint compile step is a side effect inside what reads as a database image w
 Inferring Yjs/RxJS usage by pattern-matching source strings is fragile. It exists to support apps that predate `gapp.json`.
 
 **Fix:** once all squint apps have `gapp.json` with explicit `dependencies`, delete `inferDepsFromSquintSource` entirely. The fix for #3 makes this possible.
+
+## Review feedback (2026-08-08)
+
+- Findings 1 and 2 appear stale. `src/gapp/registry-paths.ts` now throws if the registry directory cannot be found, and `src/gapp/resolve-dependencies.ts` now reads from a single resolved registry path instead of looping over candidates.
+- Findings 3 and 6 are still relevant. The checked fixtures now have `gapp.json`, so the legacy `compile.edn` / `compile.cljs` / inference path looks increasingly removable once tests or any external fixture dependency confirm nothing still relies on it.

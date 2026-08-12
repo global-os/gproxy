@@ -70,3 +70,8 @@ The intercept script currently uses `location.origin` to identify same-origin re
 - Which separator is safest for encoding dots in hostnames? (`--`, `__`, or another scheme)
 - Does Cloudflare's wildcard proxying support two-level deep subdomains on a custom domain?
 - Should cross-domain subdomains be ephemeral (derived from the slug at intercept time) or registered as webview rows in the DB?
+
+## Review feedback (2026-08-08)
+
+- The proposed host shape (`www.facebook.com.s5heqqbq.app.onetrueos.com`) is not compatible with the current `*.app.onetrueos.com` wildcard certificate or Vercel's one-level wildcard routing. Even `www-facebook-com.s5heqqbq.app.onetrueos.com` is still two labels under `app.onetrueos.com`.
+- To fit the existing wildcard, encode the upstream host and webview slug into one label, for example `www-facebook-com--s5heqqbq.app.onetrueos.com`, or make a front proxy/certificate strategy an explicit prerequisite.
