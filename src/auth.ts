@@ -13,9 +13,6 @@ const isNonProduction =
   || (typeof process.env.VERCEL_ENV === 'string' && process.env.VERCEL_ENV !== 'production')
 
 export const auth = betterAuth({
-  advanced: {
-    trustedProxyHeaders: true,
-  },
 
   logger: {
     level: isNonProduction ? 'warn' : 'error',
