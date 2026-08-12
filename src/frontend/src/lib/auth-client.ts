@@ -1,7 +1,12 @@
 import { createAuthClient } from 'better-auth/react'
 import { inferAdditionalFields } from 'better-auth/client/plugins'
 
+const baseURL = import.meta.env.DEV
+  ? 'https://app.app.dev.onetrueos.com:3443'
+  : undefined;
+
 export const authClient = createAuthClient({
+  baseURL,
   basePath: '/api/auth',
   fetchOptions: {
     retry: {

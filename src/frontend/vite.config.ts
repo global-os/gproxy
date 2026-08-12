@@ -65,6 +65,11 @@ export default defineConfig({
   }), react()],
   server: {
     host: '0.0.0.0',
+    port: 3443,
+    https: {
+      cert: path.resolve(dirname, '../../certs/dev.pem'),
+      key: path.resolve(dirname, '../../certs/dev-key.pem'),
+    },
     allowedHosts: ['app.app.dev.onetrueos.com'],
     fs: {
       strict: false
