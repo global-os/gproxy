@@ -66,6 +66,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3443,
+    open: 'https://app.app.dev.onetrueos.com:3443',
     https: {
       cert: path.resolve(dirname, '../../certs/dev.pem'),
       key: path.resolve(dirname, '../../certs/dev-key.pem'),
@@ -89,6 +90,7 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:3000',
         changeOrigin: true,
+        rewrite: path => path.replace(/^\/api/, '/app/api'),
         configure: (proxy, options) => {
           proxy.on('error', (err, req, res) => {
             console.log('Proxy ERROR:', err.message);

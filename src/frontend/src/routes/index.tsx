@@ -29,7 +29,7 @@ function AuthLoading() {
 function Index() {
   const navigate = useNavigate()
   const { data: session, isPending, error } = useSession()
-  const userId = session?.user.id
+  const userId = session?.user?.id
 
   useEffect(() => {
     if (!isPending && !error && userId !== undefined) {

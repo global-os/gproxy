@@ -70,8 +70,6 @@ export const auth = betterAuth({
   // Allow requests from the frontend development server
   trustedOrigins: [
     ...(process.env.VERCEL ? [] : [
-      'http://localhost:5173',
-      'http://app.app.dev.onetrueos.com:5173',
       'https://app.app.dev.onetrueos.com:3443',
       'http://127.0.0.1:3000',
     ]),

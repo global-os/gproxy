@@ -20,7 +20,13 @@ if (!process.env.VERCEL && !hasMkcert()) {
   execSync('brew install mkcert', { stdio: 'inherit' });
 }
 
-execSync('mkcert -install 2>/dev/null; true', { stdio: 'inherit' });
+if (!process.env.VERCEL) {
+  try { execSync('sudo mkcert -install', { stdio: 'inherit' }) }
+  catch {
+    try { execSync('mkcert -install 2>/dev/null', { stdio: 'inherit' }) }
+    catch { /* already trusted or no sudo */ }
+  }
+}
 
 if (!existsSync(certPath) || !existsSync(keyPath)) {
   execSync(`mkdir -p ${certsDir}`, { stdio: 'inherit' });
