@@ -402,8 +402,19 @@ function _rb(body){
   if(typeof body!=='string')return body;
   return body.split(_o).join(_bound).split(_oHost).join(_boundHost);
 }
+// X's Sentry SDK reports to sentry.io; its envelope POST is CORS-rejected in
+// this iframe context and the rejection cascades into a page teardown (blank).
+// Stub those requests out entirely -- return a fake success so Sentry thinks
+// the event was delivered and its error handling never throws.
+function _isSentry(u){
+  try{return typeof u==='string'&&u.indexOf('sentry.io')>-1;}catch(e){return false;}
+}
 var _f=window.fetch.bind(window);
 window.fetch=function(input,init){
+  var u=input instanceof Request?input.url:(typeof input==='string'?input:String(input));
+  if(_isSentry(u)){
+    return Promise.resolve(new Response('{}',{status:200,headers:{'Content-Type':'application/json'}}));
+  }
   var rw=_p(input);
   if(rw!==null)input=input instanceof Request?new Request(rw,input):rw;
   if(init&&typeof init.body==='string'){init=Object.assign({},init,{body:_rb(init.body)});}
@@ -411,12 +422,19 @@ window.fetch=function(input,init){
 };
 var _xo=XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open=function(m,u){
-  var rw=_p(typeof u==='string'?u:String(u));
+  var url=typeof u==='string'?u:String(u);
+  var args=Array.prototype.slice.call(arguments);
+  if(_isSentry(url)){
+    // Point the XHR at an empty JSON data URL so it "succeeds" without a real
+    // network request to sentry.io.
+    args[1]='data:application/json,{}';
+    return _xo.apply(this,args);
+  }
+  var rw=_p(url);
   // Copy instead of mutating the arguments object -- a second wrapper (e.g.
   // the site's own Sentry instrumentation) calls us via apply(), and mutating
   // the live arguments object there is a known footgun.
-  var args=Array.prototype.slice.call(arguments);
-  args[1]=rw!==null?rw:u;
+  args[1]=rw!==null?rw:url;
   return _xo.apply(this,args);
 };
 var _xs=XMLHttpRequest.prototype.send;
@@ -425,8 +443,10 @@ XMLHttpRequest.prototype.send=function(body){
 };
 var _sb=navigator.sendBeacon.bind(navigator);
 navigator.sendBeacon=function(u,d){
-  var rw=_p(typeof u==='string'?u:String(u));
-  return _sb(rw!==null?rw:u,_rb(d));
+  var url=typeof u==='string'?u:String(u);
+  if(_isSentry(url))return true;
+  var rw=_p(url);
+  return _sb(rw!==null?rw:url,_rb(d));
 };
 
 /* ── SHIMS ────────────────────────────────────────────────────────────── */
