@@ -25,6 +25,11 @@ const SECRET = process.env.SIDECAR_SECRET || ''
 const PROXY_URL = resolveProxyUrl()
 const FETCH_TIMEOUT_MS = 20_000
 const MAX_REDIRECTS = 10
+// Intermittent `network error: Failed` (net::ERR_FAILED) from the driven
+// browser under concurrent load — retry a failed fetch a few times rather
+// than surface a 502 to the caller on a transient drop.
+const FETCH_ATTEMPTS = 3
+const FETCH_RETRY_DELAY_MS = 250
 // Optional path to a custom-built Chromium binary (see PROPOSALS/custom-chromium-build.md).
 // When set, the sidecar uses this binary instead of stock Google Chrome.
 const CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH || null
@@ -272,6 +277,29 @@ async function chromeFetch(url, method, headersObj, bodyB64) {
   throw new Error('too many redirects')
 }
 
+/**
+ * chromeFetch with retries for transient network failures. Only "network
+ * error: ..." (CDP responseErrorReason, i.e. net::ERR_FAILED and friends) is
+ * retried — a timeout or too-many-redirects is a different problem and
+ * retrying them just multiplies the wait.
+ */
+async function chromeFetchWithRetry(url, method, headersObj, bodyB64) {
+  let lastErr
+  for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
+    try {
+      return await chromeFetch(url, method, headersObj, bodyB64)
+    } catch (err) {
+      lastErr = err
+      const msg = err instanceof Error ? err.message : String(err)
+      if (!/^network error:/.test(msg) || attempt === FETCH_ATTEMPTS) break
+      const delay = FETCH_RETRY_DELAY_MS * attempt
+      console.log(`[sidecar] fetch failed (attempt ${attempt}/${FETCH_ATTEMPTS}): ${msg} — retrying in ${delay}ms`)
+      await new Promise((r) => setTimeout(r, delay))
+    }
+  }
+  throw lastErr
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = []
@@ -348,7 +376,7 @@ const server = createServer(async (req, res) => {
       const headersObj = Object.fromEntries((body.headers || []).map(([k, v]) => [k, v]))
       console.log(`[sidecar] /fetch ${body.method} ${body.url} headerCount=${(body.headers || []).length}`)
 
-      const result = await chromeFetch(body.url, body.method, headersObj, body.body || '')
+      const result = await chromeFetchWithRetry(body.url, body.method, headersObj, body.body || '')
 
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(result))
