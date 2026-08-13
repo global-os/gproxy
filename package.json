@@ -62,7 +62,7 @@
     "tldts": "^7.4.10",
     "tsx": "^4.19.4",
     "typescript": "^5.9.3",
-    "undici": "^8.5.0",
+    "undici": "^8.9.0",
     "yjs": "^13.6.20"
   },
   "devDependencies": {
