@@ -1,0 +1,31 @@
+name: Storybook build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/frontend/**"
+
+jobs:
+  storybook:
+    name: Build Storybook
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install frontend deps
+        run: cd src/frontend && npm install --legacy-peer-deps
+
+      - name: Build Storybook
+        run: cd src/frontend && npm run build-storybook
+
+      - name: Upload static Storybook
+        uses: actions/upload-artifact@v4
+        with:
+          name: storybook-static
+          path: src/frontend/storybook-static
