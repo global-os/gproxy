@@ -3,6 +3,7 @@ import type { HttpBindings } from '@hono/node-server'
 import type { IncomingMessage } from 'node:http'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
+import { cors } from 'hono/cors'
 import path from 'path'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { getPath } from 'hono/utils/url'
@@ -371,8 +372,23 @@ app.get('/health', async (c) => {
 
 app.basePath('/app/api/auth').route('/', authRoutes)
 
+// The workspace shell (app.app.onetrueos.com) and instance/webview iframes
+// ({slug}.app.onetrueos.com) are different origins. The iframe polls /_status
+// same-origin, but the shell (and its dev variant) may query instance/webview
+// endpoints cross-origin, so allow those origins here.
+const SHELL_ORIGINS = [
+  'https://app.app.onetrueos.com',
+  'https://app.app.dev.onetrueos.com',
+  'https://app.app.dev.onetrueos.com:3443',
+  'https://app.app.dev.onetrueos.com:443',
+]
+
 app.use(
   '/instance/**',
+  cors({
+    origin: SHELL_ORIGINS,
+    credentials: true,
+  }),
   middleware.provideDb,
   middleware.setIsLocal,
   middleware.logRequest
