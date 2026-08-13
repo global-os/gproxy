@@ -16,12 +16,13 @@ async function walkDirectory(
   db: NodePgDatabase<typeof schema>,
   directoryId: number,
   directoryPath: string,
-  entries: FileIndexEntry[],
+  entries: FileIndexEntry[]
 ): Promise<void> {
   entries.push({
     type: 'directory',
     id: directoryId,
-    name: directoryPath.slice(directoryPath.lastIndexOf('/') + 1) || directoryPath,
+    name:
+      directoryPath.slice(directoryPath.lastIndexOf('/') + 1) || directoryPath,
     path: directoryPath,
     launchable: directoryPath.endsWith('.gapp'),
   })
@@ -60,15 +61,17 @@ async function walkDirectory(
 
 export async function buildUserFileIndex(
   db: NodePgDatabase<typeof schema>,
-  userId: string,
+  userId: string
 ): Promise<FileIndexEntry[]> {
   const roots = await db
     .select({ id: schema.directory.id })
     .from(schema.directory)
-    .where(and(
-      eq(schema.directory.user_id, userId),
-      isNull(schema.directory.parent_id),
-    ))
+    .where(
+      and(
+        eq(schema.directory.user_id, userId),
+        isNull(schema.directory.parent_id)
+      )
+    )
 
   const entries: FileIndexEntry[] = []
 

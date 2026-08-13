@@ -48,7 +48,9 @@ for (const file of fs.readdirSync(distAssets)) {
     }
   }
 
-  for (const match of contents.matchAll(/assets\/[A-Za-z0-9._-]+\.(?:js|css)/g)) {
+  for (const match of contents.matchAll(
+    /assets\/[A-Za-z0-9._-]+\.(?:js|css)/g
+  )) {
     recordAssetRef(match[0])
   }
 }
@@ -63,4 +65,6 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log(`Frontend bundle verification passed (${referencedAssets.size} assets referenced)`)
+console.log(
+  `Frontend bundle verification passed (${referencedAssets.size} assets referenced)`
+)

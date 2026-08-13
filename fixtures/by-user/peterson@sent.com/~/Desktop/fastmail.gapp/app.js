@@ -8,7 +8,10 @@ var pendingRequestId = null
 function showError(msg) {
   console.error('[fastmail.gapp] error:', msg)
   if (loadingMsg) loadingMsg.style.display = 'none'
-  if (errorMsg) { errorMsg.textContent = msg; errorMsg.style.display = 'block' }
+  if (errorMsg) {
+    errorMsg.textContent = msg
+    errorMsg.style.display = 'block'
+  }
 }
 
 function showFrame(origin) {
@@ -19,7 +22,7 @@ function showFrame(origin) {
   }
 }
 
-window.addEventListener('message', function(event) {
+window.addEventListener('message', function (event) {
   var data = event.data
   if (!data || typeof data.type !== 'string') return
 
@@ -29,16 +32,29 @@ window.addEventListener('message', function(event) {
       return
     }
     pendingRequestId = window.KernelMessaging.nextId()
-    window.parent.postMessage({ type: 'webview:create', requestId: pendingRequestId, domain: 'fastmail.com' }, '*')
+    window.parent.postMessage(
+      {
+        type: 'webview:create',
+        requestId: pendingRequestId,
+        domain: 'fastmail.com',
+      },
+      '*'
+    )
     return
   }
 
-  if (data.type === 'webview:create:complete' && data.requestId === pendingRequestId) {
+  if (
+    data.type === 'webview:create:complete' &&
+    data.requestId === pendingRequestId
+  ) {
     showFrame(data.proxyOrigin)
     return
   }
 
-  if (data.type === 'webview:create:error' && data.requestId === pendingRequestId) {
+  if (
+    data.type === 'webview:create:error' &&
+    data.requestId === pendingRequestId
+  ) {
     showError(data.message || 'Failed to connect')
     return
   }

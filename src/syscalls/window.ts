@@ -7,20 +7,31 @@ import type { SyscallContext, SyscallHandler } from './types.js'
 
 function parseWorkspaceArg(args: Record<string, unknown>): number | null {
   const raw = args['_workspaceId']
-  const n = typeof raw === 'string' ? parseInt(raw, 10) : typeof raw === 'number' ? raw : NaN
+  const n =
+    typeof raw === 'string'
+      ? parseInt(raw, 10)
+      : typeof raw === 'number'
+        ? raw
+        : NaN
   return Number.isFinite(n) ? n : null
 }
 
 function parseProcessArg(args: Record<string, unknown>): number | null {
   const raw = args['_processId']
-  const n = typeof raw === 'string' ? parseInt(raw, 10) : typeof raw === 'number' ? raw : NaN
+  const n =
+    typeof raw === 'string'
+      ? parseInt(raw, 10)
+      : typeof raw === 'number'
+        ? raw
+        : NaN
   return Number.isFinite(n) ? n : null
 }
 
 /** window.open — create a new process + srcdoc window. */
 export const windowOpen: SyscallHandler = async (ctx, args) => {
   const workspaceId = parseWorkspaceArg(args)
-  if (workspaceId == null) return { ok: false, message: 'Missing _workspaceId', status: 400 }
+  if (workspaceId == null)
+    return { ok: false, message: 'Missing _workspaceId', status: 400 }
 
   const name = typeof args['name'] === 'string' ? args['name'].trim() : ''
   if (!name) return { ok: false, message: 'name is required', status: 400 }
@@ -54,10 +65,12 @@ export const windowOpen: SyscallHandler = async (ctx, args) => {
 /** window.open.process — create a srcdoc window within the caller's existing process. */
 export const windowOpenProcess: SyscallHandler = async (ctx, args) => {
   const workspaceId = parseWorkspaceArg(args)
-  if (workspaceId == null) return { ok: false, message: 'Missing _workspaceId', status: 400 }
+  if (workspaceId == null)
+    return { ok: false, message: 'Missing _workspaceId', status: 400 }
 
   const processId = parseProcessArg(args)
-  if (processId == null) return { ok: false, message: 'Missing _processId', status: 400 }
+  if (processId == null)
+    return { ok: false, message: 'Missing _processId', status: 400 }
 
   const srcdoc = typeof args['srcdoc'] === 'string' ? args['srcdoc'] : null
   if (!srcdoc) return { ok: false, message: 'srcdoc is required', status: 400 }
@@ -76,13 +89,15 @@ export const windowOpenProcess: SyscallHandler = async (ctx, args) => {
     return { ok: false, message: 'Process not found', status: 404 }
   }
 
-  const title = typeof args['title'] === 'string' && args['title'].trim()
-    ? args['title'].trim()
-    : (process.bundle_name ?? 'Window')
+  const title =
+    typeof args['title'] === 'string' && args['title'].trim()
+      ? args['title'].trim()
+      : (process.bundle_name ?? 'Window')
 
-  const bundleName = typeof args['title'] === 'string' && args['title'].trim()
-    ? args['title'].trim()
-    : (process.bundle_name ?? 'Window')
+  const bundleName =
+    typeof args['title'] === 'string' && args['title'].trim()
+      ? args['title'].trim()
+      : (process.bundle_name ?? 'Window')
 
   const win = await createWindow({
     workspaceId,

@@ -16,5 +16,5 @@ execFileSync(
     '--platform=browser',
     `--outfile=${out}`,
   ],
-  { cwd: root, stdio: 'inherit' },
+  { cwd: root, stdio: 'inherit' }
 )

@@ -1,12 +1,20 @@
 import { loadProcessState, saveProcessState } from './state'
-import type { ActiveOperation, KernelMessage, KernelWindowContext } from './types'
+import type {
+  ActiveOperation,
+  KernelMessage,
+  KernelWindowContext,
+} from './types'
 
 export type KernelWindowBinding = KernelWindowContext & {
   iframe: HTMLIFrameElement
 }
 
 function isKernelMessage(data: unknown): data is KernelMessage {
-  return typeof data === 'object' && data !== null && typeof (data as KernelMessage).type === 'string'
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    typeof (data as KernelMessage).type === 'string'
+  )
 }
 
 type TraceEvent = {
@@ -62,7 +70,7 @@ export class WorkspaceKernel {
   private emitTrace(
     binding: KernelWindowBinding,
     direction: TraceEvent['direction'],
-    message: KernelMessage,
+    message: KernelMessage
   ) {
     if (this.tracers.size === 0) return
 
@@ -116,13 +124,19 @@ export class WorkspaceKernel {
         void this.onFsOp('fs.browse', message, post, 'fs:browse')
         break
       case 'fs:mkdir':
-        void this.onFsOp('fs.mkdir', message, post, 'fs:mkdir', { notifyDesktop: true })
+        void this.onFsOp('fs.mkdir', message, post, 'fs:mkdir', {
+          notifyDesktop: true,
+        })
         break
       case 'fs:rename':
-        void this.onFsOp('fs.rename', message, post, 'fs:rename', { notifyDesktop: true })
+        void this.onFsOp('fs.rename', message, post, 'fs:rename', {
+          notifyDesktop: true,
+        })
         break
       case 'fs:delete':
-        void this.onFsOp('fs.delete', message, post, 'fs:delete', { notifyDesktop: true })
+        void this.onFsOp('fs.delete', message, post, 'fs:delete', {
+          notifyDesktop: true,
+        })
         break
       case 'fs:read':
         void this.onFsOp('fs.read', message, post, 'fs:read')
@@ -152,7 +166,10 @@ export class WorkspaceKernel {
     }
   }
 
-  private async readSyscallError(r: Response, fallback: string): Promise<string> {
+  private async readSyscallError(
+    r: Response,
+    fallback: string
+  ): Promise<string> {
     let message = fallback
     try {
       const body = (await r.json()) as { message?: string }
@@ -165,7 +182,7 @@ export class WorkspaceKernel {
 
   private async invokeSyscall(
     op: string,
-    args: Record<string, unknown>,
+    args: Record<string, unknown>
   ): Promise<unknown> {
     const r = await fetch('/api/syscalls', {
       method: 'POST',
@@ -178,7 +195,9 @@ export class WorkspaceKernel {
     })
 
     if (!r.ok) {
-      throw new Error(await this.readSyscallError(r, `Syscall failed (${r.status})`))
+      throw new Error(
+        await this.readSyscallError(r, `Syscall failed (${r.status})`)
+      )
     }
 
     if (r.status === 204) return undefined
@@ -195,7 +214,7 @@ export class WorkspaceKernel {
 
   private async onSyscall(
     message: KernelMessage,
-    post: (msg: KernelMessage) => void,
+    post: (msg: KernelMessage) => void
   ) {
     const op = message.op
     const requestId = message.requestId
@@ -225,11 +244,10 @@ export class WorkspaceKernel {
     message: KernelMessage,
     post: (msg: KernelMessage) => void,
     replyPrefix: string,
-    options?: { notifyDesktop?: boolean },
+    options?: { notifyDesktop?: boolean }
   ) {
     const { type: _type, requestId, ...args } = message
-    const replyBase =
-      typeof requestId === 'string' ? { requestId } : {}
+    const replyBase = typeof requestId === 'string' ? { requestId } : {}
 
     try {
       const result = await this.invokeSyscall(op, args)
@@ -244,7 +262,7 @@ export class WorkspaceKernel {
   private async onWindowOpen(
     binding: KernelWindowBinding,
     message: KernelMessage,
-    post: (msg: KernelMessage) => void,
+    post: (msg: KernelMessage) => void
   ) {
     const { type: _type, requestId, ...args } = message
     const replyBase = typeof requestId === 'string' ? { requestId } : {}
@@ -253,10 +271,13 @@ export class WorkspaceKernel {
         ...args,
         _workspaceId: this.workspaceId,
       })
-      window.dispatchEvent(new CustomEvent('globalos:window-opened', { detail: result }))
+      window.dispatchEvent(
+        new CustomEvent('globalos:window-opened', { detail: result })
+      )
       post({ type: 'window:open:complete', ...replyBase, result })
     } catch (err) {
-      const errMessage = err instanceof Error ? err.message : 'Failed to open window'
+      const errMessage =
+        err instanceof Error ? err.message : 'Failed to open window'
       post({ type: 'window:open:error', ...replyBase, message: errMessage })
     }
   }
@@ -264,7 +285,7 @@ export class WorkspaceKernel {
   private async onWindowOpenSelf(
     binding: KernelWindowBinding,
     message: KernelMessage,
-    post: (msg: KernelMessage) => void,
+    post: (msg: KernelMessage) => void
   ) {
     const { type: _type, requestId, ...args } = message
     const replyBase = typeof requestId === 'string' ? { requestId } : {}
@@ -274,10 +295,13 @@ export class WorkspaceKernel {
         _workspaceId: this.workspaceId,
         _processId: binding.processId,
       })
-      window.dispatchEvent(new CustomEvent('globalos:window-opened', { detail: result }))
+      window.dispatchEvent(
+        new CustomEvent('globalos:window-opened', { detail: result })
+      )
       post({ type: 'window:open:complete', ...replyBase, result })
     } catch (err) {
-      const errMessage = err instanceof Error ? err.message : 'Failed to open window'
+      const errMessage =
+        err instanceof Error ? err.message : 'Failed to open window'
       post({ type: 'window:open:error', ...replyBase, message: errMessage })
     }
   }
@@ -286,17 +310,28 @@ export class WorkspaceKernel {
     return 'Untitled.txt'
   }
 
-  private async onReady(binding: KernelWindowBinding, post: (msg: KernelMessage) => void) {
+  private async onReady(
+    binding: KernelWindowBinding,
+    post: (msg: KernelMessage) => void
+  ) {
     const visitId = await this.visitIdPromise
     post({ type: 'visit', visitId })
 
     const state = this.resolveProcessState(binding.processId)
     if (state === undefined) {
-      post({ type: 'init:fresh', reason: 'fresh', filename: this.defaultFilename(binding) })
+      post({
+        type: 'init:fresh',
+        reason: 'fresh',
+        filename: this.defaultFilename(binding),
+      })
       return
     }
     if (state === null) {
-      post({ type: 'init:fresh', reason: 'corrupted', filename: this.defaultFilename(binding) })
+      post({
+        type: 'init:fresh',
+        reason: 'corrupted',
+        filename: this.defaultFilename(binding),
+      })
       return
     }
     post({ type: 'init', ...state })
@@ -305,15 +340,20 @@ export class WorkspaceKernel {
   private async onSave(
     binding: KernelWindowBinding,
     message: KernelMessage,
-    post: (msg: KernelMessage) => void,
+    post: (msg: KernelMessage) => void
   ) {
     if (this.activeOps.get(binding.processId)?.op === 'save') {
-      console.warn(`[kernel] save already in progress for process ${binding.processId}`)
+      console.warn(
+        `[kernel] save already in progress for process ${binding.processId}`
+      )
       post({ type: 'save:error', message: 'Save already in progress' })
       return
     }
 
-    this.activeOps.set(binding.processId, { op: 'save', windowId: binding.windowId })
+    this.activeOps.set(binding.processId, {
+      op: 'save',
+      windowId: binding.windowId,
+    })
 
     const { type: _type, ...state } = message
     const filename = typeof state.filename === 'string' ? state.filename : ''
@@ -334,7 +374,9 @@ export class WorkspaceKernel {
     }
   }
 
-  private resolveProcessState(processId: number): Record<string, unknown> | null | undefined {
+  private resolveProcessState(
+    processId: number
+  ): Record<string, unknown> | null | undefined {
     if (this.processState.has(processId)) {
       return this.processState.get(processId)!
     }
@@ -345,7 +387,9 @@ export class WorkspaceKernel {
     return persisted
   }
 
-  private findBinding(source: MessageEventSource | null): KernelWindowBinding | undefined {
+  private findBinding(
+    source: MessageEventSource | null
+  ): KernelWindowBinding | undefined {
     if (!source) return undefined
     for (const binding of this.bindings.values()) {
       if (binding.iframe.contentWindow === source) return binding
@@ -353,7 +397,11 @@ export class WorkspaceKernel {
     return undefined
   }
 
-  private async callApi<T>(path: string, method: string, body?: unknown): Promise<T> {
+  private async callApi<T>(
+    path: string,
+    method: string,
+    body?: unknown
+  ): Promise<T> {
     const r = await fetch(path, {
       method,
       credentials: 'include',
@@ -362,7 +410,9 @@ export class WorkspaceKernel {
     })
     if (!r.ok) {
       let msg = `API error (${r.status})`
-      try { msg = ((await r.json()) as { message?: string }).message ?? msg } catch {}
+      try {
+        msg = ((await r.json()) as { message?: string }).message ?? msg
+      } catch {}
       throw new Error(msg)
     }
     if (r.status === 204) return undefined as T
@@ -372,13 +422,18 @@ export class WorkspaceKernel {
   private async onWebviewCreate(
     binding: KernelWindowBinding,
     message: KernelMessage,
-    post: (msg: KernelMessage) => void,
+    post: (msg: KernelMessage) => void
   ) {
-    const requestId = typeof message.requestId === 'string' ? message.requestId : undefined
+    const requestId =
+      typeof message.requestId === 'string' ? message.requestId : undefined
     const replyBase = requestId ? { requestId } : {}
     const domain = typeof message.domain === 'string' ? message.domain : ''
     if (!domain) {
-      post({ type: 'webview:create:error', ...replyBase, message: 'domain is required' })
+      post({
+        type: 'webview:create:error',
+        ...replyBase,
+        message: 'domain is required',
+      })
       return
     }
     try {
@@ -395,7 +450,8 @@ export class WorkspaceKernel {
       post({
         type: 'webview:create:error',
         ...replyBase,
-        message: err instanceof Error ? err.message : 'Failed to create webview',
+        message:
+          err instanceof Error ? err.message : 'Failed to create webview',
       })
     }
   }
@@ -403,13 +459,19 @@ export class WorkspaceKernel {
   private async onWebviewDestroy(
     binding: KernelWindowBinding,
     message: KernelMessage,
-    post: (msg: KernelMessage) => void,
+    post: (msg: KernelMessage) => void
   ) {
-    const requestId = typeof message.requestId === 'string' ? message.requestId : undefined
+    const requestId =
+      typeof message.requestId === 'string' ? message.requestId : undefined
     const replyBase = requestId ? { requestId } : {}
-    const webviewId = typeof message.webviewId === 'string' ? message.webviewId : ''
+    const webviewId =
+      typeof message.webviewId === 'string' ? message.webviewId : ''
     if (!webviewId) {
-      post({ type: 'webview:destroy:error', ...replyBase, message: 'webviewId is required' })
+      post({
+        type: 'webview:destroy:error',
+        ...replyBase,
+        message: 'webviewId is required',
+      })
       return
     }
     try {
@@ -419,7 +481,8 @@ export class WorkspaceKernel {
       post({
         type: 'webview:destroy:error',
         ...replyBase,
-        message: err instanceof Error ? err.message : 'Failed to destroy webview',
+        message:
+          err instanceof Error ? err.message : 'Failed to destroy webview',
       })
     }
   }

@@ -17,7 +17,9 @@ export const PLATFORM_DEP_DEFAULTS: Record<string, GappDependencySpec> = {
   },
 }
 
-export function platformDepsFor(ids: string[]): Record<string, GappDependencySpec> {
+export function platformDepsFor(
+  ids: string[]
+): Record<string, GappDependencySpec> {
   const deps: Record<string, GappDependencySpec> = {}
   for (const id of ids) {
     const spec = PLATFORM_DEP_DEFAULTS[id]

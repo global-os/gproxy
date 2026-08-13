@@ -38,7 +38,10 @@ function writeLocalConfig(config) {
     fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true })
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2))
   } catch (err) {
-    console.error('[config] failed to write local config:', err instanceof Error ? err.message : String(err))
+    console.error(
+      '[config] failed to write local config:',
+      err instanceof Error ? err.message : String(err)
+    )
   }
 }
 
@@ -49,7 +52,9 @@ export function resolveProxyUrl() {
 
 export function startConfigPolling() {
   if (!MAIN_APP_URL) {
-    console.log('[config] MAIN_APP_URL not set, admin-panel config polling disabled')
+    console.log(
+      '[config] MAIN_APP_URL not set, admin-panel config polling disabled'
+    )
     return
   }
 
@@ -69,20 +74,34 @@ export function startConfigPolling() {
       if (data.encrypted && proxyUrl && SECRET) {
         const [ivHex, ctHex, tagHex] = proxyUrl.split(':')
         const key = createHash('sha256').update(SECRET).digest()
-        const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(ivHex, 'hex'))
+        const decipher = createDecipheriv(
+          'aes-256-gcm',
+          key,
+          Buffer.from(ivHex, 'hex')
+        )
         decipher.setAuthTag(Buffer.from(tagHex, 'hex'))
-        proxyUrl = Buffer.concat([decipher.update(Buffer.from(ctHex, 'hex')), decipher.final()]).toString('utf8')
+        proxyUrl = Buffer.concat([
+          decipher.update(Buffer.from(ctHex, 'hex')),
+          decipher.final(),
+        ]).toString('utf8')
       }
       const effective = proxyUrl || ''
       if (effective !== current) {
-        console.log('[config] proxy_url changed via admin panel — writing local config and restarting to apply')
+        console.log(
+          '[config] proxy_url changed via admin panel — writing local config and restarting to apply'
+        )
         writeLocalConfig({ proxyUrl: proxyUrl || null })
         process.exit(0)
       }
     } catch (err) {
-      console.error('[config] poll failed:', err instanceof Error ? err.message : String(err))
+      console.error(
+        '[config] poll failed:',
+        err instanceof Error ? err.message : String(err)
+      )
     }
   }, POLL_INTERVAL_MS)
 
-  console.log(`[config] polling ${MAIN_APP_URL}/api/sidecar-config every ${POLL_INTERVAL_MS / 1000}s`)
+  console.log(
+    `[config] polling ${MAIN_APP_URL}/api/sidecar-config every ${POLL_INTERVAL_MS / 1000}s`
+  )
 }

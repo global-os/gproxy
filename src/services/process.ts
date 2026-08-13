@@ -5,15 +5,17 @@ import * as schema from '../db/schema.js'
 export async function findOrCreateProcess(
   db: NodePgDatabase<typeof schema>,
   workspaceId: number,
-  directoryId: number,
+  directoryId: number
 ) {
   const [existing] = await db
     .select({ id: schema.process.id })
     .from(schema.process)
-    .where(and(
-      eq(schema.process.workspace_id, workspaceId),
-      eq(schema.process.directory_id, directoryId),
-    ))
+    .where(
+      and(
+        eq(schema.process.workspace_id, workspaceId),
+        eq(schema.process.directory_id, directoryId)
+      )
+    )
     .limit(1)
 
   if (existing) return existing
@@ -33,7 +35,7 @@ export async function findOrCreateProcess(
 export async function createNamedProcess(
   db: NodePgDatabase<typeof schema>,
   workspaceId: number,
-  bundleName: string,
+  bundleName: string
 ) {
   const [created] = await db
     .insert(schema.process)
@@ -45,7 +47,7 @@ export async function createNamedProcess(
 
 export async function getProcessById(
   db: NodePgDatabase<typeof schema>,
-  processId: number,
+  processId: number
 ) {
   const [row] = await db
     .select({
@@ -54,10 +56,9 @@ export async function getProcessById(
       bundle_name: schema.process.bundle_name,
     })
     .from(schema.process)
-    .where(and(
-      eq(schema.process.id, processId),
-      isNull(schema.process.directory_id),
-    ))
+    .where(
+      and(eq(schema.process.id, processId), isNull(schema.process.directory_id))
+    )
     .limit(1)
 
   return row ?? null

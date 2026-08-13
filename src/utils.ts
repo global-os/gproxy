@@ -12,7 +12,8 @@ const appPath = (path: string) => {
   ) {
     return path
   }
-  if (path === '/health' || path === '/debug' || path.startsWith('/debug/')) return path
+  if (path === '/health' || path === '/debug' || path.startsWith('/debug/'))
+    return path
   return path === '/' ? '/app' : '/app/' + removeLeadingSlash(path)
 }
 
@@ -21,19 +22,26 @@ const instancePath = (host: string, path: string) => {
   return '/instance/' + slug + '/' + removeLeadingSlash(path)
 }
 
-const rules: [ReturnType<typeof pm>, (host: string, path: string) => string][] = [
-  [pm('www.onetrueos.com'),           (_h, p)  => p === '/' ? '/www' : p],
-  [pm('onetrueos.com'),               (_h, _p) => '/www-redirect'],
-  [pm('app.app.onetrueos.com'),       (_h, p)  => appPath(p)],
-  [pm('app.dev.onetrueos.com'),       (_h, p)  => appPath(p)],
-  [pm('app.app.dev.onetrueos.com'),   (_h, p)  => appPath(p)],
-  [pm('global-os-git-*-philip-petersons-projects.vercel.app'), (_h, p)  => appPath(p)],
-  [pm('*.vercel.app'),                (_h, p)  => appPath(p)],
-  [pm('*.app.onetrueos.com'),         (h, p)   => instancePath(h, p)],
-  [pm('*.app.dev.onetrueos.com'),     (h, p)   => instancePath(h, p)],
-]
+const rules: [ReturnType<typeof pm>, (host: string, path: string) => string][] =
+  [
+    [pm('www.onetrueos.com'), (_h, p) => (p === '/' ? '/www' : p)],
+    [pm('onetrueos.com'), (_h, _p) => '/www-redirect'],
+    [pm('app.app.onetrueos.com'), (_h, p) => appPath(p)],
+    [pm('app.dev.onetrueos.com'), (_h, p) => appPath(p)],
+    [pm('app.app.dev.onetrueos.com'), (_h, p) => appPath(p)],
+    [
+      pm('global-os-git-*-philip-petersons-projects.vercel.app'),
+      (_h, p) => appPath(p),
+    ],
+    [pm('*.vercel.app'), (_h, p) => appPath(p)],
+    [pm('*.app.onetrueos.com'), (h, p) => instancePath(h, p)],
+    [pm('*.app.dev.onetrueos.com'), (h, p) => instancePath(h, p)],
+  ]
 
-export const pathFromHostnameAndPath = (hostname: string, path: string): string => {
+export const pathFromHostnameAndPath = (
+  hostname: string,
+  path: string
+): string => {
   const host = hostname.split(':')[0]
 
   for (const [match, handler] of rules) {

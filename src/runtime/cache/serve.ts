@@ -4,7 +4,7 @@ import type { InstanceBundleFile } from './types.js'
 
 export async function resolveInstanceBundleFile(
   instanceId: number,
-  urlPath: string,
+  urlPath: string
 ): Promise<InstanceBundleFile | null> {
   const paths = await listBundlePaths(instanceId)
   if (paths.length === 0) return null

@@ -1,6 +1,12 @@
 import { createComponent } from 'react-fela'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
 import { WorkspaceProps } from './types'
 import { useWorkspace } from './useWorkspace'
 import { WorkspaceWindow } from './WorkspaceWindow'
@@ -110,7 +116,8 @@ const IconBitmap = createComponent(
 const IconLabel = createComponent(
   () => ({
     fontSize: '11px',
-    fontFamily: 'Tahoma, "MS Sans Serif", "Segoe UI", ui-sans-serif, system-ui, sans-serif',
+    fontFamily:
+      'Tahoma, "MS Sans Serif", "Segoe UI", ui-sans-serif, system-ui, sans-serif',
     textAlign: 'center',
     maxWidth: '80px',
     overflow: 'hidden',
@@ -149,13 +156,14 @@ const ContextMenu = createComponent(
     boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
     zIndex: 9999,
     minWidth: '220px',
-    fontFamily: 'Tahoma, "MS Sans Serif", "Segoe UI", ui-sans-serif, system-ui, sans-serif',
+    fontFamily:
+      'Tahoma, "MS Sans Serif", "Segoe UI", ui-sans-serif, system-ui, sans-serif',
     fontSize: '12px',
     color: '#333',
     userSelect: 'all',
   }),
   'div',
-  ['x', 'y'],
+  ['x', 'y']
 )
 
 const computeX = (x: number, width: number) =>
@@ -198,7 +206,7 @@ const serverWindowToAppWindow = (win: ServerWindow) => ({
 export function Workspace({ workspaceId, children }: WorkspaceProps) {
   const { state, onMouseDown, onMouseUp, onMouseMove, actions } = useWorkspace(
     workspaceId,
-    children.onStartup,
+    children.onStartup
   )
   const [launchMessage, setLaunchMessage] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -215,25 +223,38 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
     if (!contextMenu) return
     const close = () => setContextMenu(null)
     window.addEventListener('click', close)
-    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') close() })
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close()
+    })
     return () => {
       window.removeEventListener('click', close)
     }
   }, [!!contextMenu])
 
-  const onIconContextMenu = useCallback((e: ReactMouseEvent, item: DesktopItem) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setContextMenu({ x: e.clientX, y: e.clientY, item, checksum: null })
-    void fetch(`/api/fs/checksum?entryType=${item.type}&id=${item.id}`, { credentials: 'include' })
-      .then(r => r.json())
-      .then((body: { checksum?: string }) => {
-        setContextMenu(prev => prev?.item.id === item.id ? { ...prev, checksum: body.checksum ?? 'error' } : prev)
+  const onIconContextMenu = useCallback(
+    (e: ReactMouseEvent, item: DesktopItem) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setContextMenu({ x: e.clientX, y: e.clientY, item, checksum: null })
+      void fetch(`/api/fs/checksum?entryType=${item.type}&id=${item.id}`, {
+        credentials: 'include',
       })
-      .catch(() => {
-        setContextMenu(prev => prev?.item.id === item.id ? { ...prev, checksum: 'error' } : prev)
-      })
-  }, [])
+        .then((r) => r.json())
+        .then((body: { checksum?: string }) => {
+          setContextMenu((prev) =>
+            prev?.item.id === item.id
+              ? { ...prev, checksum: body.checksum ?? 'error' }
+              : prev
+          )
+        })
+        .catch(() => {
+          setContextMenu((prev) =>
+            prev?.item.id === item.id ? { ...prev, checksum: 'error' } : prev
+          )
+        })
+    },
+    []
+  )
 
   const onDeleteItem = useCallback((item: DesktopItem) => {
     if (!window.confirm(`Delete "${item.name}"? This can't be undone.`)) return
@@ -242,9 +263,14 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ op: 'fs.delete', entryType: item.type, id: item.id }),
+      body: JSON.stringify({
+        op: 'fs.delete',
+        entryType: item.type,
+        id: item.id,
+      }),
     }).then((r) => {
-      if (r.ok) window.dispatchEvent(new CustomEvent('globalos:desktop-updated'))
+      if (r.ok)
+        window.dispatchEvent(new CustomEvent('globalos:desktop-updated'))
     })
   }, [])
 
@@ -253,7 +279,7 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
     queryFn: async () => {
       const r = await fetch(
         `/api/fs/desktop?workspaceId=${encodeURIComponent(workspaceId)}`,
-        { credentials: 'include' },
+        { credentials: 'include' }
       )
       if (!r.ok) return { globalPcId: 0, items: [] }
       const body = (await r.json()) as DesktopApiResponse
@@ -264,7 +290,8 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
     },
   })
   const desktopItems = desktopData?.items ?? []
-  const { syncWindow, iframeRef, releaseWindow } = useWorkspaceKernel(workspaceId)
+  const { syncWindow, iframeRef, releaseWindow } =
+    useWorkspaceKernel(workspaceId)
 
   useWorkspaceEvents(workspaceId, {
     onProcessKilled: (event) => {
@@ -272,7 +299,9 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
         releaseWindow(windowId)
       }
       actions.closeProcessWindows(event.processId)
-      void queryClient.invalidateQueries({ queryKey: ['workspace-windows', workspaceId] })
+      void queryClient.invalidateQueries({
+        queryKey: ['workspace-windows', workspaceId],
+      })
     },
   })
 
@@ -283,7 +312,8 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
       actions.openWindow(serverWindowToAppWindow(win))
     }
     window.addEventListener('globalos:window-opened', onWindowOpened)
-    return () => window.removeEventListener('globalos:window-opened', onWindowOpened)
+    return () =>
+      window.removeEventListener('globalos:window-opened', onWindowOpened)
   }, [actions])
 
   const hydratedWorkspace = useRef<string | null>(null)
@@ -321,7 +351,7 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
     const serverWindows = workspaceWindows.map(serverWindowToAppWindow)
     const serverIds = new Set(serverWindows.map((w) => w.id))
     const locallyOpened = state.windows.filter(
-      (w) => pendingLocalWindowIds.current.has(w.id) && !serverIds.has(w.id),
+      (w) => pendingLocalWindowIds.current.has(w.id) && !serverIds.has(w.id)
     )
     actions.setWindows([...serverWindows, ...locallyOpened])
     pendingLocalWindowIds.current = new Set()
@@ -352,80 +382,97 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
       void queryClient.invalidateQueries({ queryKey: ['file-index'] })
     }
     window.addEventListener('globalos:desktop-updated', refreshDesktop)
-    return () => window.removeEventListener('globalos:desktop-updated', refreshDesktop)
+    return () =>
+      window.removeEventListener('globalos:desktop-updated', refreshDesktop)
   }, [queryClient, workspaceId])
 
-  const openProgram = useCallback(async (item: DesktopItem) => {
-    if (!isLaunchableApp(item)) return
+  const openProgram = useCallback(
+    async (item: DesktopItem) => {
+      if (!isLaunchableApp(item)) return
 
-    setLaunchMessage(`Launching ${item.name}…`)
-    try {
-      const r = await fetch(`/api/workspaces/${workspaceId}/launch`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          directoryId: item.id,
-          directoryName: item.name,
-        }),
-      })
+      setLaunchMessage(`Launching ${item.name}…`)
+      try {
+        const r = await fetch(`/api/workspaces/${workspaceId}/launch`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            directoryId: item.id,
+            directoryName: item.name,
+          }),
+        })
 
-      if (!r.ok) {
-        let message = `Launch failed (${r.status})`
-        try {
-          const body = (await r.json()) as { message?: string }
-          if (body.message) message = body.message
-        } catch {
-          // ignore
+        if (!r.ok) {
+          let message = `Launch failed (${r.status})`
+          try {
+            const body = (await r.json()) as { message?: string }
+            if (body.message) message = body.message
+          } catch {
+            // ignore
+          }
+          setLaunchMessage(message)
+          return
         }
-        setLaunchMessage(message)
-        return
-      }
 
-      const result = (await r.json()) as {
-        action: 'focus' | 'open'
-        window: ServerWindow
-      }
+        const result = (await r.json()) as {
+          action: 'focus' | 'open'
+          window: ServerWindow
+        }
 
-      const appWindow = serverWindowToAppWindow(result.window)
-      if (result.action === 'focus') {
-        actions.focusWindow(appWindow.id, appWindow.zIndex)
-      } else {
-        pendingLocalWindowIds.current.add(appWindow.id)
-        actions.openWindow(appWindow)
+        const appWindow = serverWindowToAppWindow(result.window)
+        if (result.action === 'focus') {
+          actions.focusWindow(appWindow.id, appWindow.zIndex)
+        } else {
+          pendingLocalWindowIds.current.add(appWindow.id)
+          actions.openWindow(appWindow)
+        }
+        setLaunchMessage(null)
+        void queryClient.invalidateQueries({
+          queryKey: ['workspace-logs', workspaceId],
+        })
+      } catch (err) {
+        setLaunchMessage(err instanceof Error ? err.message : 'Launch failed')
       }
-      setLaunchMessage(null)
-      void queryClient.invalidateQueries({ queryKey: ['workspace-logs', workspaceId] })
-    } catch (err) {
-      setLaunchMessage(err instanceof Error ? err.message : 'Launch failed')
-    }
-  }, [actions, queryClient, workspaceId])
+    },
+    [actions, queryClient, workspaceId]
+  )
 
-  const closeWindow = useCallback(async (windowId: number) => {
-    actions.closeWindow(windowId)
-    try {
-      const r = await fetch(`/api/workspaces/${workspaceId}/windows/${windowId}`, {
-        method: 'DELETE',
-        credentials: 'include',
+  const closeWindow = useCallback(
+    async (windowId: number) => {
+      actions.closeWindow(windowId)
+      try {
+        const r = await fetch(
+          `/api/workspaces/${workspaceId}/windows/${windowId}`,
+          {
+            method: 'DELETE',
+            credentials: 'include',
+          }
+        )
+        if (!r.ok) return
+        await queryClient.invalidateQueries({
+          queryKey: ['workspace-windows', workspaceId],
+        })
+      } catch {
+        // UI already updated; sync on next refresh
+      }
+    },
+    [actions, queryClient, workspaceId]
+  )
+
+  const launchFromIndex = useCallback(
+    (entry: FileIndexEntry) => {
+      if (!entry.launchable) return
+      void openProgram({
+        type: 'directory',
+        id: entry.id,
+        name: entry.name,
       })
-      if (!r.ok) return
-      await queryClient.invalidateQueries({ queryKey: ['workspace-windows', workspaceId] })
-    } catch {
-      // UI already updated; sync on next refresh
-    }
-  }, [actions, queryClient, workspaceId])
-
-  const launchFromIndex = useCallback((entry: FileIndexEntry) => {
-    if (!entry.launchable) return
-    void openProgram({
-      type: 'directory',
-      id: entry.id,
-      name: entry.name,
-    })
-  }, [openProgram])
+    },
+    [openProgram]
+  )
 
   return (
     <Frame
@@ -434,7 +481,7 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
       onMouseUp={onMouseUp}
     >
       <IconGrid>
-        {desktopItems.map(item => {
+        {desktopItems.map((item) => {
           const launchable = isLaunchableApp(item)
           return (
             <IconBox
@@ -443,9 +490,14 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
               onClick={launchable ? () => void openProgram(item) : undefined}
               onContextMenu={(e: ReactMouseEvent) => onIconContextMenu(e, item)}
             >
-              {item.icon
-                ? <IconBitmap src={`/api/fs/icons?path=${encodeURIComponent(item.icon)}`} alt="" />
-                : <IconShape isDir={item.type === 'directory'} />}
+              {item.icon ? (
+                <IconBitmap
+                  src={`/api/fs/icons?path=${encodeURIComponent(item.icon)}`}
+                  alt=""
+                />
+              ) : (
+                <IconShape isDir={item.type === 'directory'} />
+              )}
               <IconLabel>{item.name}</IconLabel>
             </IconBox>
           )
@@ -454,9 +506,23 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
       {launchMessage && <LaunchStatus>{launchMessage}</LaunchStatus>}
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y}>
-          <div style={{ fontWeight: 600, marginBottom: '4px', userSelect: 'none' }}>{contextMenu.item.name}</div>
-          <div style={{ color: '#888', marginBottom: '2px', userSelect: 'none' }}>checksum</div>
-          <div style={{ fontFamily: 'monospace', wordBreak: 'break-all', marginBottom: '8px' }}>
+          <div
+            style={{ fontWeight: 600, marginBottom: '4px', userSelect: 'none' }}
+          >
+            {contextMenu.item.name}
+          </div>
+          <div
+            style={{ color: '#888', marginBottom: '2px', userSelect: 'none' }}
+          >
+            checksum
+          </div>
+          <div
+            style={{
+              fontFamily: 'monospace',
+              wordBreak: 'break-all',
+              marginBottom: '8px',
+            }}
+          >
             {contextMenu.checksum ?? '…'}
           </div>
           <div
@@ -469,8 +535,12 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
               cursor: 'pointer',
               userSelect: 'none',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#f5f5f5' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#f5f5f5'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent'
+            }}
           >
             Delete
           </div>
@@ -481,7 +551,7 @@ export function Workspace({ workspaceId, children }: WorkspaceProps) {
       {state.windows.map((win, i) => {
         const topZIndex = state.windows.reduce(
           (max, w) => Math.max(max, w.zIndex),
-          0,
+          0
         )
         return (
           <WorkspaceWindow

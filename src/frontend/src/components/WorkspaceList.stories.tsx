@@ -12,7 +12,9 @@ const WORKSPACES = [
 ]
 
 function seededClient(data: unknown) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   client.setQueryData(['workspaces'], data)
   return client
 }
@@ -42,7 +44,11 @@ export const Loading: StoryObj = {
     (Story) => {
       globalThis.fetch = () => new Promise(() => {})
       return (
-        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <QueryClientProvider
+          client={
+            new QueryClient({ defaultOptions: { queries: { retry: false } } })
+          }
+        >
           <Story />
         </QueryClientProvider>
       )
@@ -55,7 +61,11 @@ export const WithError: StoryObj = {
     (Story) => {
       globalThis.fetch = () => Promise.reject(new Error('Network error'))
       return (
-        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <QueryClientProvider
+          client={
+            new QueryClient({ defaultOptions: { queries: { retry: false } } })
+          }
+        >
           <Story />
         </QueryClientProvider>
       )

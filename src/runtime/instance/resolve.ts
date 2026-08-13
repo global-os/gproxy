@@ -3,7 +3,9 @@ import { db } from '../../db/index.js'
 import * as schema from '../../db/schema.js'
 import { isValidInstanceSlug } from './slug.js'
 
-export async function resolveInstanceIdBySlug(slug: string): Promise<number | null> {
+export async function resolveInstanceIdBySlug(
+  slug: string
+): Promise<number | null> {
   if (!isValidInstanceSlug(slug)) return null
 
   const [row] = await db

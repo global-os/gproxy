@@ -26,7 +26,7 @@ export type WorkspaceProcessDto = {
 }
 
 export async function listWorkspaceProcesses(
-  workspaceId: number,
+  workspaceId: number
 ): Promise<WorkspaceProcessDto[]> {
   const rows = await db
     .select({
@@ -35,7 +35,10 @@ export async function listWorkspaceProcesses(
       bundleName: schema.directory.name,
     })
     .from(schema.process)
-    .innerJoin(schema.directory, eq(schema.process.directory_id, schema.directory.id))
+    .innerJoin(
+      schema.directory,
+      eq(schema.process.directory_id, schema.directory.id)
+    )
     .where(eq(schema.process.workspace_id, workspaceId))
     .orderBy(schema.directory.name)
 
@@ -93,7 +96,7 @@ export async function listWorkspaceProcesses(
 export async function killWorkspaceProcess(
   userId: string,
   workspaceId: number,
-  processId: number,
+  processId: number
 ): Promise<void> {
   await requireWorkspace(userId, workspaceId)
 
@@ -103,11 +106,16 @@ export async function killWorkspaceProcess(
       bundleName: schema.directory.name,
     })
     .from(schema.process)
-    .innerJoin(schema.directory, eq(schema.process.directory_id, schema.directory.id))
-    .where(and(
-      eq(schema.process.id, processId),
-      eq(schema.process.workspace_id, workspaceId),
-    ))
+    .innerJoin(
+      schema.directory,
+      eq(schema.process.directory_id, schema.directory.id)
+    )
+    .where(
+      and(
+        eq(schema.process.id, processId),
+        eq(schema.process.workspace_id, workspaceId)
+      )
+    )
     .limit(1)
 
   if (!proc) {
@@ -119,9 +127,7 @@ export async function killWorkspaceProcess(
     .from(schema.workspaceWindow)
     .where(eq(schema.workspaceWindow.process_id, processId))
 
-  await db
-    .delete(schema.process)
-    .where(eq(schema.process.id, processId))
+  await db.delete(schema.process).where(eq(schema.process.id, processId))
 
   await appendWorkspaceEvent(db, {
     type: 'process.killed',

@@ -13,7 +13,8 @@ import { spawnSync } from 'node:child_process'
 import aws4 from 'aws4'
 import { fetch as undiciFetch } from 'undici'
 
-const MINIO_ENDPOINT = process.env.MINIO_ENDPOINT || 'https://s3.quineglobal.com'
+const MINIO_ENDPOINT =
+  process.env.MINIO_ENDPOINT || 'https://s3.quineglobal.com'
 const MINIO_BUCKET = process.env.MINIO_BUCKET || 'chromium-builds'
 // MinIO on mainframe-2 sets no explicit region, so SigV4 must sign with the
 // default us-east-1. Overridable in case that ever changes.
@@ -22,9 +23,15 @@ const EXTRACT_ROOT = process.env.CHROMIUM_EXTRACT_DIR || '/tmp/custom-chromium'
 
 function credentials() {
   const accessKeyId =
-    process.env.AWS_ACCESS_KEY_ID || process.env.MINIO_ACCESS_KEY_ID || process.env.MINIO_ROOT_USER || ''
+    process.env.AWS_ACCESS_KEY_ID ||
+    process.env.MINIO_ACCESS_KEY_ID ||
+    process.env.MINIO_ROOT_USER ||
+    ''
   const secretAccessKey =
-    process.env.AWS_SECRET_ACCESS_KEY || process.env.MINIO_SECRET_ACCESS_KEY || process.env.MINIO_ROOT_PASSWORD || ''
+    process.env.AWS_SECRET_ACCESS_KEY ||
+    process.env.MINIO_SECRET_ACCESS_KEY ||
+    process.env.MINIO_ROOT_PASSWORD ||
+    ''
   if (!accessKeyId || !secretAccessKey) {
     throw new Error(
       '[chromium-artifact] missing MinIO credentials (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)'
@@ -72,10 +79,14 @@ export async function resolveChromiumExecutable(sha) {
 
   console.log(`[chromium-artifact] extracting ${sha}`)
   fs.mkdirSync(extractDir, { recursive: true })
-  const tar = spawnSync('tar', ['-xzf', tarPath, '-C', extractDir], { stdio: 'inherit' })
+  const tar = spawnSync('tar', ['-xzf', tarPath, '-C', extractDir], {
+    stdio: 'inherit',
+  })
   fs.unlinkSync(tarPath)
   if (tar.status !== 0) {
-    throw new Error(`[chromium-artifact] tar extraction failed (exit ${tar.status})`)
+    throw new Error(
+      `[chromium-artifact] tar extraction failed (exit ${tar.status})`
+    )
   }
   if (!fs.existsSync(executablePath)) {
     throw new Error(`[chromium-artifact] no chrome binary at ${executablePath}`)

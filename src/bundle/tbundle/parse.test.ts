@@ -30,7 +30,7 @@ line two
 `)
     assert.equal(
       entries.get('hello.js'),
-      "export function hello() {\n  return 'hi'\n}\n\n",
+      "export function hello() {\n  return 'hi'\n}\n\n"
     )
     assert.equal(entries.get('hello.txt'), 'line one\nline two\n')
   })
@@ -51,7 +51,7 @@ not a new file
 `)
     assert.equal(
       entries.get('notes.txt'),
-      'Mention @user on @channel\nnot a new file\n',
+      'Mention @user on @channel\nnot a new file\n'
     )
   })
 
@@ -89,9 +89,7 @@ world
   })
 
   it('normalizes CRLF and strips BOM', () => {
-    const entries = expectOk(
-      `\uFEFF@a.txt\r\none\r\n@b.txt\r\ntwo\r\n`,
-    )
+    const entries = expectOk(`\uFEFF@a.txt\r\none\r\n@b.txt\r\ntwo\r\n`)
     assert.equal(entries.get('a.txt'), 'one\n')
     assert.equal(entries.get('b.txt'), 'two\n')
   })
@@ -102,7 +100,7 @@ world
 @foo.txt
 bar
 `),
-      { kind: 'unexpected-preamble' },
+      { kind: 'unexpected-preamble' }
     )
   })
 
@@ -146,7 +144,7 @@ one
 @dup.txt
 two
 `),
-      { kind: 'duplicate-path', path: 'dup.txt' },
+      { kind: 'duplicate-path', path: 'dup.txt' }
     )
   })
 })

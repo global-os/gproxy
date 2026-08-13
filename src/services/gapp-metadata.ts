@@ -6,15 +6,17 @@ import * as schema from '../db/schema.js'
 
 export async function readGappManifest(
   db: NodePgDatabase<typeof schema>,
-  directoryId: number,
+  directoryId: number
 ): Promise<GappManifest | null> {
   const [row] = await db
     .select({ content: schema.file.content })
     .from(schema.file)
-    .where(and(
-      eq(schema.file.parent_id, directoryId),
-      eq(schema.file.name, 'gapp.json'),
-    ))
+    .where(
+      and(
+        eq(schema.file.parent_id, directoryId),
+        eq(schema.file.name, 'gapp.json')
+      )
+    )
     .limit(1)
 
   if (!row) return null
@@ -29,7 +31,7 @@ export async function readGappManifest(
 export async function resolveGappIconPath(
   db: NodePgDatabase<typeof schema>,
   directoryId: number,
-  bundleName: string,
+  bundleName: string
 ): Promise<string | undefined> {
   if (!bundleName.endsWith('.gapp')) return undefined
 

@@ -10,7 +10,7 @@ export type GlobalPcRow = {
 
 export async function getGlobalPcForUser(
   db: NodePgDatabase<typeof schema>,
-  userId: string,
+  userId: string
 ): Promise<GlobalPcRow | null> {
   const [row] = await db
     .select({
@@ -28,7 +28,7 @@ export async function getGlobalPcForUser(
 export async function ensureGlobalPcForUser(
   db: NodePgDatabase<typeof schema>,
   userId: string,
-  name = 'My Global PC',
+  name = 'My Global PC'
 ): Promise<number> {
   const existing = await getGlobalPcForUser(db, userId)
   if (existing) return existing.id
@@ -44,17 +44,19 @@ export async function ensureGlobalPcForUser(
 export async function resolveGlobalPcIdForWorkspace(
   db: NodePgDatabase<typeof schema>,
   userId: string,
-  workspaceId: number,
+  workspaceId: number
 ): Promise<number> {
   const [row] = await db
     .select({
       global_pc_id: schema.workspace.global_pc_id,
     })
     .from(schema.workspace)
-    .where(and(
-      eq(schema.workspace.id, workspaceId),
-      eq(schema.workspace.user_id, userId),
-    ))
+    .where(
+      and(
+        eq(schema.workspace.id, workspaceId),
+        eq(schema.workspace.user_id, userId)
+      )
+    )
     .limit(1)
 
   if (!row) {

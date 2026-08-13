@@ -6,7 +6,9 @@ import { FIXTURE_EMAIL, resolveFixturePath } from './fixture-path.mjs'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const out = resolveFixturePath(FIXTURE_EMAIL, '~/Desktop/textedit.gapp/yjs.js')
 if (!out) {
-  throw new Error('textedit.gapp fixture not found under fixtures/by-user/*/ or user dir')
+  throw new Error(
+    'textedit.gapp fixture not found under fixtures/by-user/*/ or user dir'
+  )
 }
 
 execFileSync(
@@ -20,5 +22,5 @@ execFileSync(
     '--platform=browser',
     `--outfile=${out}`,
   ],
-  { cwd: root, stdio: 'inherit' },
+  { cwd: root, stdio: 'inherit' }
 )

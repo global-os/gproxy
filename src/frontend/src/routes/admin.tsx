@@ -73,10 +73,13 @@ function ProxyConfigSection() {
 
   return (
     <div className="mb-8 rounded-xl border border-gray-200 p-5">
-      <h2 className="m-0 mb-1 text-sm font-semibold text-gray-900">Residential proxy URL</h2>
+      <h2 className="m-0 mb-1 text-sm font-semibold text-gray-900">
+        Residential proxy URL
+      </h2>
       <p className="m-0 mb-3 text-xs text-gray-500">
-        Used by the sidecar (mainframe-2) for outbound webview traffic. The sidecar polls this
-        periodically and applies changes on its own — no redeploy needed.
+        Used by the sidecar (mainframe-2) for outbound webview traffic. The
+        sidecar polls this periodically and applies changes on its own — no
+        redeploy needed.
         {data?.updatedAt && (
           <> Last updated {new Date(data.updatedAt).toLocaleString()}.</>
         )}
@@ -104,7 +107,9 @@ function ProxyConfigSection() {
       )}
       {mutation.isError && (
         <p className="mt-2 text-xs text-red-600">
-          {mutation.error instanceof Error ? mutation.error.message : 'Failed to save'}
+          {mutation.error instanceof Error
+            ? mutation.error.message
+            : 'Failed to save'}
         </p>
       )}
       {mutation.isSuccess && draft === null && (
@@ -176,22 +181,36 @@ function AdminPage() {
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Name</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Email</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Verified</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Joined</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+                      Name
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+                      Email
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+                      Verified
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+                      Joined
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.users.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-gray-400">
+                      <td
+                        colSpan={4}
+                        className="px-4 py-8 text-center text-gray-400"
+                      >
                         No users yet.
                       </td>
                     </tr>
                   ) : (
                     data.users.map((u) => (
-                      <tr key={u.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors duration-75">
+                      <tr
+                        key={u.id}
+                        className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors duration-75"
+                      >
                         <td className="px-4 py-3 text-gray-900">
                           {u.name ?? <span className="text-gray-300">—</span>}
                         </td>

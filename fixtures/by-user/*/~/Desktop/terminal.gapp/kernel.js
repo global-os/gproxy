@@ -9,12 +9,13 @@ const DEFAULT_TIMEOUT_MS = 15_000
 export function toParent(type, payload = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const requestId = `${type}-${++nextRequestId}`
   return new Promise((resolve, reject) => {
-    const timer = timeoutMs > 0
-      ? window.setTimeout(() => {
-          pending.delete(requestId)
-          reject(new Error(`Timed out waiting for ${type}`))
-        }, timeoutMs)
-      : null
+    const timer =
+      timeoutMs > 0
+        ? window.setTimeout(() => {
+            pending.delete(requestId)
+            reject(new Error(`Timed out waiting for ${type}`))
+          }, timeoutMs)
+        : null
 
     const settle = (fn, value) => {
       if (timer != null) window.clearTimeout(timer)

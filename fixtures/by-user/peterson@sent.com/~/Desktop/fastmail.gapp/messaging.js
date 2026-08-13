@@ -14,7 +14,7 @@ var _waiters = []
 
 window.KernelMessaging = {
   nextId: function () {
-    if (_visitId !== null) return _visitId + '-' + (++_seq)
+    if (_visitId !== null) return _visitId + '-' + ++_seq
     // visitId not yet received — callers shouldn't hit this in practice since
     // the kernel sends 'visit' before 'init:fresh'/'init', but handle it anyway
     var n = ++_seq
@@ -25,7 +25,11 @@ window.KernelMessaging = {
 window.addEventListener('message', function (event) {
   var data = event.data
   if (!data || typeof data.type !== 'string') return
-  if (data.type === 'visit' && typeof data.visitId === 'string' && _visitId === null) {
+  if (
+    data.type === 'visit' &&
+    typeof data.visitId === 'string' &&
+    _visitId === null
+  ) {
     _visitId = data.visitId
   }
 })

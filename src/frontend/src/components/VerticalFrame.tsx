@@ -5,7 +5,10 @@ import { LogoSection } from './LogoSection'
 
 type Props = { width?: string }
 
-export const VerticalFrame = ({ children, width }: PropsWithChildren<Props>) => (
+export const VerticalFrame = ({
+  children,
+  width,
+}: PropsWithChildren<Props>) => (
   <div className="flex justify-center px-4 py-10 sm:py-12">
     <div
       style={{ width }}

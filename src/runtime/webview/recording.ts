@@ -21,7 +21,9 @@ function querySession(): Promise<number | null> {
     .orderBy(desc(schema.proxyRecordingSession.started_at))
     .limit(1)
     .then(([row]) => row?.id ?? null)
-    .finally(() => { sessionPromise = null })
+    .finally(() => {
+      sessionPromise = null
+    })
   return sessionPromise
 }
 
@@ -75,9 +77,14 @@ function scheduleFlush(): void {
     const batch = pendingEntries
     pendingEntries = []
     if (batch.length === 0) return
-    db.insert(schema.proxyTraffic).values(batch).catch(err => {
-      console.error('[recording] flush failed:', err instanceof Error ? err.message : String(err))
-    })
+    db.insert(schema.proxyTraffic)
+      .values(batch)
+      .catch((err) => {
+        console.error(
+          '[recording] flush failed:',
+          err instanceof Error ? err.message : String(err)
+        )
+      })
   }, 500)
 }
 
@@ -101,8 +108,12 @@ export function recordTraffic(entry: TrafficEntry): void {
 const BODY_SIZE_LIMIT = 512 * 1024 // 512 KB
 
 export async function captureResponseBody(
-  response: Response,
-): Promise<{ body: ArrayBuffer; text: string | null; encoding: string | null }> {
+  response: Response
+): Promise<{
+  body: ArrayBuffer
+  text: string | null
+  encoding: string | null
+}> {
   const contentType = response.headers.get('content-type') ?? ''
   const buf = await response.arrayBuffer()
 
@@ -111,9 +122,16 @@ export async function captureResponseBody(
     return { body: buf, text: null, encoding: null }
   }
 
-  const isTextLike = /^(text\/|application\/json|application\/x-www-form-urlencoded|application\/javascript|application\/x-protobuf)/.test(contentType)
+  const isTextLike =
+    /^(text\/|application\/json|application\/x-www-form-urlencoded|application\/javascript|application\/x-protobuf)/.test(
+      contentType
+    )
   if (!isTextLike) {
-    return { body: buf, text: Buffer.from(buf).toString('base64'), encoding: 'base64' }
+    return {
+      body: buf,
+      text: Buffer.from(buf).toString('base64'),
+      encoding: 'base64',
+    }
   }
 
   return { body: buf, text: new TextDecoder().decode(buf), encoding: null }
@@ -129,7 +147,7 @@ export async function exportHar(): Promise<object> {
     log: {
       version: '1.2',
       creator: { name: 'GlobalOS Proxy', version: '1.0' },
-      entries: entries.map(e => ({
+      entries: entries.map((e) => ({
         startedDateTime: e.recorded_at.toISOString(),
         time: e.duration_ms ?? -1,
         request: {
@@ -141,9 +159,14 @@ export async function exportHar(): Promise<object> {
           queryString: [],
           headersSize: -1,
           bodySize: e.request_body ? e.request_body.length : -1,
-          ...(e.request_body ? {
-            postData: { mimeType: 'application/octet-stream', text: e.request_body },
-          } : {}),
+          ...(e.request_body
+            ? {
+                postData: {
+                  mimeType: 'application/octet-stream',
+                  text: e.request_body,
+                },
+              }
+            : {}),
         },
         response: {
           status: e.response_status ?? 0,
@@ -153,8 +176,10 @@ export async function exportHar(): Promise<object> {
           cookies: [],
           content: {
             size: -1,
-            mimeType: (e.response_headers as { name: string; value: string }[])
-              .find(h => h.name.toLowerCase() === 'content-type')?.value ?? '',
+            mimeType:
+              (e.response_headers as { name: string; value: string }[]).find(
+                (h) => h.name.toLowerCase() === 'content-type'
+              )?.value ?? '',
             ...(e.response_body != null
               ? e.response_body_encoding === 'base64'
                 ? { text: e.response_body, encoding: 'base64' }

@@ -1,4 +1,7 @@
-export function formatExecError(err: unknown): { message: string; detail?: string } {
+export function formatExecError(err: unknown): {
+  message: string
+  detail?: string
+} {
   if (!err || typeof err !== 'object') {
     return { message: String(err) }
   }

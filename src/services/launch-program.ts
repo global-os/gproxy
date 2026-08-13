@@ -28,7 +28,8 @@ export async function launchProgram(opts: {
 }): Promise<LaunchResult> {
   const { userId, workspaceId, directoryId, directoryName } = opts
   const start = Date.now()
-  const log = (step: string) => console.log(`[launch] ${step} +${Date.now() - start}ms`)
+  const log = (step: string) =>
+    console.log(`[launch] ${step} +${Date.now() - start}ms`)
 
   log('start')
   await requireWorkspace(userId, workspaceId)
@@ -36,10 +37,14 @@ export async function launchProgram(opts: {
   await requireLaunchableApp(userId, directoryId)
   log('app ok')
 
-  const bundleName = directoryName.endsWith('.gapp') ? directoryName : `${directoryName}.gapp`
+  const bundleName = directoryName.endsWith('.gapp')
+    ? directoryName
+    : `${directoryName}.gapp`
   const processRow = await findOrCreateProcess(db, workspaceId, directoryId)
   log(`process ${processRow.id}`)
-  const { instanceId, instanceSlug, url } = await ensurePrimaryInstance(processRow.id)
+  const { instanceId, instanceSlug, url } = await ensurePrimaryInstance(
+    processRow.id
+  )
   const workspaceLog = createWorkspaceLogWriter(workspaceId)
   await workspaceLog.info('launch', `Launched ${bundleName}`)
   scheduleInstancePrepare(instanceId)

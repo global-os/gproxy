@@ -37,7 +37,7 @@ export async function touchInstance(instanceId: number): Promise<void> {
 export async function startInstanceRuntime(
   instanceId: number,
   checksum: string,
-  tarBytes: Buffer,
+  tarBytes: Buffer
 ): Promise<void> {
   await touchInstance(instanceId)
   await ensureInstanceBundleCached(instanceId, tarBytes, checksum)
@@ -139,7 +139,9 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
   if (imageId && checksum !== PENDING_INSTANCE_CHECKSUM) {
     const currentHash = await hashDir(processRow.directory_id)
     if (currentHash !== checksum) {
-      console.log(`[instance] directory changed for ${instanceId}, rebuilding image`)
+      console.log(
+        `[instance] directory changed for ${instanceId}, rebuilding image`
+      )
       imageId = null
       checksum = PENDING_INSTANCE_CHECKSUM
     } else {
@@ -149,7 +151,9 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
         .where(eq(schema.image.id, imageId))
         .limit(1)
       if (imageMeta?.cache_key !== imageCacheKey(checksum)) {
-        console.log(`[instance] image cache_key stale for ${instanceId} (build changed), rebuilding image`)
+        console.log(
+          `[instance] image cache_key stale for ${instanceId} (build changed), rebuilding image`
+        )
         imageId = null
         checksum = PENDING_INSTANCE_CHECKSUM
       }
@@ -157,9 +161,13 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
   }
 
   // Bundle cache key includes build SHA so compiler changes bust the cache automatically.
-  const bundleCacheKey = checksum !== PENDING_INSTANCE_CHECKSUM ? imageCacheKey(checksum) : null
+  const bundleCacheKey =
+    checksum !== PENDING_INSTANCE_CHECKSUM ? imageCacheKey(checksum) : null
 
-  if (bundleCacheKey !== null && await isBundleCached(instanceId, bundleCacheKey)) {
+  if (
+    bundleCacheKey !== null &&
+    (await isBundleCached(instanceId, bundleCacheKey))
+  ) {
     await touchInstance(instanceId)
     if (row.state !== 'running') {
       await persistInstanceReady(instanceId)
@@ -174,10 +182,18 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
 
   if (!imageId || checksum === PENDING_INSTANCE_CHECKSUM) {
     const workspaceId = await resolveWorkspaceIdForInstance(instanceId)
-    const workspaceLog = workspaceId ? createWorkspaceLogWriter(workspaceId) : null
+    const workspaceLog = workspaceId
+      ? createWorkspaceLogWriter(workspaceId)
+      : null
 
-    console.log(`[instance] resolving image for ${instanceId} directory ${processRow.directory_id}`)
-    setInstancePrepareProgress(instanceId, 'resolving-image', 'Resolving app bundle…')
+    console.log(
+      `[instance] resolving image for ${instanceId} directory ${processRow.directory_id}`
+    )
+    setInstancePrepareProgress(
+      instanceId,
+      'resolving-image',
+      'Resolving app bundle…'
+    )
     const image = await getOrCreateImage(processRow.directory_id, {
       onProgress: (message) => {
         setInstancePrepareProgress(instanceId, 'building-snapshot', message)
@@ -206,7 +222,11 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
     return false
   }
 
-  setInstancePrepareProgress(instanceId, 'loading-tar', 'Loading bundle from database…')
+  setInstancePrepareProgress(
+    instanceId,
+    'loading-tar',
+    'Loading bundle from database…'
+  )
   const loadStart = Date.now()
   const [imageRow] = await db
     .select({ tar_bytes: schema.image.tar_bytes })
@@ -220,40 +240,51 @@ async function loadInstanceReady(instanceId: number): Promise<boolean> {
   }
 
   console.log(
-    `[instance] loaded tar for ${instanceId} (${imageRow.tar_bytes.length} bytes) +${Date.now() - loadStart}ms`,
+    `[instance] loaded tar for ${instanceId} (${imageRow.tar_bytes.length} bytes) +${Date.now() - loadStart}ms`
   )
 
   setInstancePrepareProgress(instanceId, 'extracting-tar', 'Extracting tar…')
   const extractStart = Date.now()
-  await startInstanceRuntime(instanceId, imageCacheKey(checksum), imageRow.tar_bytes)
-  console.log(`[instance] parsed tar for ${instanceId} +${Date.now() - extractStart}ms`)
+  await startInstanceRuntime(
+    instanceId,
+    imageCacheKey(checksum),
+    imageRow.tar_bytes
+  )
+  console.log(
+    `[instance] parsed tar for ${instanceId} +${Date.now() - extractStart}ms`
+  )
   await persistInstanceReady(instanceId)
   setInstancePrepareReady(instanceId)
   return true
 }
 
 /** Ensure instance bundle is parsed and ready to serve. */
-export async function ensureInstanceReady(instanceId: number): Promise<boolean> {
+export async function ensureInstanceReady(
+  instanceId: number
+): Promise<boolean> {
   const inflight = preparing.get(instanceId)
   if (inflight) return inflight
 
-  const work = loadInstanceReady(instanceId).catch(async (err) => {
-    const message = err instanceof Error ? err.message : 'Failed to prepare app'
-    const detail =
-      err && typeof err === 'object' && 'detail' in err
-        ? String((err as { detail?: string }).detail ?? '')
-        : undefined
-    setInstancePrepareFailed(instanceId, message)
-    console.error(`[instance] prepare failed for ${instanceId}:`, err)
-    const workspaceId = await resolveWorkspaceIdForInstance(instanceId)
-    if (workspaceId) {
-      const log = createWorkspaceLogWriter(workspaceId)
-      await log.error('instance', message, detail || undefined)
-    }
-    return false
-  }).finally(() => {
-    preparing.delete(instanceId)
-  })
+  const work = loadInstanceReady(instanceId)
+    .catch(async (err) => {
+      const message =
+        err instanceof Error ? err.message : 'Failed to prepare app'
+      const detail =
+        err && typeof err === 'object' && 'detail' in err
+          ? String((err as { detail?: string }).detail ?? '')
+          : undefined
+      setInstancePrepareFailed(instanceId, message)
+      console.error(`[instance] prepare failed for ${instanceId}:`, err)
+      const workspaceId = await resolveWorkspaceIdForInstance(instanceId)
+      if (workspaceId) {
+        const log = createWorkspaceLogWriter(workspaceId)
+        await log.error('instance', message, detail || undefined)
+      }
+      return false
+    })
+    .finally(() => {
+      preparing.delete(instanceId)
+    })
   preparing.set(instanceId, work)
   return work
 }

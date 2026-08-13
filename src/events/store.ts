@@ -27,7 +27,7 @@ function rowToRecord(row: {
 
 export async function appendWorkspaceEvent(
   db: NodePgDatabase<typeof schema>,
-  event: WorkspaceEventPayload,
+  event: WorkspaceEventPayload
 ): Promise<WorkspaceEventRecord> {
   const [row] = await db
     .insert(schema.workspaceEvent)
@@ -55,7 +55,7 @@ export async function listWorkspaceEventsAfter(
   db: NodePgDatabase<typeof schema>,
   workspaceId: number,
   afterId: number,
-  limit = 50,
+  limit = 50
 ): Promise<WorkspaceEventRecord[]> {
   const rows = await db
     .select({
@@ -66,10 +66,12 @@ export async function listWorkspaceEventsAfter(
       created_at: schema.workspaceEvent.created_at,
     })
     .from(schema.workspaceEvent)
-    .where(and(
-      eq(schema.workspaceEvent.workspace_id, workspaceId),
-      gt(schema.workspaceEvent.id, afterId),
-    ))
+    .where(
+      and(
+        eq(schema.workspaceEvent.workspace_id, workspaceId),
+        gt(schema.workspaceEvent.id, afterId)
+      )
+    )
     .orderBy(asc(schema.workspaceEvent.id))
     .limit(limit)
 

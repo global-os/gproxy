@@ -7,15 +7,13 @@ export async function cleanupDirectoryAppRefs(
   db: NodePgDatabase<typeof schema>,
   userId: string,
   directoryId: number,
-  directoryName: string,
+  directoryName: string
 ): Promise<void> {
   await db
     .delete(schema.process)
     .where(eq(schema.process.directory_id, directoryId))
 
-  await db
-    .delete(schema.task)
-    .where(eq(schema.task.directory_id, directoryId))
+  await db.delete(schema.task).where(eq(schema.task.directory_id, directoryId))
 
   await db
     .delete(schema.image)
@@ -30,9 +28,11 @@ export async function cleanupDirectoryAppRefs(
   if (globalPcIds.length > 0) {
     await db
       .delete(schema.globalPcIcon)
-      .where(and(
-        inArray(schema.globalPcIcon.global_pc_id, globalPcIds),
-        eq(schema.globalPcIcon.entry_name, directoryName),
-      ))
+      .where(
+        and(
+          inArray(schema.globalPcIcon.global_pc_id, globalPcIds),
+          eq(schema.globalPcIcon.entry_name, directoryName)
+        )
+      )
   }
 }

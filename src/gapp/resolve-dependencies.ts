@@ -24,7 +24,7 @@ async function readPlatformArtifact(name: string): Promise<Buffer> {
 }
 
 export async function resolvePlatformDependencies(
-  manifest: GappManifest,
+  manifest: GappManifest
 ): Promise<ResolvedDependency[]> {
   const deps = manifest.dependencies ?? {}
   const resolved: ResolvedDependency[] = []

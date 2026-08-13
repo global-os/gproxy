@@ -6,7 +6,7 @@ import {
 
 export function useWorkspaceEvents(
   workspaceId: string,
-  handlers: WorkspaceEventHandlers,
+  handlers: WorkspaceEventHandlers
 ) {
   const handlersRef = useRef(handlers)
   handlersRef.current = handlers

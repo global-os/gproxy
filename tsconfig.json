@@ -1,16 +1,11 @@
 {
-  "exclude": [
-      "src/frontend",
-      "src/www",
-      "**/*.test.ts"
-  ],
+  "exclude": ["src/frontend", "src/www", "**/*.test.ts"],
   "compilerOptions": {
-    "module": "ES2022",           // or "ESNext"
-    "target": "ES2022",           // or "ESNext"
+    "module": "ES2022", // or "ESNext"
+    "target": "ES2022", // or "ESNext"
     "esModuleInterop": true,
 
     "moduleResolution": "bundler",
-
 
     "outDir": "dist",
     "jsxImportSource": "hono/jsx",

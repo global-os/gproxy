@@ -13,7 +13,9 @@ const router = new Hono<Env>()
 router.post('/', async (c) => {
   let user = c.get('user')
   if (!user) {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null)
+    const session = await auth.api
+      .getSession({ headers: c.req.raw.headers })
+      .catch(() => null)
     user = session?.user ?? null
   }
   if (!user) {
@@ -21,7 +23,7 @@ router.post('/', async (c) => {
     return c.json({ message: 'Unauthorized', debug: { hasCookie } }, 401)
   }
 
-  const body = await c.req.json() as { processId?: number; domain?: string }
+  const body = (await c.req.json()) as { processId?: number; domain?: string }
   const { processId, domain } = body
 
   if (!processId || !domain) {
@@ -32,7 +34,10 @@ router.post('/', async (c) => {
     const [proc] = await globalDb
       .select({ workspace_user_id: schema.workspace.user_id })
       .from(schema.process)
-      .innerJoin(schema.workspace, eq(schema.workspace.id, schema.process.workspace_id))
+      .innerJoin(
+        schema.workspace,
+        eq(schema.workspace.id, schema.process.workspace_id)
+      )
       .where(eq(schema.process.id, processId))
       .limit(1)
 
@@ -66,20 +71,32 @@ router.post('/', async (c) => {
 router.delete('/:webviewId', async (c) => {
   let user = c.get('user')
   if (!user) {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null)
+    const session = await auth.api
+      .getSession({ headers: c.req.raw.headers })
+      .catch(() => null)
     user = session?.user ?? null
   }
   if (!user) return c.json({ message: 'Unauthorized' }, 401)
 
   const webviewId = Number(c.req.param('webviewId'))
-  if (!Number.isFinite(webviewId)) return c.json({ message: 'Invalid webviewId' }, 400)
+  if (!Number.isFinite(webviewId))
+    return c.json({ message: 'Invalid webviewId' }, 400)
 
   try {
     const [row] = await globalDb
-      .select({ workspace_user_id: schema.workspace.user_id, slug: schema.webview.slug })
+      .select({
+        workspace_user_id: schema.workspace.user_id,
+        slug: schema.webview.slug,
+      })
       .from(schema.webview)
-      .innerJoin(schema.process, eq(schema.process.id, schema.webview.process_id))
-      .innerJoin(schema.workspace, eq(schema.workspace.id, schema.process.workspace_id))
+      .innerJoin(
+        schema.process,
+        eq(schema.process.id, schema.webview.process_id)
+      )
+      .innerJoin(
+        schema.workspace,
+        eq(schema.workspace.id, schema.process.workspace_id)
+      )
       .where(eq(schema.webview.id, webviewId))
       .limit(1)
 
@@ -87,7 +104,9 @@ router.delete('/:webviewId', async (c) => {
       return c.json({ message: 'Not found' }, 404)
     }
 
-    await globalDb.delete(schema.webview).where(eq(schema.webview.id, webviewId))
+    await globalDb
+      .delete(schema.webview)
+      .where(eq(schema.webview.id, webviewId))
     evictWebviewCache(row.slug)
 
     return c.json({ ok: true })

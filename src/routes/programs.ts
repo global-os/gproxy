@@ -2,11 +2,21 @@ import { Hono } from 'hono'
 import * as middleware from '../middleware.js'
 import { LaunchError, launchProgram } from '../services/launch-program.js'
 import { requireWorkspace } from '../services/workspace-access.js'
-import { clearWorkspaceLogs, listWorkspaceLogs } from '../services/workspace-logger.js'
+import {
+  clearWorkspaceLogs,
+  listWorkspaceLogs,
+} from '../services/workspace-logger.js'
 import { db } from '../db/index.js'
 import { createWorkspaceEventStream } from '../events/sse.js'
-import { killWorkspaceProcess, listWorkspaceProcesses } from '../services/process-service.js'
-import { deleteWindow, listWorkspaceWindows, updateWindowGeometry } from '../services/window-service.js'
+import {
+  killWorkspaceProcess,
+  listWorkspaceProcesses,
+} from '../services/process-service.js'
+import {
+  deleteWindow,
+  listWorkspaceWindows,
+  updateWindowGeometry,
+} from '../services/window-service.js'
 import { Env } from '../types.js'
 
 const router = new Hono<Env>()
@@ -15,7 +25,7 @@ router.use(
   '*',
   middleware.provideDb,
   middleware.parseCookies,
-  middleware.betterAuthMiddleware,
+  middleware.betterAuthMiddleware
 )
 
 router.get('/workspaces/:workspaceId/logs', async (c) => {
@@ -174,7 +184,12 @@ router.patch('/workspaces/:workspaceId/windows/:windowId', async (c) => {
 
   try {
     await requireWorkspace(user.id, workspaceId)
-    const body = await c.req.json<{ x?: number; y?: number; width?: number; height?: number }>()
+    const body = await c.req.json<{
+      x?: number
+      y?: number
+      width?: number
+      height?: number
+    }>()
     await updateWindowGeometry(workspaceId, windowId, body)
     return c.json({ ok: true })
   } catch (err) {
@@ -244,9 +259,10 @@ router.post('/workspaces/:workspaceId/launch', async (c) => {
       return c.json({ message: err.message }, err.status as 400 | 404)
     }
     console.error('[launch]', err)
-    const cause = err && typeof err === 'object' && 'cause' in err
-      ? (err as { cause: unknown }).cause
-      : err
+    const cause =
+      err && typeof err === 'object' && 'cause' in err
+        ? (err as { cause: unknown }).cause
+        : err
     const detail = cause instanceof Error ? cause.message : undefined
     const message =
       detail?.includes('does not exist') || detail?.includes('column')

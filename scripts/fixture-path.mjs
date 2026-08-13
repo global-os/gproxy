@@ -12,8 +12,8 @@ export function fixtureUserDir(email) {
 }
 
 export function fixtureBasesForUser(email) {
-  return [fixtureUserDir(FIXTURE_WILDCARD), fixtureUserDir(email)].filter((base) =>
-    fs.existsSync(base),
+  return [fixtureUserDir(FIXTURE_WILDCARD), fixtureUserDir(email)].filter(
+    (base) => fs.existsSync(base)
   )
 }
 

@@ -6,15 +6,17 @@ import * as schema from '../db/schema.js'
 async function resolveChildDirectoryId(
   db: NodePgDatabase<typeof schema>,
   parentId: number,
-  name: string,
+  name: string
 ): Promise<number | null> {
   const [row] = await db
     .select({ id: schema.directory.id })
     .from(schema.directory)
-    .where(and(
-      eq(schema.directory.parent_id, parentId),
-      eq(schema.directory.name, name),
-    ))
+    .where(
+      and(
+        eq(schema.directory.parent_id, parentId),
+        eq(schema.directory.name, name)
+      )
+    )
     .limit(1)
 
   return row?.id ?? null
@@ -22,16 +24,18 @@ async function resolveChildDirectoryId(
 
 export async function resolveLocalIconsDirectoryId(
   db: NodePgDatabase<typeof schema>,
-  userId: string,
+  userId: string
 ): Promise<number | null> {
   const [resourcesDir] = await db
     .select({ id: schema.directory.id })
     .from(schema.directory)
-    .where(and(
-      eq(schema.directory.user_id, userId),
-      eq(schema.directory.name, '.Resources'),
-      isNull(schema.directory.parent_id),
-    ))
+    .where(
+      and(
+        eq(schema.directory.user_id, userId),
+        eq(schema.directory.name, '.Resources'),
+        isNull(schema.directory.parent_id)
+      )
+    )
     .limit(1)
 
   if (!resourcesDir) return null
@@ -45,7 +49,7 @@ export async function resolveLocalIconsDirectoryId(
 export async function readResourceIconBmp(
   db: NodePgDatabase<typeof schema>,
   userId: string,
-  iconPath: string,
+  iconPath: string
 ): Promise<Buffer | null> {
   if (!isResourceIconPath(iconPath)) return null
 
@@ -56,10 +60,9 @@ export async function readResourceIconBmp(
   const [row] = await db
     .select({ content: schema.file.content })
     .from(schema.file)
-    .where(and(
-      eq(schema.file.parent_id, iconsDirId),
-      eq(schema.file.name, fileName),
-    ))
+    .where(
+      and(eq(schema.file.parent_id, iconsDirId), eq(schema.file.name, fileName))
+    )
     .limit(1)
 
   if (!row) return null

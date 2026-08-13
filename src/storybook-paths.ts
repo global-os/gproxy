@@ -6,7 +6,9 @@ const distRoot = path.join(process.cwd(), 'src/frontend/storybook-static')
 
 function isInsideRoot(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate)
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+  return (
+    relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+  )
 }
 
 export function resolveStorybookFile(relativePath: string): string | null {
@@ -18,7 +20,11 @@ export function resolveStorybookFile(relativePath: string): string | null {
 
   for (const candidate of candidates) {
     const root = candidate.startsWith(publicRoot) ? publicRoot : distRoot
-    if (isInsideRoot(root, candidate) && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+    if (
+      isInsideRoot(root, candidate) &&
+      fs.existsSync(candidate) &&
+      fs.statSync(candidate).isFile()
+    ) {
       return candidate
     }
   }

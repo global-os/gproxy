@@ -11,7 +11,7 @@ router.use(
   middleware.provideDb,
   middleware.parseCookies,
   middleware.betterAuthMiddleware,
-  middleware.setRlsUser,
+  middleware.setRlsUser
 )
 
 router.post('/', async (c) => {
@@ -32,11 +32,14 @@ router.post('/', async (c) => {
   const result = await invokeSyscall(
     { db: c.get('db'), userId: user.id },
     op,
-    args,
+    args
   )
 
   if (!result.ok) {
-    return c.json({ message: result.message }, result.status as ContentfulStatusCode)
+    return c.json(
+      { message: result.message },
+      result.status as ContentfulStatusCode
+    )
   }
 
   if (result.result === undefined) {

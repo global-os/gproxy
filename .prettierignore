@@ -1,0 +1,13 @@
+# Build output
+dist
+public
+src/frontend/storybook-static
+
+# Generated files (do not edit by hand)
+src/frontend/src/routeTree.gen.ts
+drizzle
+package-lock.json
+
+# Vendored / compiled fixtures
+fixtures/tar-examples
+src/gapp/registry

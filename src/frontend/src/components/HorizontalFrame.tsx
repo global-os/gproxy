@@ -9,17 +9,21 @@ const Box = createComponent(() => ({
   justifyContent: 'center',
   margin: '0 auto',
   fontSize: '1rem',
-  marginTop: '1em'
+  marginTop: '1em',
 }))
 
 const color = 'rgb(200, 128, 0)'
 
-const LeftSection = createComponent(() => ({
-  background: '#ddd',
-  border: '3px double ' + color,
-  backgroundClip: 'padding-box',
-  'border-right': 0,
-}), LogoSection, ['href'])
+const LeftSection = createComponent(
+  () => ({
+    background: '#ddd',
+    border: '3px double ' + color,
+    backgroundClip: 'padding-box',
+    'border-right': 0,
+  }),
+  LogoSection,
+  ['href']
+)
 
 const RightSection = createComponent(() => ({
   color: '#333',
@@ -34,9 +38,7 @@ export const HorizontalFrame = ({ children }: PropsWithChildren) => {
     <Box>
       <LeftSection href="/">
         <FadingBoxes />
-        <GlobalOsTitle>
-          GlobalOS
-        </GlobalOsTitle>
+        <GlobalOsTitle>GlobalOS</GlobalOsTitle>
       </LeftSection>
       <RightSection>{children}</RightSection>
     </Box>

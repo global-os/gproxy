@@ -69,44 +69,41 @@ const TitleBar = createComponent(
     cursor: 'default',
     flex: '0 0 auto',
     fontFamily: retroFont,
-    background: 'linear-gradient(90deg, #4c1d95 0%, #7c3aed 38%, #6d28d9 62%, #4c1d95 100%)',
+    background:
+      'linear-gradient(90deg, #4c1d95 0%, #7c3aed 38%, #6d28d9 62%, #4c1d95 100%)',
     borderBottom: '1px solid #2e1065',
   }),
   'div',
   ['data-window-index', 'data-title-bar', 'onMouseDown']
 )
 
-const TitleIcon = createComponent(
-  () => ({
-    flex: '0 0 auto',
-    width: '16px',
-    height: '16px',
-    background: '#c0c0c0',
-    ...outsetBorder,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '10px',
-    lineHeight: 1,
-    color: '#4c1d95',
-    fontWeight: 700,
-    cursor: 'default',
-    userSelect: 'none',
-  })
-)
+const TitleIcon = createComponent(() => ({
+  flex: '0 0 auto',
+  width: '16px',
+  height: '16px',
+  background: '#c0c0c0',
+  ...outsetBorder,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '10px',
+  lineHeight: 1,
+  color: '#4c1d95',
+  fontWeight: 700,
+  cursor: 'default',
+  userSelect: 'none',
+}))
 
-const TitleMeta = createComponent(
-  () => ({
-    flex: '1 1 auto',
-    minWidth: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 0,
-    paddingLeft: '2px',
-    cursor: 'default',
-    userSelect: 'none',
-  })
-)
+const TitleMeta = createComponent(() => ({
+  flex: '1 1 auto',
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 0,
+  paddingLeft: '2px',
+  cursor: 'default',
+  userSelect: 'none',
+}))
 
 const TitleLabel = createComponent(
   () => ({
@@ -183,16 +180,20 @@ const ChromeButton = createComponent(
   ['type', 'onClick', 'onMouseDown', 'aria-label', 'disabled']
 )
 
-const ContentFrame = createComponent(() => ({
-  flex: '1 1 auto',
-  minHeight: 0,
-  display: 'flex',
-  flexDirection: 'column',
-  overflow: 'hidden',
-  background: '#c0c0c0',
-  padding: '2px',
-  ...insetBorder,
-}), 'div', ['data-window-index', 'onMouseDown'])
+const ContentFrame = createComponent(
+  () => ({
+    flex: '1 1 auto',
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    background: '#c0c0c0',
+    padding: '2px',
+    ...insetBorder,
+  }),
+  'div',
+  ['data-window-index', 'onMouseDown']
+)
 
 const gripSegment = {
   background: '#c0c0c0',
@@ -233,37 +234,45 @@ const GripHorizontalEast = createComponent(() => ({
   justifySelf: 'end',
 }))
 
-const ResizeHandleSouthWest = createComponent(() => ({
-  position: 'absolute',
-  bottom: '-8px',
-  left: '-8px',
-  width: '22px',
-  height: '22px',
-  display: 'grid',
-  gridTemplateColumns: '6px 8px',
-  gridTemplateRows: '6px 6px',
-  alignContent: 'end',
-  justifyContent: 'start',
-  cursor: 'nesw-resize',
-  zIndex: 2,
-  boxSizing: 'border-box',
-}), 'div', ['data-window-index', 'data-resize-handle', 'onMouseDown'])
+const ResizeHandleSouthWest = createComponent(
+  () => ({
+    position: 'absolute',
+    bottom: '-8px',
+    left: '-8px',
+    width: '22px',
+    height: '22px',
+    display: 'grid',
+    gridTemplateColumns: '6px 8px',
+    gridTemplateRows: '6px 6px',
+    alignContent: 'end',
+    justifyContent: 'start',
+    cursor: 'nesw-resize',
+    zIndex: 2,
+    boxSizing: 'border-box',
+  }),
+  'div',
+  ['data-window-index', 'data-resize-handle', 'onMouseDown']
+)
 
-const ResizeHandleSouthEast = createComponent(() => ({
-  position: 'absolute',
-  bottom: '-8px',
-  right: '-8px',
-  width: '22px',
-  height: '22px',
-  display: 'grid',
-  gridTemplateColumns: '8px 6px',
-  gridTemplateRows: '6px 6px',
-  alignContent: 'end',
-  justifyContent: 'end',
-  cursor: 'nwse-resize',
-  zIndex: 2,
-  boxSizing: 'border-box',
-}), 'div', ['data-window-index', 'data-resize-handle', 'onMouseDown'])
+const ResizeHandleSouthEast = createComponent(
+  () => ({
+    position: 'absolute',
+    bottom: '-8px',
+    right: '-8px',
+    width: '22px',
+    height: '22px',
+    display: 'grid',
+    gridTemplateColumns: '8px 6px',
+    gridTemplateRows: '6px 6px',
+    alignContent: 'end',
+    justifyContent: 'end',
+    cursor: 'nwse-resize',
+    zIndex: 2,
+    boxSizing: 'border-box',
+  }),
+  'div',
+  ['data-window-index', 'data-resize-handle', 'onMouseDown']
+)
 
 const StyledIframe = createComponent(
   ({ dragging, frontmost }: { dragging: boolean; frontmost: boolean }) => ({
@@ -324,18 +333,28 @@ export function WorkspaceWindow({
           )}
         </TitleMeta>
         <TitleButtons>
-          <ChromeButton type="button" disabled aria-label="Minimize" onMouseDown={e => e.stopPropagation()}>
+          <ChromeButton
+            type="button"
+            disabled
+            aria-label="Minimize"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             <span style={{ marginTop: '-4px' }}>_</span>
           </ChromeButton>
-          <ChromeButton type="button" disabled aria-label="Maximize" onMouseDown={e => e.stopPropagation()}>
+          <ChromeButton
+            type="button"
+            disabled
+            aria-label="Maximize"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             □
           </ChromeButton>
           <ChromeButton
             type="button"
             active
             aria-label={`Close ${win.title}`}
-            onMouseDown={e => e.stopPropagation()}
-            onClick={e => {
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
               e.stopPropagation()
               onClose()
             }}

@@ -15,8 +15,9 @@ import * as z from 'zod'
 const signUpEmailBodySchema = z
   .object({
     name: z.preprocess(
-      (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-      z.string().optional(),
+      (value) =>
+        typeof value === 'string' && value.trim() === '' ? undefined : value,
+      z.string().optional()
     ),
     email: z.email(),
     password: z.string().min(1),
@@ -50,29 +51,48 @@ export function optionalNameSignUpPlugin(): BetterAuthPlugin {
             }
 
             const body = ctx.body
-            const { name, email, password, image, callbackURL: _callbackURL, rememberMe, ...rest } =
-              body
+            const {
+              name,
+              email,
+              password,
+              image,
+              callbackURL: _callbackURL,
+              rememberMe,
+              ...rest
+            } = body
             const normalizedName =
               typeof name === 'string' && name.trim() ? name.trim() : undefined
 
             if (!z.email().safeParse(email).success) {
-              throw new APIError('BAD_REQUEST', { message: BASE_ERROR_CODES.INVALID_EMAIL })
+              throw new APIError('BAD_REQUEST', {
+                message: BASE_ERROR_CODES.INVALID_EMAIL,
+              })
             }
             if (!password || typeof password !== 'string') {
-              throw new APIError('BAD_REQUEST', { message: BASE_ERROR_CODES.INVALID_PASSWORD })
+              throw new APIError('BAD_REQUEST', {
+                message: BASE_ERROR_CODES.INVALID_PASSWORD,
+              })
             }
 
-            const minPasswordLength = ctx.context.password.config.minPasswordLength
+            const minPasswordLength =
+              ctx.context.password.config.minPasswordLength
             if (password.length < minPasswordLength) {
-              throw new APIError('BAD_REQUEST', { message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT })
+              throw new APIError('BAD_REQUEST', {
+                message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+              })
             }
 
-            const maxPasswordLength = ctx.context.password.config.maxPasswordLength
+            const maxPasswordLength =
+              ctx.context.password.config.maxPasswordLength
             if (password.length > maxPasswordLength) {
-              throw new APIError('BAD_REQUEST', { message: BASE_ERROR_CODES.PASSWORD_TOO_LONG })
+              throw new APIError('BAD_REQUEST', {
+                message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+              })
             }
 
-            if ((await ctx.context.internalAdapter.findUserByEmail(email))?.user) {
+            if (
+              (await ctx.context.internalAdapter.findUserByEmail(email))?.user
+            ) {
               throw new APIError('UNPROCESSABLE_ENTITY', {
                 message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
               })
@@ -90,10 +110,13 @@ export function optionalNameSignUpPlugin(): BetterAuthPlugin {
                 emailVerified: false,
               })
               if (!createdUser) {
-                throw new APIError('BAD_REQUEST', { message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER })
+                throw new APIError('BAD_REQUEST', {
+                  message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
+                })
               }
             } catch (e) {
-              if (isDevelopment()) ctx.context.logger.error('Failed to create user', e)
+              if (isDevelopment())
+                ctx.context.logger.error('Failed to create user', e)
               if (e instanceof APIError) throw e
               ctx.context.logger?.error('Failed to create user', e)
               throw new APIError('UNPROCESSABLE_ENTITY', {
@@ -116,18 +139,20 @@ export function optionalNameSignUpPlugin(): BetterAuthPlugin {
                 ctx.context.secret,
                 createdUser.email,
                 undefined,
-                ctx.context.options.emailVerification?.expiresIn,
+                ctx.context.options.emailVerification?.expiresIn
               )
               const callbackURL = body.callbackURL
                 ? encodeURIComponent(body.callbackURL)
                 : encodeURIComponent('/')
               const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`
-              if (ctx.context.options.emailVerification?.sendVerificationEmail) {
+              if (
+                ctx.context.options.emailVerification?.sendVerificationEmail
+              ) {
                 await ctx.context.runInBackgroundOrAwait(
                   ctx.context.options.emailVerification.sendVerificationEmail(
                     { user: createdUser, url, token },
-                    ctx.request,
-                  ),
+                    ctx.request
+                  )
                 )
               }
             }
@@ -144,16 +169,18 @@ export function optionalNameSignUpPlugin(): BetterAuthPlugin {
 
             const session = await ctx.context.internalAdapter.createSession(
               createdUser.id,
-              rememberMe === false,
+              rememberMe === false
             )
             if (!session) {
-              throw new APIError('BAD_REQUEST', { message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION })
+              throw new APIError('BAD_REQUEST', {
+                message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+              })
             }
 
             await setSessionCookie(
               ctx,
               { session, user: createdUser },
-              rememberMe === false,
+              rememberMe === false
             )
 
             return ctx.json({
@@ -161,7 +188,7 @@ export function optionalNameSignUpPlugin(): BetterAuthPlugin {
               user: parseUserOutput(ctx.context.options, createdUser),
             })
           })
-        },
+        }
       ),
     },
   }

@@ -9,11 +9,11 @@ import { ensureGlobalPcForUser } from './services/global-pc.js'
 import * as schema from './db/schema.js'
 
 const isNonProduction =
-  process.env.IS_LOCALHOST === 'true'
-  || (typeof process.env.VERCEL_ENV === 'string' && process.env.VERCEL_ENV !== 'production')
+  process.env.IS_LOCALHOST === 'true' ||
+  (typeof process.env.VERCEL_ENV === 'string' &&
+    process.env.VERCEL_ENV !== 'production')
 
 export const auth = betterAuth({
-
   logger: {
     level: isNonProduction ? 'warn' : 'error',
   },
@@ -39,7 +39,10 @@ export const auth = betterAuth({
           try {
             await ensureGlobalPcForUser(db, createdUser.id)
 
-            const stats = await seedFixturesForUser(createdUser.id, createdUser.email)
+            const stats = await seedFixturesForUser(
+              createdUser.id,
+              createdUser.email
+            )
             if (!stats) return
 
             const changes =
@@ -47,14 +50,14 @@ export const auth = betterAuth({
             if (changes === 0) return
 
             console.log(
-              `Seed: synced fixtures for new user ${createdUser.email} `
-              + `(+${stats.directoriesCreated} dirs, +${stats.filesCreated} files, `
-              + `~${stats.filesUpdated} updated)`,
+              `Seed: synced fixtures for new user ${createdUser.email} ` +
+                `(+${stats.directoriesCreated} dirs, +${stats.filesCreated} files, ` +
+                `~${stats.filesUpdated} updated)`
             )
           } catch (err) {
             console.error(
               `[seed] failed to sync fixtures for new user ${createdUser.email}:`,
-              err,
+              err
             )
           }
         },
@@ -69,11 +72,13 @@ export const auth = betterAuth({
   },
   // Allow requests from the frontend development server
   trustedOrigins: [
-    ...(process.env.VERCEL ? [] : [
-      'https://app.app.dev.onetrueos.com:3443',
-      'https://app.app.dev.onetrueos.com',
-      'http://127.0.0.1:3000',
-    ]),
+    ...(process.env.VERCEL
+      ? []
+      : [
+          'https://app.app.dev.onetrueos.com:3443',
+          'https://app.app.dev.onetrueos.com',
+          'http://127.0.0.1:3000',
+        ]),
     'https://app.app.dev.onetrueos.com',
     'https://app.onetrueos.com',
     'https://app.app.onetrueos.com',

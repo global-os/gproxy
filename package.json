@@ -21,7 +21,7 @@
     "start": "node dist/src/index.js",
     "test": "node --import tsx --test src/bundle/tbundle/**/*.test.ts",
     "test:tbundle": "npm run test",
-    "format": "prettier -w src/frontend/src/**/*.{ts,tsx} **/*.{ts,tsx} ./drizzle.config.ts",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,mjs,cjs,json}\"",
     "db:migrate": "node scripts/apply-pending-migrations.mjs",
     "db:seed": "node --import tsx scripts/seed-fixtures.mjs",
     "bundle:textedit-yjs": "node scripts/bundle-helloworld-yjs.mjs",

@@ -36,16 +36,16 @@ function logFixtureSync(email: string, stats: SyncStats) {
   }
 
   console.log(
-    `Seed: synced fixtures for ${email} `
-    + `(+${stats.directoriesCreated} dirs, +${stats.filesCreated} files, `
-    + `~${stats.filesUpdated} updated)`,
+    `Seed: synced fixtures for ${email} ` +
+      `(+${stats.directoriesCreated} dirs, +${stats.filesCreated} files, ` +
+      `~${stats.filesUpdated} updated)`
   )
 }
 
 /** Upsert shared `*` and per-email fixture trees for one user (idempotent). */
 export async function seedFixturesForUser(
   userId: string,
-  email: string,
+  email: string
 ): Promise<SyncStats | null> {
   if (!hasFixtureSourcesOnDisk()) return null
 
@@ -71,9 +71,7 @@ export async function seedUserFixtures() {
     return
   }
 
-  const users = await db
-    .select({ id: user.id, email: user.email })
-    .from(user)
+  const users = await db.select({ id: user.id, email: user.email }).from(user)
 
   if (users.length === 0) {
     console.log('Seed: no users in database, skipping')
@@ -99,7 +97,7 @@ async function syncWalk(
   fsPath: string,
   parentId: number | null,
   userId: string,
-  stats: SyncStats,
+  stats: SyncStats
 ) {
   for (const entry of fs.readdirSync(fsPath, { withFileTypes: true })) {
     const fullPath = path.join(fsPath, entry.name)
@@ -111,7 +109,13 @@ async function syncWalk(
       continue
     }
 
-    await ensureFile(parentId!, entry.name, fs.readFileSync(fullPath), userId, stats)
+    await ensureFile(
+      parentId!,
+      entry.name,
+      fs.readFileSync(fullPath),
+      userId,
+      stats
+    )
   }
 }
 
@@ -119,15 +123,16 @@ async function ensureDirectory(
   parentId: number | null,
   name: string,
   userId: string,
-  stats: SyncStats,
+  stats: SyncStats
 ): Promise<number> {
-  const where = parentId === null
-    ? and(
-      eq(directory.user_id, userId),
-      isNull(directory.parent_id),
-      eq(directory.name, name),
-    )
-    : and(eq(directory.parent_id, parentId), eq(directory.name, name))
+  const where =
+    parentId === null
+      ? and(
+          eq(directory.user_id, userId),
+          isNull(directory.parent_id),
+          eq(directory.name, name)
+        )
+      : and(eq(directory.parent_id, parentId), eq(directory.name, name))
 
   const [existing] = await db
     .select({ id: directory.id })
@@ -151,7 +156,7 @@ async function ensureFile(
   name: string,
   content: Buffer,
   userId: string,
-  stats: SyncStats,
+  stats: SyncStats
 ) {
   const mime_type = mimeFor(path.extname(name))
 

@@ -5,9 +5,17 @@ const meta: Meta = { component: VerticalFrame, title: 'VerticalFrame' }
 export default meta
 
 export const Default: StoryObj = {
-  render: () => <VerticalFrame><p>Main content area</p></VerticalFrame>,
+  render: () => (
+    <VerticalFrame>
+      <p>Main content area</p>
+    </VerticalFrame>
+  ),
 }
 
 export const Wide: StoryObj = {
-  render: () => <VerticalFrame width="800px"><p>Wide layout content</p></VerticalFrame>,
+  render: () => (
+    <VerticalFrame width="800px">
+      <p>Wide layout content</p>
+    </VerticalFrame>
+  ),
 }

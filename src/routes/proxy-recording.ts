@@ -1,6 +1,11 @@
 import { Hono } from 'hono'
 import type { Env } from '../types.js'
-import { startRecording, stopRecording, clearRecording, exportHar } from '../runtime/webview/recording.js'
+import {
+  startRecording,
+  stopRecording,
+  clearRecording,
+  exportHar,
+} from '../runtime/webview/recording.js'
 
 const router = new Hono<Env>()
 

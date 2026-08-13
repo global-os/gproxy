@@ -7,10 +7,12 @@ export async function requireWorkspace(userId: string, workspaceId: number) {
   const [row] = await db
     .select({ id: schema.workspace.id })
     .from(schema.workspace)
-    .where(and(
-      eq(schema.workspace.id, workspaceId),
-      eq(schema.workspace.user_id, userId),
-    ))
+    .where(
+      and(
+        eq(schema.workspace.id, workspaceId),
+        eq(schema.workspace.user_id, userId)
+      )
+    )
     .limit(1)
 
   if (!row) {
@@ -20,7 +22,10 @@ export async function requireWorkspace(userId: string, workspaceId: number) {
   return row
 }
 
-export async function deleteWorkspace(userId: string, workspaceId: number): Promise<void> {
+export async function deleteWorkspace(
+  userId: string,
+  workspaceId: number
+): Promise<void> {
   await requireWorkspace(userId, workspaceId)
 
   const processes = await db
@@ -41,20 +46,27 @@ export async function deleteWorkspace(userId: string, workspaceId: number): Prom
 
   await db
     .delete(schema.workspace)
-    .where(and(
-      eq(schema.workspace.id, workspaceId),
-      eq(schema.workspace.user_id, userId),
-    ))
+    .where(
+      and(
+        eq(schema.workspace.id, workspaceId),
+        eq(schema.workspace.user_id, userId)
+      )
+    )
 }
 
-export async function requireLaunchableApp(userId: string, directoryId: number) {
+export async function requireLaunchableApp(
+  userId: string,
+  directoryId: number
+) {
   const [appDir] = await db
     .select({ id: schema.directory.id, name: schema.directory.name })
     .from(schema.directory)
-    .where(and(
-      eq(schema.directory.id, directoryId),
-      eq(schema.directory.user_id, userId),
-    ))
+    .where(
+      and(
+        eq(schema.directory.id, directoryId),
+        eq(schema.directory.user_id, userId)
+      )
+    )
     .limit(1)
 
   if (!appDir) {

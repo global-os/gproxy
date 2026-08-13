@@ -8,8 +8,12 @@ for (const port of ports) {
     const out = execSync(`lsof -ti :${port}`, { encoding: 'utf8' }).trim()
     if (out) {
       const pids = out.split(/\s+/)
-      console.log(`Killing ${pids.length} PID(s) on port ${port}: ${pids.join(' ')}`)
+      console.log(
+        `Killing ${pids.length} PID(s) on port ${port}: ${pids.join(' ')}`
+      )
       for (const pid of pids) execSync(`kill -9 ${pid}`)
     }
-  } catch { /* nothing on this port */ }
+  } catch {
+    /* nothing on this port */
+  }
 }

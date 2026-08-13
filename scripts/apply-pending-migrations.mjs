@@ -11,7 +11,9 @@ function listMigrations() {
   const drizzleDir = path.join(process.cwd(), 'drizzle')
   return fs
     .readdirSync(drizzleDir)
-    .filter((name) => fs.existsSync(path.join(drizzleDir, name, 'migration.sql')))
+    .filter((name) =>
+      fs.existsSync(path.join(drizzleDir, name, 'migration.sql'))
+    )
     .sort()
     .filter((name) => name >= AUTO_MIGRATE_SINCE)
 }
@@ -49,7 +51,9 @@ async function main() {
   const url = process.env.DATABASE_URL?.trim()
   if (!url) {
     if (process.env.VERCEL) {
-      console.error('DATABASE_URL is required for Vercel builds (set it in project env vars).')
+      console.error(
+        'DATABASE_URL is required for Vercel builds (set it in project env vars).'
+      )
       process.exit(1)
     }
     console.warn('[migrate] Skipping: DATABASE_URL is not set')
@@ -68,7 +72,9 @@ async function main() {
     await pool.query('SELECT 1')
     await ensureMigrationTable(pool)
     const applied = await loadAppliedMigrations(pool)
-    console.log(`[migrate] Connected (${migrations.length} eligible, ${applied.size} already recorded)`)
+    console.log(
+      `[migrate] Connected (${migrations.length} eligible, ${applied.size} already recorded)`
+    )
 
     for (const dir of migrations) {
       if (applied.has(dir)) {
@@ -101,7 +107,10 @@ async function main() {
       SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public' ORDER BY table_name
     `)
-    console.log('\n[migrate] Tables:', tables.rows.map((r) => r.table_name).join(', '))
+    console.log(
+      '\n[migrate] Tables:',
+      tables.rows.map((r) => r.table_name).join(', ')
+    )
   } finally {
     await pool.end()
   }

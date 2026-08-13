@@ -33,13 +33,15 @@ function resolveSquintRuntimeDir(): string {
     if (fs.existsSync(path.join(dir, RUNTIME_MARKER))) return dir
   }
 
-  const fromNodeModules = path.dirname(require.resolve('squint-cljs/node-api.js'))
+  const fromNodeModules = path.dirname(
+    require.resolve('squint-cljs/node-api.js')
+  )
   if (fs.existsSync(path.join(fromNodeModules, RUNTIME_MARKER))) {
     return fromNodeModules
   }
 
   throw new Error(
-    `squint runtime not found (need ${RUNTIME_MARKER}); checked: ${squintRuntimeCandidates().join(', ')}`,
+    `squint runtime not found (need ${RUNTIME_MARKER}); checked: ${squintRuntimeCandidates().join(', ')}`
   )
 }
 
@@ -69,14 +71,14 @@ function squintResolvePlugin(runtimeRoot: string): Plugin {
 
 function globalBanner(externals: Record<string, string>): string {
   const lines = Object.entries(externals).map(
-    ([, globalName]) => `const ${globalName}=globalThis.${globalName};`,
+    ([, globalName]) => `const ${globalName}=globalThis.${globalName};`
   )
   return lines.join('')
 }
 
 export async function compileSquintSource(
   sourcePath: string,
-  spec: { output: string; externals?: Record<string, string> },
+  spec: { output: string; externals?: Record<string, string> }
 ): Promise<Buffer> {
   const ext = path.extname(spec.output) || '.js'
   const source = await fsp.readFile(sourcePath, 'utf8')
@@ -87,7 +89,7 @@ export async function compileSquintSource(
     try {
       compiled = await compileString(source, {
         extension: ext,
-        'filename': path.basename(sourcePath),
+        filename: path.basename(sourcePath),
       })
     } catch (err) {
       const formatted = formatExecError(err)

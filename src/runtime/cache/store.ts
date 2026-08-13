@@ -6,7 +6,7 @@ const INSERT_CHUNK_SIZE = 40
 
 export async function isBundleCached(
   instanceId: number,
-  expectedChecksum?: string,
+  expectedChecksum?: string
 ): Promise<boolean> {
   const [row] = await db
     .select({
@@ -17,7 +17,8 @@ export async function isBundleCached(
     .limit(1)
 
   if (!row) return false
-  if (expectedChecksum && row.directory_checksum !== expectedChecksum) return false
+  if (expectedChecksum && row.directory_checksum !== expectedChecksum)
+    return false
   return true
 }
 
@@ -40,7 +41,7 @@ export async function evictBundleCache(instanceId: number): Promise<void> {
 export async function replaceBundleCache(
   instanceId: number,
   checksum: string,
-  files: Map<string, Buffer>,
+  files: Map<string, Buffer>
 ): Promise<number> {
   let byteSize = 0
   for (const content of files.values()) {
@@ -77,12 +78,15 @@ export async function replaceBundleCache(
         .onConflictDoNothing()
     }
 
-    await tx.insert(schema.instanceBundleCache).values({
-      instance_id: instanceId,
-      directory_checksum: checksum,
-      last_used_at: new Date(),
-      byte_size: byteSize,
-    }).onConflictDoNothing()
+    await tx
+      .insert(schema.instanceBundleCache)
+      .values({
+        instance_id: instanceId,
+        directory_checksum: checksum,
+        last_used_at: new Date(),
+        byte_size: byteSize,
+      })
+      .onConflictDoNothing()
   })
 
   return byteSize
@@ -99,15 +103,17 @@ export async function listBundlePaths(instanceId: number): Promise<string[]> {
 
 export async function readBundleFile(
   instanceId: number,
-  path: string,
+  path: string
 ): Promise<Buffer | null> {
   const [row] = await db
     .select({ content: schema.instanceBundleFile.content })
     .from(schema.instanceBundleFile)
-    .where(and(
-      eq(schema.instanceBundleFile.instance_id, instanceId),
-      eq(schema.instanceBundleFile.path, path),
-    ))
+    .where(
+      and(
+        eq(schema.instanceBundleFile.instance_id, instanceId),
+        eq(schema.instanceBundleFile.path, path)
+      )
+    )
     .limit(1)
 
   return row?.content ?? null

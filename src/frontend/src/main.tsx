@@ -1,8 +1,12 @@
-console.log('🚀 Main.tsx executing');
+console.log('🚀 Main.tsx executing')
 
 import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
-import { RouterProvider, createRouter, type ErrorComponentProps } from '@tanstack/react-router'
+import {
+  RouterProvider,
+  createRouter,
+  type ErrorComponentProps,
+} from '@tanstack/react-router'
 
 // Import the generated route tree
 import { routeTree } from './routeTree.gen'
@@ -17,8 +21,12 @@ function RouteError({ error, reset }: ErrorComponentProps) {
   return (
     <Page>
       <div style={{ padding: '1.5em', color: '#eee', maxWidth: '36em' }}>
-        <h1 style={{ margin: '0 0 0.5em', fontSize: '1.1em' }}>Something went wrong</h1>
-        <p style={{ margin: '0 0 1em', color: '#fca5a5', lineHeight: 1.5 }}>{message}</p>
+        <h1 style={{ margin: '0 0 0.5em', fontSize: '1.1em' }}>
+          Something went wrong
+        </h1>
+        <p style={{ margin: '0 0 1em', color: '#fca5a5', lineHeight: 1.5 }}>
+          {message}
+        </p>
         {reset && (
           <button
             type="button"

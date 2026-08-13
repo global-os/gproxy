@@ -35,7 +35,7 @@ async function appendLog(
   level: WorkspaceLogLevel,
   source: string,
   message: string,
-  detail?: string,
+  detail?: string
 ) {
   await db.insert(schema.workspaceLog).values({
     workspace_id: workspaceId,
@@ -46,7 +46,9 @@ async function appendLog(
   })
 }
 
-export async function listWorkspaceLogs(workspaceId: number): Promise<WorkspaceLogRow[]> {
+export async function listWorkspaceLogs(
+  workspaceId: number
+): Promise<WorkspaceLogRow[]> {
   const rows = await db
     .select()
     .from(schema.workspaceLog)

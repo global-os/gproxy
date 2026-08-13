@@ -46,7 +46,9 @@ function RouteComponent() {
     return (
       <AuthLayout>
         <AuthCard>
-          <h1 className="m-0 text-xl font-semibold text-gray-100 mb-2">Invalid link</h1>
+          <h1 className="m-0 text-xl font-semibold text-gray-100 mb-2">
+            Invalid link
+          </h1>
           <p className="mt-2 mb-6 text-sm text-gray-400 leading-relaxed">
             This reset link is missing or invalid. Please request a new one.
           </p>
@@ -61,11 +63,11 @@ function RouteComponent() {
   return (
     <AuthLayout>
       <AuthCard>
-        <h1 className="m-0 text-xl font-semibold text-gray-100 mb-6">Choose a new password</h1>
+        <h1 className="m-0 text-xl font-semibold text-gray-100 mb-6">
+          Choose a new password
+        </h1>
         <form onSubmit={handleSubmit} className="grid gap-4">
-          {error && (
-            <p className="m-0 text-sm text-red-400">{error}</p>
-          )}
+          {error && <p className="m-0 text-sm text-red-400">{error}</p>}
           <div className="grid gap-1.5">
             <label htmlFor="password" className={authLabelCls}>
               New password

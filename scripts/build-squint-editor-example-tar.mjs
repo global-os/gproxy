@@ -10,9 +10,14 @@ import { resolveGappConfig } from '../src/gapp/resolve-config.ts'
 import { FIXTURE_EMAIL, resolveFixturePath } from './fixture-path.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const sourceDir = resolveFixturePath(FIXTURE_EMAIL, '~/Desktop/squint-editor.gapp')
+const sourceDir = resolveFixturePath(
+  FIXTURE_EMAIL,
+  '~/Desktop/squint-editor.gapp'
+)
 if (!sourceDir) {
-  throw new Error('squint-editor.gapp fixture not found under fixtures/by-user/*/ or user dir')
+  throw new Error(
+    'squint-editor.gapp fixture not found under fixtures/by-user/*/ or user dir'
+  )
 }
 const outDir = path.join(root, 'fixtures/tar-examples/squint-editor.gapp')
 const dirName = 'squint-editor.gapp'

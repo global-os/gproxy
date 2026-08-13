@@ -62,25 +62,29 @@ const Bar = createComponent(() => ({
   fontFamily: retroFont,
 }))
 
-const StartButton = createComponent(({ active }: { active?: boolean }) => ({
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '6px',
-  height: '30px',
-  padding: '0 10px',
-  fontFamily: retroFont,
-  fontSize: '12px',
-  fontWeight: 700,
-  color: '#000000',
-  background: '#c0c0c0',
-  cursor: 'pointer',
-  ...(active ? insetBorder : outsetBorder),
-  ':active': {
-    ...insetBorder,
-    paddingTop: '1px',
-    paddingLeft: '11px',
-  },
-}), 'button', ['type', 'onClick'])
+const StartButton = createComponent(
+  ({ active }: { active?: boolean }) => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    height: '30px',
+    padding: '0 10px',
+    fontFamily: retroFont,
+    fontSize: '12px',
+    fontWeight: 700,
+    color: '#000000',
+    background: '#c0c0c0',
+    cursor: 'pointer',
+    ...(active ? insetBorder : outsetBorder),
+    ':active': {
+      ...insetBorder,
+      paddingTop: '1px',
+      paddingLeft: '11px',
+    },
+  }),
+  'button',
+  ['type', 'onClick']
+)
 
 const MenuPanel = createComponent(() => ({
   position: 'absolute',
@@ -106,18 +110,31 @@ const MenuHeader = createComponent(() => ({
   marginBottom: '4px',
 }))
 
-const SearchField = createComponent(() => ({
-  width: '100%',
-  boxSizing: 'border-box',
-  fontFamily: retroFont,
-  fontSize: '12px',
-  padding: '5px 6px',
-  marginTop: '4px',
-  background: '#ffffff',
-  color: '#000000',
-  outline: 'none',
-  ...insetBorder,
-}), 'input', ['type', 'value', 'onChange', 'onKeyDown', 'placeholder', 'spellCheck', 'autoComplete', 'aria-label'])
+const SearchField = createComponent(
+  () => ({
+    width: '100%',
+    boxSizing: 'border-box',
+    fontFamily: retroFont,
+    fontSize: '12px',
+    padding: '5px 6px',
+    marginTop: '4px',
+    background: '#ffffff',
+    color: '#000000',
+    outline: 'none',
+    ...insetBorder,
+  }),
+  'input',
+  [
+    'type',
+    'value',
+    'onChange',
+    'onKeyDown',
+    'placeholder',
+    'spellCheck',
+    'autoComplete',
+    'aria-label',
+  ]
+)
 
 const Results = createComponent(() => ({
   maxHeight: '280px',
@@ -126,18 +143,22 @@ const Results = createComponent(() => ({
   ...insetBorder,
 }))
 
-const ResultRow = createComponent(({ active }: { active?: boolean }) => ({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '1px',
-  padding: '5px 8px',
-  cursor: 'pointer',
-  background: active ? '#000080' : '#ffffff',
-  color: active ? '#ffffff' : '#000000',
-  fontFamily: retroFont,
-  fontSize: '12px',
-  userSelect: 'none',
-}), 'button', ['type', 'onClick', 'onMouseEnter'])
+const ResultRow = createComponent(
+  ({ active }: { active?: boolean }) => ({
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1px',
+    padding: '5px 8px',
+    cursor: 'pointer',
+    background: active ? '#000080' : '#ffffff',
+    color: active ? '#ffffff' : '#000000',
+    fontFamily: retroFont,
+    fontSize: '12px',
+    userSelect: 'none',
+  }),
+  'button',
+  ['type', 'onClick', 'onMouseEnter']
+)
 
 const ResultName = createComponent(() => ({
   fontWeight: 700,
@@ -208,7 +229,7 @@ export function Taskbar({ onLaunchApp }: Props) {
 
   const fzf = useMemo(
     () => new Fzf(entries, { selector: entryLabel }),
-    [entries],
+    [entries]
   )
 
   const results = useMemo(() => {
@@ -218,7 +239,10 @@ export function Taskbar({ onLaunchApp }: Props) {
         .filter((entry) => entry.launchable || entry.type === 'file')
         .slice(0, 12)
     }
-    return fzf.find(trimmed).slice(0, 12).map((result) => result.item)
+    return fzf
+      .find(trimmed)
+      .slice(0, 12)
+      .map((result) => result.item)
   }, [entries, fzf, query])
 
   useEffect(() => {
@@ -259,19 +283,24 @@ export function Taskbar({ onLaunchApp }: Props) {
     }
   }, [menuOpen])
 
-  const activate = useCallback((entry: FileIndexEntry) => {
-    if (entry.launchable) {
-      onLaunchApp(entry)
-      setMenuOpen(false)
-      setQuery('')
-      return
-    }
-  }, [onLaunchApp])
+  const activate = useCallback(
+    (entry: FileIndexEntry) => {
+      if (entry.launchable) {
+        onLaunchApp(entry)
+        setMenuOpen(false)
+        setQuery('')
+        return
+      }
+    },
+    [onLaunchApp]
+  )
 
   const onSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
       event.preventDefault()
-      setActiveIndex((index) => Math.min(index + 1, Math.max(0, results.length - 1)))
+      setActiveIndex((index) =>
+        Math.min(index + 1, Math.max(0, results.length - 1))
+      )
       return
     }
     if (event.key === 'ArrowUp') {
@@ -286,12 +315,19 @@ export function Taskbar({ onLaunchApp }: Props) {
     }
   }
 
-  const timeLabel = clock.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const timeLabel = clock.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 
   return (
     <>
       {menuOpen && (
-        <MenuPanel innerRef={(el: HTMLDivElement | null) => { panelRef.current = el }}>
+        <MenuPanel
+          innerRef={(el: HTMLDivElement | null) => {
+            panelRef.current = el
+          }}
+        >
           <MenuHeader>Find a file or app</MenuHeader>
           <Results>
             {isLoading && <Hint>Loading file index…</Hint>}
@@ -309,7 +345,11 @@ export function Taskbar({ onLaunchApp }: Props) {
                   onClick={() => activate(entry)}
                 >
                   <ResultName>
-                    {entry.launchable ? '◆ ' : entry.type === 'directory' ? '📁 ' : '📄 '}
+                    {entry.launchable
+                      ? '◆ '
+                      : entry.type === 'directory'
+                        ? '📁 '
+                        : '📄 '}
                     {entry.name}
                   </ResultName>
                   <ResultPath active={active}>{entry.path}</ResultPath>
@@ -318,7 +358,9 @@ export function Taskbar({ onLaunchApp }: Props) {
             })}
           </Results>
           <SearchField
-            innerRef={(el: HTMLInputElement | null) => { inputRef.current = el }}
+            innerRef={(el: HTMLInputElement | null) => {
+              inputRef.current = el
+            }}
             type="text"
             placeholder="Type to search…"
             value={query}

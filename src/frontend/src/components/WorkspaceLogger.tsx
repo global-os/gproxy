@@ -63,10 +63,12 @@ const ClearButton = createComponent(
     textTransform: 'none',
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.45 : 1,
-    ':hover': disabled ? undefined : {
-      background: 'rgba(255,255,255,0.1)',
-      color: '#e8e8ec',
-    },
+    ':hover': disabled
+      ? undefined
+      : {
+          background: 'rgba(255,255,255,0.1)',
+          color: '#e8e8ec',
+        },
   }),
   'button',
   ['type', 'onClick', 'disabled']
@@ -142,13 +144,17 @@ export function WorkspaceLogger({ workspaceId }: { workspaceId: string }) {
         credentials: 'include',
       })
       if (!r.ok) {
-        const body = (await r.json().catch(() => null)) as { message?: string } | null
+        const body = (await r.json().catch(() => null)) as {
+          message?: string
+        } | null
         throw new Error(body?.message ?? 'Failed to clear workspace log')
       }
     },
     onSuccess: () => {
       queryClient.setQueryData(['workspace-logs', workspaceId], [])
-      void queryClient.invalidateQueries({ queryKey: ['workspace-logs', workspaceId] })
+      void queryClient.invalidateQueries({
+        queryKey: ['workspace-logs', workspaceId],
+      })
     },
   })
 

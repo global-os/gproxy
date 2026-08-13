@@ -41,7 +41,10 @@ export const parseCookies: MiddlewareHandler<Env> = async (c, next) => {
 
 export const setIsLocal: MiddlewareHandler<Env> = async (c, next) => {
   const url = new URL(c.req.url)
-  c.set('isLocal', url.host === 'localhost' || url.host.startsWith('localhost:'))
+  c.set(
+    'isLocal',
+    url.host === 'localhost' || url.host.startsWith('localhost:')
+  )
   await next()
 }
 
@@ -62,7 +65,10 @@ export const setRlsUser: MiddlewareHandler<Env> = async (c, next) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-    await client.query('SELECT set_config($1, $2, true)', ['app.user_id', user.id])
+    await client.query('SELECT set_config($1, $2, true)', [
+      'app.user_id',
+      user.id,
+    ])
     c.set('db', drizzle({ client, schema }) as any)
     await next()
     await client.query('COMMIT')

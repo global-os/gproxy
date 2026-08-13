@@ -55,7 +55,9 @@ function RouteComponent() {
   return (
     <AuthLayout>
       <AuthCard>
-        <h1 className="m-0 text-xl font-semibold text-gray-100 mb-6">Create your account</h1>
+        <h1 className="m-0 text-xl font-semibold text-gray-100 mb-6">
+          Create your account
+        </h1>
 
         <form onSubmit={handleSubmit} className="grid gap-4">
           {error && (

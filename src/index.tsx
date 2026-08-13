@@ -9,20 +9,21 @@ export async function confirmTimeout(
   prompts: (config: any) => Promise<any>,
   message: string,
   timeoutMs: number,
-  default_: boolean = false,
+  default_: boolean = false
 ): Promise<boolean> {
   const result = await Promise.race([
-    prompts({ type: "confirm", name: "value", message }) as Promise<{ value: boolean }>,
+    prompts({ type: 'confirm', name: 'value', message }) as Promise<{
+      value: boolean
+    }>,
     new Promise<{ value: boolean }>((resolve) =>
-      setTimeout(() => resolve({ value: default_ }), timeoutMs),
+      setTimeout(() => resolve({ value: default_ }), timeoutMs)
     ),
-  ]);
+  ])
   if (result.value === default_) {
-    console.log(`Timed out, defaulting to ${default_ ? "yes" : "no"}`);
+    console.log(`Timed out, defaulting to ${default_ ? 'yes' : 'no'}`)
   }
-  return result.value;
+  return result.value
 }
-
 
 async function main() {
   await testConnection()
@@ -30,7 +31,12 @@ async function main() {
   if (!process.env.VERCEL) {
     const prompts = (await import('prompts'))?.default
 
-    const value = await confirmTimeout(prompts, "Seed user fixtures?", 5_000, false);
+    const value = await confirmTimeout(
+      prompts,
+      'Seed user fixtures?',
+      5_000,
+      false
+    )
     if (value) {
       await seedUserFixtures()
     }

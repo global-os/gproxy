@@ -4,7 +4,7 @@ import * as schema from '../db/schema.js'
 
 export async function resolveDirectoryPath(
   db: NodePgDatabase<typeof schema>,
-  directoryId: number,
+  directoryId: number
 ): Promise<string> {
   const segments: string[] = []
   let currentId: number | null = directoryId

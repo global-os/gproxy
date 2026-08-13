@@ -14,7 +14,10 @@ function resolveDatabaseUrl(): string | undefined {
   let result = url
 
   if (process.env.DATABASE_SSL === 'true') {
-    result = result.replace(/[?&]sslmode=[^&]*/i, '').replace(/\?&/, '?').replace(/[?&]$/, '')
+    result = result
+      .replace(/[?&]sslmode=[^&]*/i, '')
+      .replace(/\?&/, '?')
+      .replace(/[?&]$/, '')
   }
 
   if (!result.includes('connect_timeout=')) {
@@ -30,7 +33,8 @@ function sslModeFromUrl(url: string | undefined): 'disable' | 'require' | null {
   if (!match) return null
   const mode = decodeURIComponent(match[1]).toLowerCase()
   if (mode === 'disable') return 'disable'
-  if (['require', 'verify-ca', 'verify-full', 'prefer'].includes(mode)) return 'require'
+  if (['require', 'verify-ca', 'verify-full', 'prefer'].includes(mode))
+    return 'require'
   return null
 }
 
@@ -80,13 +84,22 @@ export function isDatabaseConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL?.trim())
 }
 
-type PingResult = { ok: true; ms: number } | { ok: false; error: string; ms: number }
+type PingResult =
+  | { ok: true; ms: number }
+  | { ok: false; error: string; ms: number }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
   return Promise.race([
     promise,
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs)
+      setTimeout(
+        () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+        timeoutMs
+      )
     ),
   ])
 }
@@ -109,7 +122,8 @@ export async function pingDatabase(timeoutMs = 5_000): Promise<PingResult> {
     )
     return { ok: true, ms: Date.now() - start }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Database connection failed'
+    const message =
+      error instanceof Error ? error.message : 'Database connection failed'
     return { ok: false, error: message, ms: Date.now() - start }
   } finally {
     await client.end().catch(() => {})
@@ -133,7 +147,7 @@ export async function pingPool(timeoutMs = 5_000): Promise<PingResult> {
 
 export async function probeDrizzleUserLookup(
   email = 'nobody@example.com',
-  timeoutMs = 5_000,
+  timeoutMs = 5_000
 ): Promise<PingResult> {
   if (!isDatabaseConfigured()) {
     return { ok: false, error: 'DATABASE_URL is not set', ms: 0 }
@@ -148,18 +162,19 @@ export async function probeDrizzleUserLookup(
         .where(eq(schema.user.email, email))
         .limit(1),
       timeoutMs,
-      'Drizzle user lookup',
+      'Drizzle user lookup'
     )
     return { ok: true, ms: Date.now() - start }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Drizzle user lookup failed'
+    const message =
+      error instanceof Error ? error.message : 'Drizzle user lookup failed'
     return { ok: false, error: message, ms: Date.now() - start }
   }
 }
 
 export async function probeUserLookup(
   email = 'nobody@example.com',
-  timeoutMs = 5_000,
+  timeoutMs = 5_000
 ): Promise<PingResult> {
   if (!isDatabaseConfigured()) {
     return { ok: false, error: 'DATABASE_URL is not set', ms: 0 }
@@ -170,18 +185,17 @@ export async function probeUserLookup(
     await withTimeout(
       pool.query('SELECT id FROM "user" WHERE email = $1 LIMIT 1', [email]),
       timeoutMs,
-      'User lookup',
+      'User lookup'
     )
     return { ok: true, ms: Date.now() - start }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'User lookup failed'
+    const message =
+      error instanceof Error ? error.message : 'User lookup failed'
     return { ok: false, error: message, ms: Date.now() - start }
   }
 }
 
-export async function checkAppTables(
-  timeoutMs = 5_000,
-): Promise<
+export async function checkAppTables(timeoutMs = 5_000): Promise<
   PingResult & {
     tables?: {
       verification: boolean
@@ -230,32 +244,40 @@ export async function checkAppTables(
     )
     const tables = result.rows[0]
     const ok = Boolean(
-      tables?.verification
-      && tables?.instances
-      && tables?.workspace_window
-      && tables?.global_pc
-      && tables?.global_pc_icon
-      && tables?.task
-      && tables?.workspace
-      && tables?.workspace_log
-      && tables?.webview
+      tables?.verification &&
+      tables?.instances &&
+      tables?.workspace_window &&
+      tables?.global_pc &&
+      tables?.global_pc_icon &&
+      tables?.task &&
+      tables?.workspace &&
+      tables?.workspace_log &&
+      tables?.webview
     )
     if (!ok) {
       return {
         ok: false,
-        error: 'App tables are missing. Run pending migrations against this database.',
+        error:
+          'App tables are missing. Run pending migrations against this database.',
         ms: Date.now() - start,
         tables,
       }
     }
     return { ok: true, ms: Date.now() - start, tables }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'App table check failed'
+    const message =
+      error instanceof Error ? error.message : 'App table check failed'
     return { ok: false, error: message, ms: Date.now() - start }
   }
 }
 
-export async function checkAuthTables(timeoutMs = 5_000): Promise<PingResult & { tables?: { user: boolean; account: boolean; session: boolean } }> {
+export async function checkAuthTables(
+  timeoutMs = 5_000
+): Promise<
+  PingResult & {
+    tables?: { user: boolean; account: boolean; session: boolean }
+  }
+> {
   if (!isDatabaseConfigured()) {
     return { ok: false, error: 'DATABASE_URL is not set', ms: 0 }
   }
@@ -277,14 +299,16 @@ export async function checkAuthTables(timeoutMs = 5_000): Promise<PingResult & {
     if (!ok) {
       return {
         ok: false,
-        error: 'Auth tables are missing. Run drizzle-kit push against this database.',
+        error:
+          'Auth tables are missing. Run drizzle-kit push against this database.',
         ms: Date.now() - start,
         tables,
       }
     }
     return { ok: true, ms: Date.now() - start, tables }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Auth table check failed'
+    const message =
+      error instanceof Error ? error.message : 'Auth table check failed'
     return { ok: false, error: message, ms: Date.now() - start }
   }
 }

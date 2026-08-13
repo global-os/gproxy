@@ -9,5 +9,7 @@ export const Default: StoryObj = {
 }
 
 export const Long: StoryObj = {
-  render: () => <PageTitle>A Very Long Session Title That Goes On For A While</PageTitle>,
+  render: () => (
+    <PageTitle>A Very Long Session Title That Goes On For A While</PageTitle>
+  ),
 }

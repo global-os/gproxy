@@ -50,19 +50,28 @@ async function createWorkspace(): Promise<Workspace[]> {
     try {
       const body = (await r.json()) as { message?: string }
       if (body.message) message = body.message
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     throw new Error(message)
   }
   return r.json()
 }
 
-async function fetchWorkspaceProcesses(workspaceId: number): Promise<WorkspaceProcess[]> {
-  const r = await fetch(`/api/workspaces/${workspaceId}/processes`, { credentials: 'include' })
+async function fetchWorkspaceProcesses(
+  workspaceId: number
+): Promise<WorkspaceProcess[]> {
+  const r = await fetch(`/api/workspaces/${workspaceId}/processes`, {
+    credentials: 'include',
+  })
   if (!r.ok) throw new Error(`Failed to load processes (${r.status})`)
   return r.json()
 }
 
-async function closeWorkspaceWindow(workspaceId: number, windowId: number): Promise<void> {
+async function closeWorkspaceWindow(
+  workspaceId: number,
+  windowId: number
+): Promise<void> {
   const r = await fetch(`/api/workspaces/${workspaceId}/windows/${windowId}`, {
     method: 'DELETE',
     credentials: 'include',
@@ -72,22 +81,32 @@ async function closeWorkspaceWindow(workspaceId: number, windowId: number): Prom
     try {
       const body = (await r.json()) as { message?: string }
       if (body.message) message = body.message
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     throw new Error(message)
   }
 }
 
-async function killWorkspaceProcess(workspaceId: number, processId: number): Promise<void> {
-  const r = await fetch(`/api/workspaces/${workspaceId}/processes/${processId}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  })
+async function killWorkspaceProcess(
+  workspaceId: number,
+  processId: number
+): Promise<void> {
+  const r = await fetch(
+    `/api/workspaces/${workspaceId}/processes/${processId}`,
+    {
+      method: 'DELETE',
+      credentials: 'include',
+    }
+  )
   if (!r.ok) {
     let message = `Failed to kill process (${r.status})`
     try {
       const body = (await r.json()) as { message?: string }
       if (body.message) message = body.message
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     throw new Error(message)
   }
 }
@@ -102,7 +121,9 @@ async function deleteWorkspace(workspaceId: number): Promise<void> {
     try {
       const body = (await r.json()) as { message?: string }
       if (body.message) message = body.message
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     throw new Error(message)
   }
 }
@@ -112,7 +133,9 @@ function workspaceLabel(ws: Workspace, index: number): string {
   return `Workspace ${index + 1}`
 }
 
-function instanceStateLabel(state: WorkspaceProcess['instances'][number]['state']): string {
+function instanceStateLabel(
+  state: WorkspaceProcess['instances'][number]['state']
+): string {
   switch (state) {
     case 'running':
       return 'running'
@@ -121,7 +144,9 @@ function instanceStateLabel(state: WorkspaceProcess['instances'][number]['state'
   }
 }
 
-function instanceStateCls(state: WorkspaceProcess['instances'][number]['state']): string {
+function instanceStateCls(
+  state: WorkspaceProcess['instances'][number]['state']
+): string {
   switch (state) {
     case 'running':
       return 'text-emerald-700 bg-emerald-50 border-emerald-200'
@@ -130,7 +155,13 @@ function instanceStateCls(state: WorkspaceProcess['instances'][number]['state'])
   }
 }
 
-function WindowRow({ win, workspaceId }: { win: WorkspaceProcessWindow; workspaceId: number }) {
+function WindowRow({
+  win,
+  workspaceId,
+}: {
+  win: WorkspaceProcessWindow
+  workspaceId: number
+}) {
   const queryClient = useQueryClient()
   const [closing, setClosing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -140,7 +171,9 @@ function WindowRow({ win, workspaceId }: { win: WorkspaceProcessWindow; workspac
     setError(null)
     try {
       await closeWorkspaceWindow(workspaceId, win.id)
-      await queryClient.invalidateQueries({ queryKey: ['workspace-processes', workspaceId] })
+      await queryClient.invalidateQueries({
+        queryKey: ['workspace-processes', workspaceId],
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to close window')
     } finally {
@@ -160,7 +193,7 @@ function WindowRow({ win, workspaceId }: { win: WorkspaceProcessWindow; workspac
           'shrink-0 inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors duration-100',
           closing
             ? 'bg-gray-50 border-gray-200 text-gray-300 cursor-default'
-            : 'bg-white border-gray-200 text-gray-500 cursor-pointer hover:bg-red-50 hover:border-red-200 hover:text-red-600',
+            : 'bg-white border-gray-200 text-gray-500 cursor-pointer hover:bg-red-50 hover:border-red-200 hover:text-red-600'
         )}
       >
         {closing ? '…' : '×'}
@@ -169,7 +202,13 @@ function WindowRow({ win, workspaceId }: { win: WorkspaceProcessWindow; workspac
   )
 }
 
-function ProcessRow({ proc, workspaceId }: { proc: WorkspaceProcess; workspaceId: number }) {
+function ProcessRow({
+  proc,
+  workspaceId,
+}: {
+  proc: WorkspaceProcess
+  workspaceId: number
+}) {
   const queryClient = useQueryClient()
   const [killing, setKilling] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -179,7 +218,9 @@ function ProcessRow({ proc, workspaceId }: { proc: WorkspaceProcess; workspaceId
     setError(null)
     try {
       await killWorkspaceProcess(workspaceId, proc.id)
-      await queryClient.invalidateQueries({ queryKey: ['workspace-processes', workspaceId] })
+      await queryClient.invalidateQueries({
+        queryKey: ['workspace-processes', workspaceId],
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to kill process')
     } finally {
@@ -193,9 +234,12 @@ function ProcessRow({ proc, workspaceId }: { proc: WorkspaceProcess; workspaceId
     <li className="px-4 py-3 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="m-0 text-sm font-medium text-gray-900 truncate">{proc.bundleName}</p>
+          <p className="m-0 text-sm font-medium text-gray-900 truncate">
+            {proc.bundleName}
+          </p>
           <p className="m-0 mt-0.5 text-xs text-gray-400">
-            Process {proc.id} · {windowCount} window{windowCount === 1 ? '' : 's'}
+            Process {proc.id} · {windowCount} window
+            {windowCount === 1 ? '' : 's'}
           </p>
         </div>
         <button
@@ -206,14 +250,16 @@ function ProcessRow({ proc, workspaceId }: { proc: WorkspaceProcess; workspaceId
             'shrink-0 inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors duration-100',
             killing
               ? 'bg-gray-50 border-gray-200 text-gray-300 cursor-default'
-              : 'bg-white border-red-200 text-red-600 cursor-pointer hover:bg-red-50 hover:border-red-300',
+              : 'bg-white border-red-200 text-red-600 cursor-pointer hover:bg-red-50 hover:border-red-300'
           )}
         >
           {killing ? 'Killing…' : 'Kill'}
         </button>
       </div>
       {error && (
-        <p role="alert" className="m-0 text-xs text-red-600">{error}</p>
+        <p role="alert" className="m-0 text-xs text-red-600">
+          {error}
+        </p>
       )}
       {proc.windows.length > 0 && (
         <ul className="m-0 p-0 list-none flex flex-col gap-1 pl-2 border-l-2 border-gray-100">
@@ -233,7 +279,7 @@ function ProcessRow({ proc, workspaceId }: { proc: WorkspaceProcess; workspaceId
               <span
                 className={cn(
                   'shrink-0 px-2 py-0.5 rounded-full border text-[11px] font-medium capitalize',
-                  instanceStateCls(inst.state),
+                  instanceStateCls(inst.state)
                 )}
               >
                 {instanceStateLabel(inst.state)}
@@ -282,7 +328,8 @@ function WorkspaceProcessPanel({
   if (processes.length === 0) {
     return (
       <div className="px-4 py-3 text-sm text-gray-400 border-t border-gray-200 bg-white/60">
-        No processes on this workspace yet. Open the desk and launch a .gapp to start one.
+        No processes on this workspace yet. Open the desk and launch a .gapp to
+        start one.
       </div>
     )
   }
@@ -322,7 +369,7 @@ function WorkspaceManageCard({
         <span
           className={cn(
             'shrink-0 w-6 text-center text-xs text-gray-400 transition-transform duration-100',
-            expanded && 'rotate-90',
+            expanded && 'rotate-90'
           )}
           aria-hidden
         >
@@ -346,10 +393,7 @@ function WorkspaceManageCard({
           Open
         </Link>
       </button>
-      <WorkspaceProcessPanel
-        workspaceId={ws.id}
-        expanded={expanded}
-      />
+      <WorkspaceProcessPanel workspaceId={ws.id} expanded={expanded} />
     </div>
   )
 }
@@ -374,16 +418,14 @@ function PrimaryButton({
       onClick={onClick}
       className={cn(
         'self-start px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-100',
-        variant === 'primary' && (
-          disabled
+        variant === 'primary' &&
+          (disabled
             ? 'bg-violet-200 text-white cursor-default'
-            : 'bg-violet-600 text-white hover:bg-violet-700 cursor-pointer'
-        ),
-        variant === 'secondary' && (
-          disabled
+            : 'bg-violet-600 text-white hover:bg-violet-700 cursor-pointer'),
+        variant === 'secondary' &&
+          (disabled
             ? 'bg-gray-50 border border-gray-200 text-gray-300 cursor-default'
-            : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 cursor-pointer'
-        ),
+            : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 cursor-pointer')
       )}
     >
       {children}
@@ -396,13 +438,18 @@ type WorkspaceListProps = {
   isLoggingOut?: boolean
 }
 
-export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) => {
+export const WorkspaceList = ({
+  onLogOut,
+  isLoggingOut,
+}: WorkspaceListProps) => {
   const queryClient = useQueryClient()
   const [screen, setScreen] = useState<'global-pc' | 'manage'>('global-pc')
   const [createError, setCreateError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [expandedManageIds, setExpandedManageIds] = useState<Set<number>>(() => new Set())
+  const [expandedManageIds, setExpandedManageIds] = useState<Set<number>>(
+    () => new Set()
+  )
   const { data: authSession } = useSession()
   const isAdmin = authSession?.user?.email === 'peterson@sent.com'
 
@@ -425,7 +472,9 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
     try {
       await createMutate()
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create workspace')
+      setCreateError(
+        err instanceof Error ? err.message : 'Failed to create workspace'
+      )
     }
   }, [createMutate])
 
@@ -444,23 +493,32 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
     })
   }, [])
 
-  const handleDeleteWorkspace = useCallback(async (workspaceId: number) => {
-    setDeleteError(null)
-    setDeletingId(workspaceId)
-    try {
-      await deleteWorkspace(workspaceId)
-      queryClient.setQueryData<Workspace[]>(['workspaces'], (current) =>
-        (current ?? []).filter((ws) => ws.id !== workspaceId),
-      )
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Failed to delete workspace')
-    } finally {
-      setDeletingId(null)
-    }
-  }, [queryClient])
+  const handleDeleteWorkspace = useCallback(
+    async (workspaceId: number) => {
+      setDeleteError(null)
+      setDeletingId(workspaceId)
+      try {
+        await deleteWorkspace(workspaceId)
+        queryClient.setQueryData<Workspace[]>(['workspaces'], (current) =>
+          (current ?? []).filter((ws) => ws.id !== workspaceId)
+        )
+      } catch (err) {
+        setDeleteError(
+          err instanceof Error ? err.message : 'Failed to delete workspace'
+        )
+      } finally {
+        setDeletingId(null)
+      }
+    },
+    [queryClient]
+  )
 
   if (isPending) {
-    return <div className="py-8 px-4 text-center text-gray-400 text-sm">Loading your workspaces…</div>
+    return (
+      <div className="py-8 px-4 text-center text-gray-400 text-sm">
+        Loading your workspaces…
+      </div>
+    )
   }
 
   if (error) {
@@ -472,7 +530,7 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
   const tabCls = cn(
     'flex-1 border-none rounded-lg px-3 py-2 text-sm font-medium bg-transparent',
     'text-gray-500 cursor-pointer transition-colors duration-100',
-    'aria-selected:bg-white aria-selected:text-violet-700 aria-selected:shadow-sm',
+    'aria-selected:bg-white aria-selected:text-violet-700 aria-selected:shadow-sm'
   )
 
   if (screen === 'manage') {
@@ -490,14 +548,16 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
           <div>
             <p className="m-0 text-base font-semibold text-gray-900">Manage</p>
             <p className="m-0 mt-1 text-sm text-gray-500 leading-normal">
-              Task manager for workspace processes — kill a process to close its windows and stop its instances.
+              Task manager for workspace processes — kill a process to close its
+              windows and stop its instances.
             </p>
           </div>
 
           <div className="flex flex-col gap-2">
             {workspaces.length === 0 ? (
               <div className="px-4 py-8 rounded-xl text-center text-gray-400 bg-gray-50 border border-dashed border-gray-200 text-sm leading-relaxed">
-                No workspaces yet. Create one on My Global PC to manage processes here.
+                No workspaces yet. Create one on My Global PC to manage
+                processes here.
               </div>
             ) : (
               workspaces.map((ws, i) => (
@@ -521,9 +581,15 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
       <Tabs.Root defaultValue="global-pc">
         <div className="p-1 rounded-xl bg-gray-100 mb-6">
           <Tabs.List className="flex gap-1">
-            <Tabs.Tab value="global-pc" className={tabCls}>My Global PC</Tabs.Tab>
-            <Tabs.Tab value="settings" className={tabCls}>Settings</Tabs.Tab>
-            <Tabs.Tab value="help" className={tabCls}>Help</Tabs.Tab>
+            <Tabs.Tab value="global-pc" className={tabCls}>
+              My Global PC
+            </Tabs.Tab>
+            <Tabs.Tab value="settings" className={tabCls}>
+              Settings
+            </Tabs.Tab>
+            <Tabs.Tab value="help" className={tabCls}>
+              Help
+            </Tabs.Tab>
             <Tabs.Indicator hidden />
           </Tabs.List>
         </div>
@@ -531,7 +597,9 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
         <Tabs.Panel value="global-pc">
           <div className="flex flex-col gap-4">
             <div>
-              <p className="m-0 text-base font-semibold text-gray-900">My Workspaces</p>
+              <p className="m-0 text-base font-semibold text-gray-900">
+                My Workspaces
+              </p>
               <p className="m-0 mt-1 text-sm text-gray-500 leading-normal">
                 Open a desk or remove workspaces you no longer need.
               </p>
@@ -540,7 +608,8 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
             <div className="flex flex-col gap-2">
               {workspaces.length === 0 ? (
                 <div className="px-4 py-8 rounded-xl text-center text-gray-400 bg-gray-50 border border-dashed border-gray-200 text-sm leading-relaxed">
-                  No workspaces yet. Create one to launch apps on your Global PC desktop.
+                  No workspaces yet. Create one to launch apps on your Global PC
+                  desktop.
                 </div>
               ) : (
                 workspaces.map((ws, i) => (
@@ -583,7 +652,7 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
                           'inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors duration-100 text-lg leading-none',
                           deletingId === ws.id
                             ? 'bg-gray-50 border-gray-200 text-gray-300 cursor-default'
-                            : 'bg-white border-gray-200 text-gray-400 cursor-pointer hover:bg-red-50 hover:border-red-200 hover:text-red-500',
+                            : 'bg-white border-gray-200 text-gray-400 cursor-pointer hover:bg-red-50 hover:border-red-200 hover:text-red-500'
                         )}
                       >
                         ×
@@ -595,14 +664,21 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
             </div>
 
             {createError && (
-              <p role="alert" className="m-0 text-sm text-red-600">{createError}</p>
+              <p role="alert" className="m-0 text-sm text-red-600">
+                {createError}
+              </p>
             )}
             {deleteError && (
-              <p role="alert" className="m-0 text-sm text-red-600">{deleteError}</p>
+              <p role="alert" className="m-0 text-sm text-red-600">
+                {deleteError}
+              </p>
             )}
 
             <div className="flex flex-col gap-2.5 mt-2 pt-5 border-t border-gray-200">
-              <PrimaryButton disabled={isCreating} onClick={() => void handleCreateWorkspace()}>
+              <PrimaryButton
+                disabled={isCreating}
+                onClick={() => void handleCreateWorkspace()}
+              >
                 {isCreating ? 'Creating…' : 'Create New Workspace'}
               </PrimaryButton>
               {onLogOut && (
@@ -628,7 +704,9 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
 
         <Tabs.Panel value="settings">
           <div className="flex flex-col gap-4">
-            <p className="m-0 text-base font-semibold text-gray-900">Settings</p>
+            <p className="m-0 text-base font-semibold text-gray-900">
+              Settings
+            </p>
             <p className="m-0 text-sm text-gray-500 leading-normal">
               Personal settings for your Global PC will appear here.
             </p>
@@ -640,7 +718,10 @@ export const WorkspaceList = ({ onLogOut, isLoggingOut }: WorkspaceListProps) =>
             <p className="m-0 text-base font-semibold text-gray-900">Help</p>
             <p className="m-0 text-sm text-gray-500 leading-normal">
               For support, email{' '}
-              <a href="mailto:coldairnetworks@fastmail.com" className="text-violet-600 hover:text-violet-800">
+              <a
+                href="mailto:coldairnetworks@fastmail.com"
+                className="text-violet-600 hover:text-violet-800"
+              >
                 coldairnetworks@fastmail.com
               </a>{' '}
               and we will assist as soon as possible.

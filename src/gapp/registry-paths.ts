@@ -19,7 +19,7 @@ function findRegistryDir(): string {
     dir = parent
   }
   throw new Error(
-    `[registry-paths] could not locate src/gapp/registry (cwd=${process.cwd()}, searched upward from ${start})`,
+    `[registry-paths] could not locate src/gapp/registry (cwd=${process.cwd()}, searched upward from ${start})`
   )
 }
 

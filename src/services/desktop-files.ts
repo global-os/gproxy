@@ -11,16 +11,18 @@ export function normalizeDesktopFilename(raw: string): string | null {
 
 export async function resolveDesktopDirectoryId(
   db: NodePgDatabase<typeof schema>,
-  userId: string,
+  userId: string
 ): Promise<number | null> {
   const [usersDir] = await db
     .select({ id: schema.directory.id })
     .from(schema.directory)
-    .where(and(
-      eq(schema.directory.user_id, userId),
-      eq(schema.directory.name, 'Users'),
-      isNull(schema.directory.parent_id),
-    ))
+    .where(
+      and(
+        eq(schema.directory.user_id, userId),
+        eq(schema.directory.name, 'Users'),
+        isNull(schema.directory.parent_id)
+      )
+    )
     .limit(1)
 
   if (!usersDir) return null
@@ -28,10 +30,12 @@ export async function resolveDesktopDirectoryId(
   const [desktopDir] = await db
     .select({ id: schema.directory.id })
     .from(schema.directory)
-    .where(and(
-      eq(schema.directory.parent_id, usersDir.id),
-      eq(schema.directory.name, 'Desktop'),
-    ))
+    .where(
+      and(
+        eq(schema.directory.parent_id, usersDir.id),
+        eq(schema.directory.name, 'Desktop')
+      )
+    )
     .limit(1)
 
   return desktopDir?.id ?? null
@@ -52,7 +56,7 @@ export async function upsertDesktopFile(
   db: NodePgDatabase<typeof schema>,
   userId: string,
   filename: string,
-  content: string,
+  content: string
 ): Promise<{ id: number; name: string; created: boolean }> {
   const name = normalizeDesktopFilename(filename)
   if (!name) {
@@ -70,16 +74,20 @@ export async function upsertDesktopFile(
   const [existing] = await db
     .select({ id: schema.file.id })
     .from(schema.file)
-    .where(and(
-      eq(schema.file.parent_id, desktopId),
-      eq(schema.file.name, name),
-    ))
+    .where(
+      and(eq(schema.file.parent_id, desktopId), eq(schema.file.name, name))
+    )
     .limit(1)
 
   if (existing) {
     await db
       .update(schema.file)
-      .set({ content: bytes, mime_type, is_stock: false, updated_at: new Date() })
+      .set({
+        content: bytes,
+        mime_type,
+        is_stock: false,
+        updated_at: new Date(),
+      })
       .where(eq(schema.file.id, existing.id))
 
     return { id: existing.id, name, created: false }

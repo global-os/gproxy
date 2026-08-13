@@ -1,10 +1,7 @@
 import type { FileEntry } from '../db/file.js'
 import { inferDepsFromSquintSource } from './infer-deps.js'
 import { parseCompileConfig } from './parse-compile-config.js'
-import {
-  platformDepsFor,
-  squintExternalsFor,
-} from './platform-defaults.js'
+import { platformDepsFor, squintExternalsFor } from './platform-defaults.js'
 import type { GappManifest } from './types.js'
 
 const COMPILE_CONFIG_NAMES = ['compile.edn', 'compile.cljs']
@@ -12,7 +9,7 @@ const COMPILE_CONFIG_NAMES = ['compile.edn', 'compile.cljs']
 function findFile(
   files: FileEntry[],
   dirName: string,
-  name: string,
+  name: string
 ): FileEntry | undefined {
   return files.find((f) => f.path === `${dirName}/${name}`)
 }
@@ -23,7 +20,7 @@ function parseGappJson(raw: string): GappManifest {
 
 export function resolveGappConfig(
   dirName: string,
-  files: FileEntry[],
+  files: FileEntry[]
 ): GappManifest | null {
   const gappJson = findFile(files, dirName, 'gapp.json')
   if (gappJson) {
@@ -31,7 +28,7 @@ export function resolveGappConfig(
   }
 
   const compileFile = COMPILE_CONFIG_NAMES.map((name) =>
-    findFile(files, dirName, name),
+    findFile(files, dirName, name)
   ).find(Boolean)
 
   const overrides = compileFile

@@ -30,7 +30,11 @@ function maxmem(config: ScryptConfig) {
   return 128 * config.N * config.r * 2
 }
 
-async function deriveKey(password: string, salt: Uint8Array, config: ScryptConfig) {
+async function deriveKey(
+  password: string,
+  salt: Uint8Array,
+  config: ScryptConfig
+) {
   return scryptAsync(password.normalize('NFKC'), salt, {
     ...config,
     maxmem: maxmem(config),
@@ -43,19 +47,39 @@ async function hashWithConfig(password: string, config: ScryptConfig) {
   return `${salt}:${hex.encode(key)}`
 }
 
-async function verifyWithConfig(hash: string, password: string, config: ScryptConfig) {
+async function verifyWithConfig(
+  hash: string,
+  password: string,
+  config: ScryptConfig
+) {
   const [salt, key] = hash.split(':')
   if (!salt || !key) return false
-  return constantTimeEqual(await deriveKey(password, hexToBytes(salt), config), hexToBytes(key))
+  return constantTimeEqual(
+    await deriveKey(password, hexToBytes(salt), config),
+    hexToBytes(key)
+  )
 }
 
 export async function hashPassword(password: string) {
-  return hashWithConfig(password, isServerless ? SERVERLESS_SCRYPT : LEGACY_SCRYPT)
+  return hashWithConfig(
+    password,
+    isServerless ? SERVERLESS_SCRYPT : LEGACY_SCRYPT
+  )
 }
 
-export async function verifyPassword({ hash, password }: { hash: string; password: string }) {
+export async function verifyPassword({
+  hash,
+  password,
+}: {
+  hash: string
+  password: string
+}) {
   if (await verifyWithConfig(hash, password, LEGACY_SCRYPT)) return true
-  if (isServerless && (await verifyWithConfig(hash, password, SERVERLESS_SCRYPT))) return true
+  if (
+    isServerless &&
+    (await verifyWithConfig(hash, password, SERVERLESS_SCRYPT))
+  )
+    return true
   return false
 }
 

@@ -15,7 +15,10 @@ function indexDirectoryPrefix(paths: Iterable<string>): string | null {
 }
 
 /** Map an HTTP path to a file path inside an extracted bundle. */
-export function resolveBundlePath(paths: Iterable<string>, urlPath: string): string | null {
+export function resolveBundlePath(
+  paths: Iterable<string>,
+  urlPath: string
+): string | null {
   const pathSet = new Set(paths)
   const safePath = urlPath.replace(/^(\.\.(\/|\\|$))+/, '')
   const relative = safePath === '/' ? '' : safePath.replace(/^\//, '')

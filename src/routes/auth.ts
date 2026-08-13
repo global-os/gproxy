@@ -32,7 +32,10 @@ async function handleAuth(c: Context) {
   } catch (err) {
     console.error(`[auth] body read failed ${path}:`, err)
     return c.json(
-      { message: err instanceof Error ? err.message : 'Failed to read request body.' },
+      {
+        message:
+          err instanceof Error ? err.message : 'Failed to read request body.',
+      },
       400
     )
   }
@@ -49,7 +52,9 @@ async function handleAuth(c: Context) {
       ),
     ])
     clearInterval(interval)
-    console.log(`[auth] done ${path} → ${response.status} in ${Date.now() - start}ms`)
+    console.log(
+      `[auth] done ${path} → ${response.status} in ${Date.now() - start}ms`
+    )
     return response
   } catch (err) {
     clearInterval(interval)

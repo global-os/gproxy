@@ -13,22 +13,29 @@ export type ResolvedLib = {
 
 /** Resolve a map of name → semver-range to specific versions from the registry. */
 export function resolveLibDeps(deps: Record<string, string>): ResolvedLib[] {
-  console.log(`[resolve-lib-deps] platformLibsDir=${platformLibsDir} deps=${JSON.stringify(deps)}`)
+  console.log(
+    `[resolve-lib-deps] platformLibsDir=${platformLibsDir} deps=${JSON.stringify(deps)}`
+  )
   return Object.entries(deps).map(([name, range]) => {
     const libDir = path.join(platformLibsDir, name)
-    console.log(`[resolve-lib-deps] checking ${libDir} → exists=${fs.existsSync(libDir)}`)
+    console.log(
+      `[resolve-lib-deps] checking ${libDir} → exists=${fs.existsSync(libDir)}`
+    )
     if (!fs.existsSync(libDir)) {
       throw new Error(`Unknown platform lib: "${name}"`)
     }
 
-    const versions = fs.readdirSync(libDir)
-      .filter(f => f.endsWith('.js'))
-      .map(f => f.slice(0, -3))
-      .filter(v => semver.valid(v) != null)
+    const versions = fs
+      .readdirSync(libDir)
+      .filter((f) => f.endsWith('.js'))
+      .map((f) => f.slice(0, -3))
+      .filter((v) => semver.valid(v) != null)
 
     const best = semver.maxSatisfying(versions, range)
     if (!best) {
-      throw new Error(`No version of "${name}" satisfies "${range}" (available: ${versions.join(', ')})`)
+      throw new Error(
+        `No version of "${name}" satisfies "${range}" (available: ${versions.join(', ')})`
+      )
     }
 
     return { name, version: best, urlPath: `/platform/libs/${name}@${best}.js` }
@@ -39,7 +46,10 @@ export function resolveLibDeps(deps: Record<string, string>): ResolvedLib[] {
  * Read a versioned lib file from the registry for serving.
  * Returns null if the name/version don't exist (→ 404).
  */
-export async function readRegistryLib(name: string, version: string): Promise<Buffer | null> {
+export async function readRegistryLib(
+  name: string,
+  version: string
+): Promise<Buffer | null> {
   if (!isValidLibName(name) || !semver.valid(version)) return null
   const filePath = path.join(platformLibsDir, name, `${version}.js`)
   try {

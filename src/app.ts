@@ -24,23 +24,52 @@ import webviewRoutes from './routes/webviews.js'
 import visitsRoutes from './routes/visits.js'
 import proxyRecordingRoutes from './routes/proxy-recording.js'
 import { resolveWebviewBySlug } from './runtime/webview/resolve.js'
-import { proxyWebviewRequest, probeOutboundProxy, getActiveOutboundProxyUrl } from './runtime/webview/proxy.js'
+import {
+  proxyWebviewRequest,
+  probeOutboundProxy,
+  getActiveOutboundProxyUrl,
+} from './runtime/webview/proxy.js'
 import { ensureGlobalPcForUser } from './services/global-pc.js'
 import { isBundleCached } from './runtime/cache/store.js'
 import { resolveInstanceBundleFile } from './runtime/cache/serve.js'
 import { scheduleInstancePrepare } from './runtime/instance/background.js'
-import { ensureInstanceReady, touchInstance } from './runtime/instance/manager.js'
+import {
+  ensureInstanceReady,
+  touchInstance,
+} from './runtime/instance/manager.js'
 import { instanceLoadingPage } from './runtime/instance/loading-page.js'
 import { getInstancePrepareStatus } from './runtime/instance/prepare-progress.js'
 import { resolveInstanceIdBySlug } from './runtime/instance/resolve.js'
 import { INSTANCE_MIME } from './runtime/tar/mime.js'
-import { instanceSlugFromHostname, stripInstancePrefix } from './runtime/urls.js'
+import {
+  instanceSlugFromHostname,
+  stripInstancePrefix,
+} from './runtime/urls.js'
 import { getBuildVersion } from './build-version.js'
-import { frontendDistRoot, readFrontendFile, resolveFrontendFile } from './frontend-paths.js'
+import {
+  frontendDistRoot,
+  readFrontendFile,
+  resolveFrontendFile,
+} from './frontend-paths.js'
 import { resolveStorybookFile } from './storybook-paths.js'
 import { benchmarkScrypt } from './crypto/password.js'
-import { checkAppTables, checkAuthTables, db, pingDatabase, pingPool, pool, probeDrizzleUserLookup, probeUserLookup } from './db/index.js'
-import { checkConfig, checkFrontendBundle, checkProxyUrl, probeAuthHandler, probeSidecar } from './health-checks.js'
+import {
+  checkAppTables,
+  checkAuthTables,
+  db,
+  pingDatabase,
+  pingPool,
+  pool,
+  probeDrizzleUserLookup,
+  probeUserLookup,
+} from './db/index.js'
+import {
+  checkConfig,
+  checkFrontendBundle,
+  checkProxyUrl,
+  probeAuthHandler,
+  probeSidecar,
+} from './health-checks.js'
 import { LaunchError } from './services/errors.js'
 import { deleteWorkspace } from './services/workspace-access.js'
 import { readRegistryLib } from './gapp/resolve-lib-deps.js'
@@ -61,8 +90,14 @@ const app = new Hono<Env>({
 app.use(logger())
 
 app.use(async (c, next) => {
-  if (process.env.VERCEL && c.req.header('host')?.startsWith('app.app.dev.onetrueos.com')) {
-    return c.text('This is the Vercel deployment — use localhost:3443 or localhost:443 for local dev.', 200)
+  if (
+    process.env.VERCEL &&
+    c.req.header('host')?.startsWith('app.app.dev.onetrueos.com')
+  ) {
+    return c.text(
+      'This is the Vercel deployment — use localhost:3443 or localhost:443 for local dev.',
+      200
+    )
   }
   await next()
 })
@@ -79,7 +114,10 @@ app.get('/www', async (c) => {
 app.get('/www-assets/*', async (c) => {
   const relativePath = c.req.path.replace(/^\/www-assets\//, '')
   const filePath = path.join(process.cwd(), 'src/www/dist', relativePath)
-  if (!filePath.startsWith(path.join(process.cwd(), 'src/www/dist')) || !fs.existsSync(filePath)) {
+  if (
+    !filePath.startsWith(path.join(process.cwd(), 'src/www/dist')) ||
+    !fs.existsSync(filePath)
+  ) {
     return c.notFound()
   }
   return c.body(fs.readFileSync(filePath), 200, {
@@ -89,16 +127,23 @@ app.get('/www-assets/*', async (c) => {
 })
 
 app.get('/www-redirect', (c) => c.redirect('https://www.onetrueos.com', 301))
-app.get('/vercel-git-redirect', (c) => c.redirect('https://app.app.onetrueos.com', 301))
+app.get('/vercel-git-redirect', (c) =>
+  c.redirect('https://app.app.onetrueos.com', 301)
+)
 
 app.get('/debug', async (c) => {
   const poolStart = Date.now()
-  let poolOk = false, poolMs = 0, poolError: string | undefined, tables: string[] = []
+  let poolOk = false,
+    poolMs = 0,
+    poolError: string | undefined,
+    tables: string[] = []
 
   try {
     await Promise.race([
       pool.query('SELECT 1'),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 10_000)),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 10_000)
+      ),
     ])
     poolOk = true
     poolMs = Date.now() - poolStart
@@ -113,23 +158,49 @@ app.get('/debug', async (c) => {
     poolError = err instanceof Error ? err.message : String(err)
   }
 
-  let migrations: { latest: string | null; count: number } | { error: string } = { latest: null, count: 0 }
+  let migrations: { latest: string | null; count: number } | { error: string } =
+    { latest: null, count: 0 }
   try {
-    const m = await pool.query(`SELECT name FROM drizzle.__drizzle_migrations ORDER BY created_at DESC LIMIT 1`)
-    const count = await pool.query(`SELECT COUNT(*) FROM drizzle.__drizzle_migrations`)
-    migrations = { latest: m.rows[0]?.name ?? null, count: parseInt(count.rows[0].count) }
+    const m = await pool.query(
+      `SELECT name FROM drizzle.__drizzle_migrations ORDER BY created_at DESC LIMIT 1`
+    )
+    const count = await pool.query(
+      `SELECT COUNT(*) FROM drizzle.__drizzle_migrations`
+    )
+    migrations = {
+      latest: m.rows[0]?.name ?? null,
+      count: parseInt(count.rows[0].count),
+    }
   } catch {
     try {
-      const m = await pool.query(`SELECT name FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1`)
-      const count = await pool.query(`SELECT COUNT(*) FROM __drizzle_migrations`)
-      migrations = { latest: m.rows[0]?.name ?? null, count: parseInt(count.rows[0].count) }
+      const m = await pool.query(
+        `SELECT name FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1`
+      )
+      const count = await pool.query(
+        `SELECT COUNT(*) FROM __drizzle_migrations`
+      )
+      migrations = {
+        latest: m.rows[0]?.name ?? null,
+        count: parseInt(count.rows[0].count),
+      }
     } catch (err2) {
-      migrations = { error: err2 instanceof Error ? err2.message : String(err2) }
+      migrations = {
+        error: err2 instanceof Error ? err2.message : String(err2),
+      }
     }
   }
 
   const dbHost = (() => {
-    try { return new URL(process.env.DATABASE_URL!.replace(/^postgres(ql)?:\/\/[^@]+@/, 'https://')).hostname } catch { return null }
+    try {
+      return new URL(
+        process.env.DATABASE_URL!.replace(
+          /^postgres(ql)?:\/\/[^@]+@/,
+          'https://'
+        )
+      ).hostname
+    } catch {
+      return null
+    }
   })()
 
   const [userLookup, drizzleUserLookup, scrypt] = await Promise.all([
@@ -139,7 +210,14 @@ app.get('/debug', async (c) => {
   ])
 
   const authProbeStart = Date.now()
-  let authProbe: { ok: boolean; ms: number; url?: string; status?: number; error?: string; body?: string } = {
+  let authProbe: {
+    ok: boolean
+    ms: number
+    url?: string
+    status?: number
+    error?: string
+    body?: string
+  } = {
     ok: false,
     ms: 0,
   }
@@ -151,7 +229,10 @@ app.get('/debug', async (c) => {
         'Content-Type': 'application/json',
         Origin: probeUrl.origin,
       },
-      body: JSON.stringify({ email: 'nobody-probe@example.com', password: 'wrongpassword' }),
+      body: JSON.stringify({
+        email: 'nobody-probe@example.com',
+        password: 'wrongpassword',
+      }),
     })
     const probeResponse = await Promise.race([
       auth.handler(probeRequest),
@@ -180,9 +261,11 @@ app.get('/debug', async (c) => {
   const staleTables = ['process_domains']
   const tableSet = new Set(tables)
   const schema = {
-    ok: requiredTables.every(t => tableSet.has(t)) && !staleTables.some(t => tableSet.has(t)),
-    missing: requiredTables.filter(t => !tableSet.has(t)),
-    stale: staleTables.filter(t => tableSet.has(t)),
+    ok:
+      requiredTables.every((t) => tableSet.has(t)) &&
+      !staleTables.some((t) => tableSet.has(t)),
+    missing: requiredTables.filter((t) => !tableSet.has(t)),
+    stale: staleTables.filter((t) => tableSet.has(t)),
   }
 
   const [twimagProbe, xcomProbe] = await Promise.all([
@@ -190,37 +273,47 @@ app.get('/debug', async (c) => {
     probeOutboundProxy('https://x.com/'),
   ])
 
-  return c.json({
-    pool: { ok: poolOk, ms: poolMs, ...(poolError ? { error: poolError } : {}) },
-    userLookup,
-    drizzleUserLookup,
-    scrypt,
-    // Single source of truth now: the db-backed proxy_config row, read
-    // live (short-cached) by proxy.ts itself — no more env var to diverge
-    // from it. null means either nothing configured, or a db read failure
-    // (falls back to no proxy rather than a stale/wrong cached value).
-    activeOutboundProxyUrl: await getActiveOutboundProxyUrl(),
-    authProbe,
-    twimagProbe,
-    xcomProbe,
-    requestEnv: {
-      hasIncoming: Boolean((c.env as HttpBindings | undefined)?.incoming),
-      hasRawBody: Buffer.isBuffer(
-        ((c.env as HttpBindings | undefined)?.incoming as IncomingMessage & { rawBody?: Buffer })
-          ?.rawBody
-      ),
+  return c.json(
+    {
+      pool: {
+        ok: poolOk,
+        ms: poolMs,
+        ...(poolError ? { error: poolError } : {}),
+      },
+      userLookup,
+      drizzleUserLookup,
+      scrypt,
+      // Single source of truth now: the db-backed proxy_config row, read
+      // live (short-cached) by proxy.ts itself — no more env var to diverge
+      // from it. null means either nothing configured, or a db read failure
+      // (falls back to no proxy rather than a stale/wrong cached value).
+      activeOutboundProxyUrl: await getActiveOutboundProxyUrl(),
+      authProbe,
+      twimagProbe,
+      xcomProbe,
+      requestEnv: {
+        hasIncoming: Boolean((c.env as HttpBindings | undefined)?.incoming),
+        hasRawBody: Buffer.isBuffer(
+          (
+            (c.env as HttpBindings | undefined)?.incoming as IncomingMessage & {
+              rawBody?: Buffer
+            }
+          )?.rawBody
+        ),
+      },
+      tables,
+      schema,
+      migrations,
+      env: {
+        DATABASE_SSL: process.env.DATABASE_SSL,
+        NODE_TLS_REJECT_UNAUTHORIZED: process.env.NODE_TLS_REJECT_UNAUTHORIZED,
+        DATABASE_URL_SET: !!process.env.DATABASE_URL,
+        dbHost,
+        nodeVersion: process.version,
+      },
     },
-    tables,
-    schema,
-    migrations,
-    env: {
-      DATABASE_SSL: process.env.DATABASE_SSL,
-      NODE_TLS_REJECT_UNAUTHORIZED: process.env.NODE_TLS_REJECT_UNAUTHORIZED,
-      DATABASE_URL_SET: !!process.env.DATABASE_URL,
-      dbHost,
-      nodeVersion: process.version,
-    },
-  }, poolOk ? 200 : 503)
+    poolOk ? 200 : 503
+  )
 })
 
 app.get('/health', async (c) => {
@@ -228,7 +321,15 @@ app.get('/health', async (c) => {
   const frontend = checkFrontendBundle()
   const proxy = await checkProxyUrl()
 
-  const [direct, pooled, authTables, appTables, userLookup, authProbe, sidecar] = await Promise.all([
+  const [
+    direct,
+    pooled,
+    authTables,
+    appTables,
+    userLookup,
+    authProbe,
+    sidecar,
+  ] = await Promise.all([
     pingDatabase(),
     pingPool(),
     checkAuthTables(),
@@ -270,7 +371,12 @@ app.get('/health', async (c) => {
 
 app.basePath('/app/api/auth').route('/', authRoutes)
 
-app.use('/instance/**', middleware.provideDb, middleware.setIsLocal, middleware.logRequest)
+app.use(
+  '/instance/**',
+  middleware.provideDb,
+  middleware.setIsLocal,
+  middleware.logRequest
+)
 
 app.use(
   '/app/**',
@@ -316,14 +422,18 @@ app.get('/app/api/sidecar-config', async (c) => {
     return c.json({ message: 'Unauthorized' }, 401)
   }
 
-  const [row] = await db.select().from(schema.proxyConfig).where(eq(schema.proxyConfig.id, 1))
+  const [row] = await db
+    .select()
+    .from(schema.proxyConfig)
+    .where(eq(schema.proxyConfig.id, 1))
   const proxyUrl = row?.proxy_url ?? null
 
   if (!secret || proxyUrl === null) {
     return c.json({ proxyUrl })
   }
 
-  const { createCipheriv, createHash, randomBytes } = await import('node:crypto')
+  const { createCipheriv, createHash, randomBytes } =
+    await import('node:crypto')
   const key = createHash('sha256').update(secret).digest()
   const iv = randomBytes(12)
   const cipher = createCipheriv('aes-256-gcm', key, iv)
@@ -418,7 +528,7 @@ app.use(
   middleware.provideDb,
   middleware.parseCookies,
   middleware.betterAuthMiddleware,
-  middleware.requireAdmin,
+  middleware.requireAdmin
 )
 
 app.get('/storybook', (c) => c.redirect('/storybook/'))
@@ -436,7 +546,8 @@ app.get('/storybook/*', async (c) => {
 
   return c.body(fs.readFileSync(filePath), 200, {
     'Content-Type': contentType,
-    'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+    'Cache-Control':
+      ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
   })
 })
 
@@ -496,7 +607,9 @@ app.all('/instance/*', async (c) => {
   if (instanceId === null) {
     const webview = await resolveWebviewBySlug(slug)
     if (!webview) return c.json({ message: 'Not found' }, 404)
-    console.log(`[webview-route] slug=${slug} path=${upstreamPath} cookies=${c.req.raw.headers.get('cookie') ? c.req.raw.headers.get('cookie')!.split(';').length : 0}`)
+    console.log(
+      `[webview-route] slug=${slug} path=${upstreamPath} cookies=${c.req.raw.headers.get('cookie') ? c.req.raw.headers.get('cookie')!.split(';').length : 0}`
+    )
     return proxyWebviewRequest(webview.domain, upstreamPath, c.req.raw, slug)
   }
 
@@ -508,7 +621,9 @@ app.all('/instance/*', async (c) => {
 
   // Platform libs: /platform/libs/{name}@{version}.js — served from the registry,
   // never bundled into the instance tar. Versioned URLs are immutable.
-  const libMatch = upstreamPath.match(/^\/platform\/libs\/([a-z][a-z0-9-]*)@(\d+\.\d+\.\d+)\.js$/)
+  const libMatch = upstreamPath.match(
+    /^\/platform\/libs\/([a-z][a-z0-9-]*)@(\d+\.\d+\.\d+)\.js$/
+  )
   if (libMatch) {
     const [, name, version] = libMatch
     const content = await readRegistryLib(name, version)
@@ -551,13 +666,17 @@ app.all('/instance/*', async (c) => {
 
   if (contentType.includes('text/html')) {
     const text = file.data.toString('utf-8')
-    const transformed = replaceDomainInHTML(text, 'localhost', url.host, c.get('isLocal'))
+    const transformed = replaceDomainInHTML(
+      text,
+      'localhost',
+      url.host,
+      c.get('isLocal')
+    )
     return c.html(transformed)
   }
 
   return c.body(new Uint8Array(file.data), 200, { 'Content-Type': contentType })
 })
-
 ;['/app/*', '/app/**', '/app'].forEach((route) => {
   app.get(route, async (c) => {
     console.log('app route')

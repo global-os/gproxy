@@ -7,7 +7,12 @@ import { isAdminEmail } from '../constants/admin.js'
 
 const router = new Hono<Env>()
 
-router.use('*', middleware.provideDb, middleware.parseCookies, middleware.betterAuthMiddleware)
+router.use(
+  '*',
+  middleware.provideDb,
+  middleware.parseCookies,
+  middleware.betterAuthMiddleware
+)
 
 router.get('/proxy-config', async (c) => {
   const user = c.get('user')
@@ -15,7 +20,10 @@ router.get('/proxy-config', async (c) => {
   if (!isAdminEmail(user.email)) return c.json({ message: 'Forbidden' }, 403)
 
   const db = c.get('db')
-  const [row] = await db.select().from(schema.proxyConfig).where(eq(schema.proxyConfig.id, 1))
+  const [row] = await db
+    .select()
+    .from(schema.proxyConfig)
+    .where(eq(schema.proxyConfig.id, 1))
 
   // Sidecar has its own tiny status page, gated by the same shared secret —
   // no session cookie support there, so the secret rides along as a query
@@ -26,7 +34,11 @@ router.get('/proxy-config', async (c) => {
     ? `${sidecarUrl.replace(/\/$/, '')}/admin${sidecarSecret ? `?secret=${encodeURIComponent(sidecarSecret)}` : ''}`
     : null
 
-  return c.json({ proxyUrl: row?.proxy_url ?? null, updatedAt: row?.updated_at ?? null, sidecarAdminUrl })
+  return c.json({
+    proxyUrl: row?.proxy_url ?? null,
+    updatedAt: row?.updated_at ?? null,
+    sidecarAdminUrl,
+  })
 })
 
 router.put('/proxy-config', async (c) => {
@@ -34,7 +46,9 @@ router.put('/proxy-config', async (c) => {
   if (!user) return c.json({ message: 'Unauthorized' }, 401)
   if (!isAdminEmail(user.email)) return c.json({ message: 'Forbidden' }, 403)
 
-  const body = await c.req.json().catch(() => null) as { proxyUrl?: string | null } | null
+  const body = (await c.req.json().catch(() => null)) as {
+    proxyUrl?: string | null
+  } | null
   if (!body || (body.proxyUrl != null && typeof body.proxyUrl !== 'string')) {
     return c.json({ message: 'Expected { proxyUrl: string | null }' }, 400)
   }
@@ -46,7 +60,10 @@ router.put('/proxy-config', async (c) => {
     .where(eq(schema.proxyConfig.id, 1))
     .returning()
 
-  return c.json({ proxyUrl: row?.proxy_url ?? null, updatedAt: row?.updated_at ?? null })
+  return c.json({
+    proxyUrl: row?.proxy_url ?? null,
+    updatedAt: row?.updated_at ?? null,
+  })
 })
 
 router.get('/users', async (c) => {

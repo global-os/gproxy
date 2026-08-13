@@ -4,9 +4,14 @@ import { fileURLToPath } from 'node:url'
 import { FIXTURE_EMAIL, resolveFixturePath } from './fixture-path.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const gappDir = resolveFixturePath(FIXTURE_EMAIL, '~/Desktop/squint-editor.gapp')
+const gappDir = resolveFixturePath(
+  FIXTURE_EMAIL,
+  '~/Desktop/squint-editor.gapp'
+)
 if (!gappDir) {
-  throw new Error('squint-editor.gapp fixture not found under fixtures/by-user/*/ or user dir')
+  throw new Error(
+    'squint-editor.gapp fixture not found under fixtures/by-user/*/ or user dir'
+  )
 }
 
 const bundles = [
@@ -34,7 +39,7 @@ for (const { entry, outfile, globalName } of bundles) {
       '--platform=browser',
       `--outfile=${outfile}`,
     ],
-    { cwd: root, stdio: 'inherit' },
+    { cwd: root, stdio: 'inherit' }
   )
   console.log(`Wrote ${path.relative(root, outfile)}`)
 }

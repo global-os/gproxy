@@ -5,7 +5,11 @@ import { eq } from 'drizzle-orm'
 import { getDomain } from 'tldts'
 import { db } from '../../db/index.js'
 import * as schema from '../../db/schema.js'
-import { getActiveSessionId, captureResponseBody, recordTraffic } from './recording.js'
+import {
+  getActiveSessionId,
+  captureResponseBody,
+  recordTraffic,
+} from './recording.js'
 
 const brotliDecompressAsync = promisify(brotliDecompress)
 
@@ -29,28 +33,50 @@ let cachedProxyAgent: ProxyAgent | null = null
 let cacheExpiresAt = 0
 let lastError: string | null = null
 
-export async function resolveOutboundProxy(): Promise<{ agent: ProxyAgent | null; urlRedacted: string | null; error: string | null }> {
+export async function resolveOutboundProxy(): Promise<{
+  agent: ProxyAgent | null
+  urlRedacted: string | null
+  error: string | null
+}> {
   if (Date.now() < cacheExpiresAt) {
-    return { agent: cachedProxyAgent, urlRedacted: cachedProxyUrl ? redactProxyUrl(cachedProxyUrl) : null, error: lastError }
+    return {
+      agent: cachedProxyAgent,
+      urlRedacted: cachedProxyUrl ? redactProxyUrl(cachedProxyUrl) : null,
+      error: lastError,
+    }
   }
   try {
-    const [row] = await db.select().from(schema.proxyConfig).where(eq(schema.proxyConfig.id, 1))
+    const [row] = await db
+      .select()
+      .from(schema.proxyConfig)
+      .where(eq(schema.proxyConfig.id, 1))
     const url = row?.proxy_url || null
     if (url !== cachedProxyUrl) {
       cachedProxyAgent = url ? new ProxyAgent(url) : null
       cachedProxyUrl = url
-      console.log(url ? `[webview] outbound proxy active: ${redactProxyUrl(url)}` : '[webview] outbound proxy disabled (no proxy_url in db)')
+      console.log(
+        url
+          ? `[webview] outbound proxy active: ${redactProxyUrl(url)}`
+          : '[webview] outbound proxy disabled (no proxy_url in db)'
+      )
     }
     lastError = null
     cacheExpiresAt = Date.now() + CACHE_TTL_MS
   } catch (err) {
     lastError = err instanceof Error ? err.message : String(err)
-    console.error('[webview] failed to read proxy config from db, using no proxy until next check:', err)
+    console.error(
+      '[webview] failed to read proxy config from db, using no proxy until next check:',
+      err
+    )
     cachedProxyAgent = null
     cachedProxyUrl = null
     cacheExpiresAt = Date.now() + RETRY_TTL_MS
   }
-  return { agent: cachedProxyAgent, urlRedacted: cachedProxyUrl ? redactProxyUrl(cachedProxyUrl) : null, error: lastError }
+  return {
+    agent: cachedProxyAgent,
+    urlRedacted: cachedProxyUrl ? redactProxyUrl(cachedProxyUrl) : null,
+    error: lastError,
+  }
 }
 
 /** Current outbound proxy URL (redacted), read live from the db — used by /debug. */
@@ -64,9 +90,17 @@ if (sidecarUrl) {
   console.log('[webview] TLS sidecar active:', sidecarUrl)
 }
 
-type SidecarFetchInit = { method: string; headers: Headers; body: ArrayBuffer | null; redirect: 'follow' }
+type SidecarFetchInit = {
+  method: string
+  headers: Headers
+  body: ArrayBuffer | null
+  redirect: 'follow'
+}
 
-async function fetchViaSidecar(upstream: string, init: SidecarFetchInit): Promise<Response> {
+async function fetchViaSidecar(
+  upstream: string,
+  init: SidecarFetchInit
+): Promise<Response> {
   const headers: [string, string][] = []
   init.headers.forEach((value, name) => {
     // Omit Accept-Encoding — Go's http client adds gzip and auto-decompresses,
@@ -75,31 +109,41 @@ async function fetchViaSidecar(upstream: string, init: SidecarFetchInit): Promis
     headers.push([name, value])
   })
 
-  const body = init.body && init.body.byteLength > 0
-    ? Buffer.from(init.body).toString('base64')
-    : ''
+  const body =
+    init.body && init.body.byteLength > 0
+      ? Buffer.from(init.body).toString('base64')
+      : ''
 
   const sidecarResp = await fetch(`${sidecarUrl}/fetch`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(sidecarSecret ? { 'Authorization': `Bearer ${sidecarSecret}` } : {}),
+      ...(sidecarSecret ? { Authorization: `Bearer ${sidecarSecret}` } : {}),
     },
     body: JSON.stringify({ url: upstream, method: init.method, headers, body }),
   })
 
   if (!sidecarResp.ok) {
-    throw new Error(`sidecar ${sidecarResp.status}: ${await sidecarResp.text()}`)
+    throw new Error(
+      `sidecar ${sidecarResp.status}: ${await sidecarResp.text()}`
+    )
   }
 
-  const data = await sidecarResp.json() as { status: number; headers: [string, string][]; body: string }
+  const data = (await sidecarResp.json()) as {
+    status: number
+    headers: [string, string][]
+    body: string
+  }
 
   const responseHeaders = new Headers()
   for (const [name, value] of data.headers) {
     responseHeaders.append(name, value)
   }
 
-  return new Response(Buffer.from(data.body, 'base64'), { status: data.status, headers: responseHeaders })
+  return new Response(Buffer.from(data.body, 'base64'), {
+    status: data.status,
+    headers: responseHeaders,
+  })
 }
 
 const STRIP_RESPONSE_HEADERS = new Set([
@@ -120,19 +164,49 @@ const STRIP_RESPONSE_HEADERS = new Set([
 
 // Common file extensions that appear as path segments but are never real TLDs.
 const FILE_EXT_TLDS = new Set([
-  'js', 'mjs', 'cjs', 'ts', 'jsx', 'tsx',
-  'css', 'scss', 'less',
-  'php', 'html', 'htm', 'xml',
-  'json', 'yaml', 'yml',
-  'svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'avif',
-  'woff', 'woff2', 'ttf', 'eot', 'otf',
-  'map', 'gz', 'br', 'zip',
+  'js',
+  'mjs',
+  'cjs',
+  'ts',
+  'jsx',
+  'tsx',
+  'css',
+  'scss',
+  'less',
+  'php',
+  'html',
+  'htm',
+  'xml',
+  'json',
+  'yaml',
+  'yml',
+  'svg',
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'ico',
+  'avif',
+  'woff',
+  'woff2',
+  'ttf',
+  'eot',
+  'otf',
+  'map',
+  'gz',
+  'br',
+  'zip',
 ])
 
 /** True if the first path segment looks like a proxied cross-domain hostname. */
-function extractCrossDomain(upstreamPath: string): { domain: string; rest: string } | null {
+function extractCrossDomain(
+  upstreamPath: string
+): { domain: string; rest: string } | null {
   // Require 2+ dot-separated labels (covers x.com, api.x.com, abs.twimg.com, etc.)
-  const m = upstreamPath.match(/^\/([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*){1,})(\/.*)?$/i)
+  const m = upstreamPath.match(
+    /^\/([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*){1,})(\/.*)?$/i
+  )
   if (!m) return null
   const candidate = m[1]!
   const labels = candidate.split('.')
@@ -142,7 +216,7 @@ function extractCrossDomain(upstreamPath: string): { domain: string; rest: strin
   // Last label must not be a file extension masquerading as a TLD (rejects rsrc.php, api.js, etc.)
   if (FILE_EXT_TLDS.has(tld)) return null
   // Reject if any label is a minified-filename hex hash (e.g. a1954c7a, 542e285a).
-  if (labels.some(l => /^[0-9a-f]{6,16}$/i.test(l))) return null
+  if (labels.some((l) => /^[0-9a-f]{6,16}$/i.test(l))) return null
   return { domain: candidate, rest: m[2] || '/' }
 }
 
@@ -179,13 +253,14 @@ function isSameSite(a: string, b: string): boolean {
 function computeSecFetchHeaders(
   boundDomain: string,
   fetchDomain: string,
-  incomingRequest: Request,
+  incomingRequest: Request
 ): Record<string, string> {
-  const site = fetchDomain === boundDomain
-    ? 'same-origin'
-    : isSameSite(fetchDomain, boundDomain)
-      ? 'same-site'
-      : 'cross-site'
+  const site =
+    fetchDomain === boundDomain
+      ? 'same-origin'
+      : isSameSite(fetchDomain, boundDomain)
+        ? 'same-site'
+        : 'cross-site'
 
   const headers: Record<string, string> = { 'Sec-Fetch-Site': site }
 
@@ -201,8 +276,14 @@ function computeSecFetchHeaders(
 
 // Headers that must not be forwarded to the upstream.
 const HOP_BY_HOP = new Set([
-  'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
-  'te', 'trailers', 'transfer-encoding', 'upgrade',
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailers',
+  'transfer-encoding',
+  'upgrade',
   // Set to the upstream host by the fetch() call itself.
   'host',
   // We buffer the body, so let fetch() compute the correct length.
@@ -213,16 +294,30 @@ const HOP_BY_HOP = new Set([
   // calls to relative paths), not a real visit to the bound domain, so they
   // can't be forwarded as-is — stripped here and replaced below with values
   // computed for the bound-domain relationship instead.
-  'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'sec-fetch-user',
-  'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform',
-  'sec-ch-ua-arch', 'sec-ch-ua-bitness', 'sec-ch-ua-full-version',
-  'sec-ch-ua-full-version-list', 'sec-ch-ua-model', 'sec-ch-ua-wow64',
-  'sec-ch-prefers-color-scheme', 'sec-ch-prefers-reduced-motion',
-  'sec-ch-viewport-width', 'sec-ch-width',
+  'sec-fetch-dest',
+  'sec-fetch-mode',
+  'sec-fetch-site',
+  'sec-fetch-user',
+  'sec-ch-ua',
+  'sec-ch-ua-mobile',
+  'sec-ch-ua-platform',
+  'sec-ch-ua-arch',
+  'sec-ch-ua-bitness',
+  'sec-ch-ua-full-version',
+  'sec-ch-ua-full-version-list',
+  'sec-ch-ua-model',
+  'sec-ch-ua-wow64',
+  'sec-ch-prefers-color-scheme',
+  'sec-ch-prefers-reduced-motion',
+  'sec-ch-viewport-width',
+  'sec-ch-width',
   // Vercel infrastructure headers injected into every inbound request.
   // These reveal our deployment identity and proxy chain to upstream services,
   // which is exactly how X detected us ("Please use X.com or official X apps").
-  'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto',
+  'forwarded',
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-forwarded-proto',
   'x-real-ip',
 ])
 
@@ -263,7 +358,7 @@ function rewriteHtmlAttrs(html: string, boundDomain: string): string {
   return html.replace(
     /((?:src|href|action|srcset)=)(["'])(https?:\/\/[^"']+)\2/gi,
     (_match, attr: string, quote: string, url: string) =>
-      `${attr}${quote}${rewriteUrl(url, boundRe)}${quote}`,
+      `${attr}${quote}${rewriteUrl(url, boundRe)}${quote}`
   )
 }
 
@@ -384,7 +479,10 @@ function rewriteHtml(html: string, boundDomain: string): string {
   let result = rewriteHtmlAttrs(html, boundDomain)
   // Strip <meta http-equiv="Content-Security-Policy"> tags — they would block
   // our injected inline script the same way HTTP CSP headers do.
-  result = result.replace(/<meta[^>]+http-equiv\s*=\s*["']?content-security-policy["']?[^>]*>/gi, '')
+  result = result.replace(
+    /<meta[^>]+http-equiv\s*=\s*["']?content-security-policy["']?[^>]*>/gi,
+    ''
+  )
   // Inject as the first child of <head> so it runs before any site scripts.
   const intercept = buildInterceptScript(boundDomain)
   const injected = result.replace(/(<head[^>]*>)/i, `$1${intercept}`)
@@ -402,30 +500,65 @@ function rewriteHtml(html: string, boundDomain: string): string {
  */
 function rewriteCss(css: string, boundDomain: string): string {
   const boundRe = new RegExp(escapeRegex(boundDomain), 'gi')
-  return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (match, quote: string, url: string) => {
-    if (!/^https?:\/\//i.test(url)) return match
-    return `url(${quote}${rewriteUrl(url, boundRe)}${quote})`
-  })
+  return css.replace(
+    /url\(\s*(['"]?)([^'")]+)\1\s*\)/gi,
+    (match, quote: string, url: string) => {
+      if (!/^https?:\/\//i.test(url)) return match
+      return `url(${quote}${rewriteUrl(url, boundRe)}${quote})`
+    }
+  )
 }
 
 /** Probe a URL through the configured fetch path (sidecar → outboundProxy → direct) — used by /debug. */
-export async function probeOutboundProxy(url: string, timeoutMs = 8_000): Promise<{ ok: boolean; status?: number; ms: number; proxyActive: boolean; sidecarActive: boolean; error?: string }> {
+export async function probeOutboundProxy(
+  url: string,
+  timeoutMs = 8_000
+): Promise<{
+  ok: boolean
+  status?: number
+  ms: number
+  proxyActive: boolean
+  sidecarActive: boolean
+  error?: string
+}> {
   const t = Date.now()
   const { agent: outboundProxy } = await resolveOutboundProxy()
   try {
-    const fetchInit = { method: 'GET', headers: new Headers(), body: null, redirect: 'follow' as const }
+    const fetchInit = {
+      method: 'GET',
+      headers: new Headers(),
+      body: null,
+      redirect: 'follow' as const,
+    }
     const res = await Promise.race([
       sidecarUrl
         ? fetchViaSidecar(url, fetchInit)
         : outboundProxy
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ? (await undiciFetch(url, { redirect: 'follow', dispatcher: outboundProxy } as any)) as unknown as Response
+          ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ((await undiciFetch(url, {
+              redirect: 'follow',
+              dispatcher: outboundProxy,
+            } as any)) as unknown as Response)
           : fetch(url, { redirect: 'follow' }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), timeoutMs)
+      ),
     ])
-    return { ok: res.status < 500, status: res.status, ms: Date.now() - t, proxyActive: !!outboundProxy, sidecarActive: !!sidecarUrl }
+    return {
+      ok: res.status < 500,
+      status: res.status,
+      ms: Date.now() - t,
+      proxyActive: !!outboundProxy,
+      sidecarActive: !!sidecarUrl,
+    }
   } catch (err) {
-    return { ok: false, ms: Date.now() - t, proxyActive: !!outboundProxy, sidecarActive: !!sidecarUrl, error: err instanceof Error ? err.message : String(err) }
+    return {
+      ok: false,
+      ms: Date.now() - t,
+      proxyActive: !!outboundProxy,
+      sidecarActive: !!sidecarUrl,
+      error: err instanceof Error ? err.message : String(err),
+    }
   }
 }
 
@@ -452,11 +585,11 @@ function instrumentCastleTamperChecks(script: string): string {
   return script.replace(
     /function (u\d+)\(\)\{try\{return ([^;]{5,80}?)\}catch\{return!1\}\}/g,
     (_match, name: string, expr: string) =>
-      `function ${name}(){try{`
-      + `var __v=(${expr});`
-      + `console.log("[castle-probe] ${name} =",__v);`
-      + `return __v`
-      + `}catch(__e){console.log("[castle-probe] ${name} threw",__e&&__e.message);return!1}}`,
+      `function ${name}(){try{` +
+      `var __v=(${expr});` +
+      `console.log("[castle-probe] ${name} =",__v);` +
+      `return __v` +
+      `}catch(__e){console.log("[castle-probe] ${name} threw",__e&&__e.message);return!1}}`
   )
 }
 
@@ -464,12 +597,11 @@ export async function proxyWebviewRequest(
   boundDomain: string,
   upstreamPath: string,
   incomingRequest: Request,
-  slug = '',
+  slug = ''
 ): Promise<Response> {
-
-const t0 = Date.now()
-const sessionId = await getActiveSessionId()
-const cross = extractCrossDomain(upstreamPath)
+  const t0 = Date.now()
+  const sessionId = await getActiveSessionId()
+  const cross = extractCrossDomain(upstreamPath)
   const fetchDomain = cross ? cross.domain : boundDomain
   const fetchPath = cross ? cross.rest : upstreamPath
 
@@ -477,7 +609,9 @@ const cross = extractCrossDomain(upstreamPath)
 
   const boundOrigin = `https://${boundDomain}`
   const incomingCookie = incomingRequest.headers.get('cookie')
-  console.log(`[webview] ${incomingRequest.method} ${upstream} cookies=${incomingCookie ? incomingCookie.split(';').length : 0}`)
+  console.log(
+    `[webview] ${incomingRequest.method} ${upstream} cookies=${incomingCookie ? incomingCookie.split(';').length : 0}`
+  )
   const forwardHeaders = new Headers()
   for (const [key, value] of incomingRequest.headers.entries()) {
     const lower = key.toLowerCase()
@@ -485,27 +619,38 @@ const cross = extractCrossDomain(upstreamPath)
     if (isVercelInternalHeader(lower)) continue
     // Present as the bound domain to all upstream services so third-party
     // integrations (e.g. Google Sign-In) see x.com rather than our proxy.
-    if (lower === 'origin') { forwardHeaders.set('Origin', boundOrigin); continue }
-    if (lower === 'referer') { forwardHeaders.set('Referer', boundOrigin + '/'); continue }
+    if (lower === 'origin') {
+      forwardHeaders.set('Origin', boundOrigin)
+      continue
+    }
+    if (lower === 'referer') {
+      forwardHeaders.set('Referer', boundOrigin + '/')
+      continue
+    }
     // Drop the browser's Accept-Encoding so we can control it below.
     if (lower === 'accept-encoding') continue
     forwardHeaders.set(key, value)
   }
   forwardHeaders.set(
     'User-Agent',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
   )
   // Real Chrome sends these low-entropy client hints on every request; we
   // stripped the browser's own values above (they'd reveal the cross-origin
   // iframe context), so replace with values consistent with the User-Agent
   // and the sidecar's TLS profile. Their absence is a stronger bot signal
   // than TLS fingerprinting alone — Chrome never omits them.
-  forwardHeaders.set('sec-ch-ua', '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"')
+  forwardHeaders.set(
+    'sec-ch-ua',
+    '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"'
+  )
   forwardHeaders.set('sec-ch-ua-mobile', '?0')
   forwardHeaders.set('sec-ch-ua-platform', '"macOS"')
   // Sec-Fetch-Site/-Mode/-Dest/-User for the bound-domain relationship — see
   // computeSecFetchHeaders() for why these can't just be forwarded as-is.
-  for (const [name, value] of Object.entries(computeSecFetchHeaders(boundDomain, fetchDomain, incomingRequest))) {
+  for (const [name, value] of Object.entries(
+    computeSecFetchHeaders(boundDomain, fetchDomain, incomingRequest)
+  )) {
     forwardHeaders.set(name, value)
   }
   // Match Chrome's Accept-Encoding for fingerprint compatibility.
@@ -518,7 +663,11 @@ const cross = extractCrossDomain(upstreamPath)
   // Vercel. Buffering also lets fetch() set the correct Content-Length.
   let body: ArrayBuffer | null = null
   if (method !== 'GET' && method !== 'HEAD' && incomingRequest.body) {
-    try { body = await incomingRequest.arrayBuffer() } catch { /* empty body */ }
+    try {
+      body = await incomingRequest.arrayBuffer()
+    } catch {
+      /* empty body */
+    }
   }
 
   let upstreamResponse: Response
@@ -534,7 +683,10 @@ const cross = extractCrossDomain(upstreamPath)
       upstreamResponse = await fetchViaSidecar(upstream, fetchInit)
     } else if (outboundProxy) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      upstreamResponse = (await undiciFetch(upstream, { ...fetchInit, dispatcher: outboundProxy } as any)) as unknown as Response
+      upstreamResponse = (await undiciFetch(upstream, {
+        ...fetchInit,
+        dispatcher: outboundProxy,
+      } as any)) as unknown as Response
     } else {
       upstreamResponse = await fetch(upstream, fetchInit)
     }
@@ -542,7 +694,10 @@ const cross = extractCrossDomain(upstreamPath)
     console.error(`[webview] upstream fetch failed for ${upstream}:`, err)
     if (sessionId != null) {
       recordTraffic({
-        sessionId, slug, method, upstreamUrl: upstream,
+        sessionId,
+        slug,
+        method,
+        upstreamUrl: upstream,
         requestHeaders: headersToArray(forwardHeaders),
         requestBody: body ? Buffer.from(body).toString('base64') : null,
         responseStatus: 0,
@@ -574,8 +729,12 @@ const cross = extractCrossDomain(upstreamPath)
   // separate string, avoiding the comma-joining that headers.entries() can
   // produce, which corrupts cookie values that contain commas (e.g. expires).
   const setCookies: string[] =
-    typeof (upstreamResponse.headers as unknown as { getSetCookie?(): string[] }).getSetCookie === 'function'
-      ? (upstreamResponse.headers as unknown as { getSetCookie(): string[] }).getSetCookie()
+    typeof (
+      upstreamResponse.headers as unknown as { getSetCookie?(): string[] }
+    ).getSetCookie === 'function'
+      ? (
+          upstreamResponse.headers as unknown as { getSetCookie(): string[] }
+        ).getSetCookie()
       : []
   for (const raw of setCookies) {
     responseHeaders.append('Set-Cookie', rewriteSetCookie(raw))
@@ -609,7 +768,10 @@ const cross = extractCrossDomain(upstreamPath)
     if (contentType.includes('text/css')) {
       const css = await upstreamResponse.text()
       responseHeaders.delete('content-length')
-      return new Response(rewriteCss(css, boundDomain), { status: upstreamResponse.status, headers: responseHeaders })
+      return new Response(rewriteCss(css, boundDomain), {
+        status: upstreamResponse.status,
+        headers: responseHeaders,
+      })
     }
 
     // Castle.io (X's bot-detection SDK, ondemand.castle.*.js) used to be
@@ -634,7 +796,10 @@ const cross = extractCrossDomain(upstreamPath)
       responseHeaders.delete('content-length')
       if (sessionId != null) {
         recordTraffic({
-          sessionId, slug, method, upstreamUrl: upstream,
+          sessionId,
+          slug,
+          method,
+          upstreamUrl: upstream,
           requestHeaders: headersToArray(forwardHeaders),
           requestBody: body ? Buffer.from(body).toString('base64') : null,
           responseStatus: upstreamResponse.status,
@@ -644,13 +809,23 @@ const cross = extractCrossDomain(upstreamPath)
           durationMs: Date.now() - t0,
         })
       }
-      return new Response(instrumented, { status: upstreamResponse.status, headers: responseHeaders })
+      return new Response(instrumented, {
+        status: upstreamResponse.status,
+        headers: responseHeaders,
+      })
     }
 
     if (sessionId != null) {
-      const { body: buf, text: respText, encoding: respEncoding } = await captureResponseBody(upstreamResponse)
+      const {
+        body: buf,
+        text: respText,
+        encoding: respEncoding,
+      } = await captureResponseBody(upstreamResponse)
       recordTraffic({
-        sessionId, slug, method, upstreamUrl: upstream,
+        sessionId,
+        slug,
+        method,
+        upstreamUrl: upstream,
         requestHeaders: headersToArray(forwardHeaders),
         requestBody: body ? Buffer.from(body).toString('base64') : null,
         responseStatus: upstreamResponse.status,
@@ -660,7 +835,10 @@ const cross = extractCrossDomain(upstreamPath)
         durationMs: Date.now() - t0,
       })
       responseHeaders.delete('content-length')
-      return new Response(buf, { status: upstreamResponse.status, headers: responseHeaders })
+      return new Response(buf, {
+        status: upstreamResponse.status,
+        headers: responseHeaders,
+      })
     }
 
     return new Response(upstreamResponse.body, {
@@ -678,7 +856,10 @@ const cross = extractCrossDomain(upstreamPath)
   responseHeaders.delete('content-length')
   if (sessionId != null) {
     recordTraffic({
-      sessionId, slug, method, upstreamUrl: upstream,
+      sessionId,
+      slug,
+      method,
+      upstreamUrl: upstream,
       requestHeaders: headersToArray(forwardHeaders),
       requestBody: body ? Buffer.from(body).toString('base64') : null,
       responseStatus: upstreamResponse.status,

@@ -8,7 +8,10 @@ import { resolveGappConfig } from './resolve-config.js'
 import { resolvePlatformDependencies } from './resolve-dependencies.js'
 import { resolveLibDeps, type ResolvedLib } from './resolve-lib-deps.js'
 
-function injectDependencyScripts(html: string, deps: { path: string }[]): string {
+function injectDependencyScripts(
+  html: string,
+  deps: { path: string }[]
+): string {
   if (deps.length === 0) return html
   const tags = deps.map((d) => `<script src="${d.path}"></script>`).join('\n')
   const marker = '<script type="module" src="app.js"></script>'
@@ -25,11 +28,19 @@ function injectImportMap(html: string, libs: ResolvedLib[]): string {
   const platformImports: Record<string, string> = {}
   for (const lib of libs) platformImports[lib.name] = lib.urlPath
 
-  const existingMatch = html.match(/<script type="importmap">([\s\S]*?)<\/script>/)
+  const existingMatch = html.match(
+    /<script type="importmap">([\s\S]*?)<\/script>/
+  )
   if (existingMatch) {
     let existing: { imports?: Record<string, string> } = {}
-    try { existing = JSON.parse(existingMatch[1]) } catch { /* keep empty */ }
-    const merged = { imports: { ...platformImports, ...(existing.imports ?? {}) } }
+    try {
+      existing = JSON.parse(existingMatch[1])
+    } catch {
+      /* keep empty */
+    }
+    const merged = {
+      imports: { ...platformImports, ...(existing.imports ?? {}) },
+    }
     const replacement = `<script type="importmap">\n${JSON.stringify(merged, null, 2)}\n</script>`
     return html.replace(existingMatch[0], replacement)
   }
@@ -48,7 +59,9 @@ function injectImportMap(html: string, libs: ResolvedLib[]): string {
 
 function injectSideEffectModules(html: string, libs: ResolvedLib[]): string {
   if (libs.length === 0) return html
-  const tags = libs.map((l) => `<script type="module">import '${l.name}'</script>`).join('\n')
+  const tags = libs
+    .map((l) => `<script type="module">import '${l.name}'</script>`)
+    .join('\n')
   const marker = '<script type="module" src="app.js"></script>'
   if (html.includes(marker)) {
     return html.replace(marker, `${tags}\n${marker}`)
@@ -59,10 +72,12 @@ function injectSideEffectModules(html: string, libs: ResolvedLib[]): string {
 export async function compileGappTree(
   dirName: string,
   files: FileEntry[],
-  ctx?: GappCompileContext,
+  ctx?: GappCompileContext
 ): Promise<FileEntry[]> {
   const manifest = resolveGappConfig(dirName, files)
-  console.log(`[compile-gapp] ${dirName}: manifest.deps=${JSON.stringify(manifest?.deps)} hasSquint=${!!manifest?.compile?.squint}`)
+  console.log(
+    `[compile-gapp] ${dirName}: manifest.deps=${JSON.stringify(manifest?.deps)} hasSquint=${!!manifest?.compile?.squint}`
+  )
 
   const libs = manifest?.deps ? resolveLibDeps(manifest.deps) : []
   const hasSquint = !!manifest?.compile?.squint
@@ -78,7 +93,10 @@ export async function compileGappTree(
     if (entryIdx < 0 || libs.length === 0) return files
     const html = files[entryIdx]!.content.toString('utf8')
     const out = [...files]
-    out[entryIdx] = { ...out[entryIdx]!, content: Buffer.from(injectImportMap(html, libs), 'utf8') }
+    out[entryIdx] = {
+      ...out[entryIdx]!,
+      content: Buffer.from(injectImportMap(html, libs), 'utf8'),
+    }
     return out
   }
 
@@ -91,7 +109,10 @@ export async function compileGappTree(
   }
 
   const bundleLabel = ctx?.bundleName ?? dirName
-  await ctx?.log.info('compile', `Compiling ${squint.source} → ${squint.output} for ${bundleLabel}`)
+  await ctx?.log.info(
+    'compile',
+    `Compiling ${squint.source} → ${squint.output} for ${bundleLabel}`
+  )
 
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'gapp-source-'))
   try {
@@ -116,11 +137,15 @@ export async function compileGappTree(
     const out = files.filter(
       (f) =>
         f.path !== `${dirName}/${squint.output}` &&
-        !platformDeps.some((d) => f.path === `${dirName}/${d.path}`),
+        !platformDeps.some((d) => f.path === `${dirName}/${d.path}`)
     )
 
     for (const dep of platformDeps) {
-      out.push({ name: dep.path, path: `${dirName}/${dep.path}`, content: dep.content })
+      out.push({
+        name: dep.path,
+        path: `${dirName}/${dep.path}`,
+        content: dep.content,
+      })
     }
 
     out.push({
@@ -133,7 +158,10 @@ export async function compileGappTree(
     if (entryIdx >= 0) {
       let html = out[entryIdx]!.content.toString('utf8')
       if (platformDeps.length > 0) {
-        html = injectDependencyScripts(html, platformDeps.map((d) => ({ path: d.path })))
+        html = injectDependencyScripts(
+          html,
+          platformDeps.map((d) => ({ path: d.path }))
+        )
       }
       if (libs.length > 0) {
         html = injectImportMap(html, libs)
@@ -142,7 +170,10 @@ export async function compileGappTree(
       out[entryIdx] = { ...out[entryIdx]!, content: Buffer.from(html, 'utf8') }
     }
 
-    await ctx?.log.info('compile', `Compiled ${squint.output} (${appJs.length} bytes) for ${bundleLabel}`)
+    await ctx?.log.info(
+      'compile',
+      `Compiled ${squint.output} (${appJs.length} bytes) for ${bundleLabel}`
+    )
 
     return out
   } finally {

@@ -11,7 +11,12 @@ interface Props {
   onReady?: () => void
 }
 
-export function RotatingText({ phrases, interval = 2500, class: className, onReady }: Props) {
+export function RotatingText({
+  phrases,
+  interval = 2500,
+  class: className,
+  onReady,
+}: Props) {
   const wrapRef = useRef<HTMLSpanElement>(null)
   const span0Ref = useRef<HTMLSpanElement>(null)
   const span1Ref = useRef<HTMLSpanElement>(null)
@@ -116,7 +121,14 @@ export function RotatingText({ phrases, interval = 2500, class: className, onRea
       </span>
       <span
         ref={measurerRef}
-        style={{ position: 'fixed', top: '-9999px', left: '-9999px', visibility: 'hidden', whiteSpace: 'nowrap', pointerEvents: 'none' }}
+        style={{
+          position: 'fixed',
+          top: '-9999px',
+          left: '-9999px',
+          visibility: 'hidden',
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+        }}
         aria-hidden="true"
       />
     </>

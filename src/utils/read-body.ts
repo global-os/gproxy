@@ -2,8 +2,13 @@ import type { Context } from 'hono'
 import type { HttpBindings } from '@hono/node-server'
 import type { IncomingWithRawBody } from './buffer-incoming.js'
 
-export async function readRequestBody(c: Context, timeoutMs = 5_000): Promise<Buffer> {
-  const incoming = (c.env as HttpBindings | undefined)?.incoming as IncomingWithRawBody | undefined
+export async function readRequestBody(
+  c: Context,
+  timeoutMs = 5_000
+): Promise<Buffer> {
+  const incoming = (c.env as HttpBindings | undefined)?.incoming as
+    | IncomingWithRawBody
+    | undefined
   if (incoming?.rawBody instanceof Buffer) {
     return incoming.rawBody
   }
@@ -14,14 +19,21 @@ export async function readRequestBody(c: Context, timeoutMs = 5_000): Promise<Bu
       await ensureIncomingRawBody(incoming, timeoutMs)
       if (incoming.rawBody instanceof Buffer) return incoming.rawBody
     } catch (err) {
-      console.warn('[read-body] incoming read failed, falling back to Request:', err)
+      console.warn(
+        '[read-body] incoming read failed, falling back to Request:',
+        err
+      )
     }
   }
 
   const body = await Promise.race([
     c.req.arrayBuffer(),
     new Promise<ArrayBuffer>((_, reject) =>
-      setTimeout(() => reject(new Error(`Request body read timed out after ${timeoutMs}ms`)), timeoutMs)
+      setTimeout(
+        () =>
+          reject(new Error(`Request body read timed out after ${timeoutMs}ms`)),
+        timeoutMs
+      )
     ),
   ])
   return Buffer.from(body)

@@ -28,13 +28,12 @@ const client = new pg.Client({ connectionString: process.env.DATABASE_URL })
 await client.connect()
 
 try {
-  const nameFilter = names
-    ? `AND d.name = ANY($1::text[])`
-    : ''
+  const nameFilter = names ? `AND d.name = ANY($1::text[])` : ''
   const params = names ? [names] : []
 
   // Evict bundle cache first (FK references instances, not images)
-  const bundleResult = await client.query(`
+  const bundleResult = await client.query(
+    `
     DELETE FROM instance_bundle_cache ibc
     USING instances i
     JOIN process p ON p.id = i.process_id
@@ -43,21 +42,28 @@ try {
       AND d.name LIKE '%.gapp'
       ${nameFilter}
     RETURNING ibc.instance_id, d.name
-  `, params)
+  `,
+    params
+  )
 
   for (const row of bundleResult.rows) {
-    console.log(`Evicted bundle cache for instance ${row.instance_id} (${row.name})`)
+    console.log(
+      `Evicted bundle cache for instance ${row.instance_id} (${row.name})`
+    )
   }
 
   // Delete images
-  const imageResult = await client.query(`
+  const imageResult = await client.query(
+    `
     DELETE FROM image i
     USING directory d
     WHERE i.directory_id = d.id
       AND d.name LIKE '%.gapp'
       ${nameFilter}
     RETURNING i.id, d.name, LEFT(i.directory_checksum, 8) AS hash
-  `, params)
+  `,
+    params
+  )
 
   for (const row of imageResult.rows) {
     console.log(`Deleted image ${row.id} for ${row.name} (hash ${row.hash})`)

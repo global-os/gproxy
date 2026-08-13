@@ -15,8 +15,14 @@ function vfsId(...segments: string[]): string {
   return [MNT_ROOT, ...segments].join('/')
 }
 
-function parseVfsId(id: string): { mountName: string | null; segments: string[] } {
-  const parts = id.replace(/^\/mnt\/?/, '').split('/').filter(Boolean)
+function parseVfsId(id: string): {
+  mountName: string | null
+  segments: string[]
+} {
+  const parts = id
+    .replace(/^\/mnt\/?/, '')
+    .split('/')
+    .filter(Boolean)
   const [mountName = null, ...segments] = parts
   return { mountName, segments }
 }
@@ -51,7 +57,7 @@ export type VfsReadResult = {
 export class VfsError extends Error {
   constructor(
     message: string,
-    readonly status: 400 | 403 | 404 | 501 = 400,
+    readonly status: 400 | 403 | 404 | 501 = 400
   ) {
     super(message)
   }
@@ -76,7 +82,7 @@ class RegistryMount implements VirtualMount {
         parent_id: MNT_ROOT,
         can_go_up: true,
         path: '/mnt/registry',
-        entries: names.map(name => ({
+        entries: names.map((name) => ({
           type: 'directory',
           id: vfsId('registry', name),
           name,
@@ -94,8 +100,8 @@ class RegistryMount implements VirtualMount {
         can_go_up: true,
         path: `/mnt/registry/${segments[0]}`,
         entries: files
-          .filter(f => f.endsWith('.js'))
-          .map(name => ({
+          .filter((f) => f.endsWith('.js'))
+          .map((name) => ({
             type: 'file',
             id: vfsId('registry', segments[0], name),
             name,
@@ -117,7 +123,8 @@ class RegistryMount implements VirtualMount {
     try {
       content = await fsAsync.readFile(filePath, 'utf8')
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') throw new VfsError('Not found', 404)
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT')
+        throw new VfsError('Not found', 404)
       throw err
     }
     return {
@@ -179,7 +186,7 @@ export async function vfsBrowse(id: string): Promise<VfsBrowseResult> {
       parent_id: null,
       can_go_up: true,
       path: '/mnt',
-      entries: Object.keys(mounts).map(name => ({
+      entries: Object.keys(mounts).map((name) => ({
         type: 'directory',
         id: vfsId(name),
         name,
@@ -188,12 +195,14 @@ export async function vfsBrowse(id: string): Promise<VfsBrowseResult> {
   }
 
   const { mountName, segments } = parseVfsId(id)
-  if (!mountName || !mounts[mountName]) throw new VfsError('Mount not found', 404)
+  if (!mountName || !mounts[mountName])
+    throw new VfsError('Mount not found', 404)
   return mounts[mountName].browse(segments)
 }
 
 export async function vfsRead(id: string): Promise<VfsReadResult> {
   const { mountName, segments } = parseVfsId(id)
-  if (!mountName || !mounts[mountName]) throw new VfsError('Mount not found', 404)
+  if (!mountName || !mounts[mountName])
+    throw new VfsError('Mount not found', 404)
   return mounts[mountName].read(segments)
 }

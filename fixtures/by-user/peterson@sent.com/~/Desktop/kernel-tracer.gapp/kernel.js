@@ -7,15 +7,21 @@ export function postToParent(message) {
   window.parent.postMessage(message, '*')
 }
 
-export function waitForAnyMessage(types, { timeoutMs = 10_000, generation = 0, isCurrent } = {}) {
+export function waitForAnyMessage(
+  types,
+  { timeoutMs = 10_000, generation = 0, isCurrent } = {}
+) {
   const expected = new Set(types)
   return new Promise((resolve, reject) => {
-    const timer = timeoutMs > 0
-      ? window.setTimeout(() => {
-          cleanup()
-          reject(new Error(`Timed out waiting for ${[...expected].join(' | ')}`))
-        }, timeoutMs)
-      : null
+    const timer =
+      timeoutMs > 0
+        ? window.setTimeout(() => {
+            cleanup()
+            reject(
+              new Error(`Timed out waiting for ${[...expected].join(' | ')}`)
+            )
+          }, timeoutMs)
+        : null
 
     const onMessage = (event) => {
       const data = event.data
@@ -34,14 +40,18 @@ export function waitForAnyMessage(types, { timeoutMs = 10_000, generation = 0, i
   })
 }
 
-export function waitForMessage(type, { timeoutMs = 10_000, generation = 0, isCurrent } = {}) {
+export function waitForMessage(
+  type,
+  { timeoutMs = 10_000, generation = 0, isCurrent } = {}
+) {
   return new Promise((resolve, reject) => {
-    const timer = timeoutMs > 0
-      ? window.setTimeout(() => {
-          cleanup()
-          reject(new Error(`Timed out waiting for ${type}`))
-        }, timeoutMs)
-      : null
+    const timer =
+      timeoutMs > 0
+        ? window.setTimeout(() => {
+            cleanup()
+            reject(new Error(`Timed out waiting for ${type}`))
+          }, timeoutMs)
+        : null
 
     const onMessage = (event) => {
       const data = event.data

@@ -21,7 +21,7 @@ export function createWorkspaceEventStream(
   db: NodePgDatabase<typeof schema>,
   workspaceId: number,
   afterId: number,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder()
 

@@ -1,6 +1,11 @@
 import { h, render } from './preact.mjs'
 import { useCallback, useEffect, useRef, useState } from './hooks.mjs'
-import { onTraceEvent, postToParent, waitForAnyMessage, waitForMessage } from './kernel.js'
+import {
+  onTraceEvent,
+  postToParent,
+  waitForAnyMessage,
+  waitForMessage,
+} from './kernel.js'
 
 const MAX_EVENTS = 500
 
@@ -29,7 +34,9 @@ function matchesFilter(event, filter) {
     event.title,
     event.message?.type,
     JSON.stringify(event.message),
-  ].join(' ').toLowerCase()
+  ]
+    .join(' ')
+    .toLowerCase()
   return haystack.includes(filter.toLowerCase())
 }
 
@@ -78,14 +85,18 @@ function KernelTracerApp() {
     pausedRef.current = paused
   }, [paused])
 
-  const connect = useCallback(() => connectTask.run(async (_gen, isCurrent) => {
-    postToParent({ type: 'ready' })
-    await waitForAnyMessage(['init:fresh', 'init'], { isCurrent })
-    postToParent({ type: 'trace:subscribe' })
-    await waitForMessage('trace:subscribed', { isCurrent })
-    setConnected(true)
-    return true
-  }), [connectTask])
+  const connect = useCallback(
+    () =>
+      connectTask.run(async (_gen, isCurrent) => {
+        postToParent({ type: 'ready' })
+        await waitForAnyMessage(['init:fresh', 'init'], { isCurrent })
+        postToParent({ type: 'trace:subscribe' })
+        await waitForMessage('trace:subscribed', { isCurrent })
+        setConnected(true)
+        return true
+      }),
+    [connectTask]
+  )
 
   useEffect(() => {
     void connect()
@@ -108,9 +119,10 @@ function KernelTracerApp() {
   }, [])
 
   const filtered = events.filter((event) => matchesFilter(event, filter))
-  const selected = filtered.find((event) => event.id === selectedId)
-    ?? events.find((event) => event.id === selectedId)
-    ?? null
+  const selected =
+    filtered.find((event) => event.id === selectedId) ??
+    events.find((event) => event.id === selectedId) ??
+    null
 
   const statusText = connectTask.error
     ? connectTask.error
@@ -120,24 +132,40 @@ function KernelTracerApp() {
         ? `${filtered.length} shown · ${events.length} captured · ${paused ? 'paused' : 'live'}`
         : 'Idle'
 
-  return h('div', { class: 'shell' },
-    h('div', { class: 'toolbar' },
-      h('button', {
-        type: 'button',
-        disabled: connectTask.isPending,
-        onClick: () => void connect(),
-      }, 'Reconnect'),
-      h('button', {
-        type: 'button',
-        onClick: () => setPaused((value) => !value),
-      }, paused ? 'Resume' : 'Pause'),
-      h('button', {
-        type: 'button',
-        onClick: () => {
-          setEvents([])
-          setSelectedId(null)
+  return h(
+    'div',
+    { class: 'shell' },
+    h(
+      'div',
+      { class: 'toolbar' },
+      h(
+        'button',
+        {
+          type: 'button',
+          disabled: connectTask.isPending,
+          onClick: () => void connect(),
         },
-      }, 'Clear'),
+        'Reconnect'
+      ),
+      h(
+        'button',
+        {
+          type: 'button',
+          onClick: () => setPaused((value) => !value),
+        },
+        paused ? 'Resume' : 'Pause'
+      ),
+      h(
+        'button',
+        {
+          type: 'button',
+          onClick: () => {
+            setEvents([])
+            setSelectedId(null)
+          },
+        },
+        'Clear'
+      ),
       h('input', {
         class: 'filter',
         type: 'search',
@@ -145,48 +173,82 @@ function KernelTracerApp() {
         value: filter,
         onInput: (event) => setFilter(event.currentTarget.value),
       }),
-      connected && h('span', { class: 'pill' }, 'subscribed'),
+      connected && h('span', { class: 'pill' }, 'subscribed')
     ),
-    h('div', { class: 'panel' },
-      h('div', { class: 'list-head' },
+    h(
+      'div',
+      { class: 'panel' },
+      h(
+        'div',
+        { class: 'list-head' },
         h('span', null, 'Time'),
         h('span', null, 'Dir'),
         h('span', null, 'Message'),
-        h('span', null, 'Source'),
+        h('span', null, 'Source')
       ),
-      h('div', { class: 'list-body' },
+      h(
+        'div',
+        { class: 'list-body' },
         filtered.length === 0
-          ? h('div', { class: 'empty' },
+          ? h(
+              'div',
+              { class: 'empty' },
               connectTask.isPending
                 ? 'Waiting for kernel… open another app to generate traffic.'
-                : 'No events yet. Launch or use another .gapp window.')
-          : filtered.map((event) => h('div', {
-              key: event.id,
-              class: `event-row${selectedId === event.id ? ' selected' : ''}`,
-              onClick: () => setSelectedId(event.id),
-            },
-            h('span', null, formatClock(event.at)),
-            h('span', { class: event.direction === 'in' ? 'dir-in' : 'dir-out' },
-              event.direction === 'in' ? '↓' : '↑'),
-            h('span', { class: 'type' }, event.message?.type ?? '(no type)'),
-            h('span', { class: 'source' }, event.bundleName || event.title || `#${event.windowId}`),
-          )),
-      ),
+                : 'No events yet. Launch or use another .gapp window.'
+            )
+          : filtered.map((event) =>
+              h(
+                'div',
+                {
+                  key: event.id,
+                  class: `event-row${selectedId === event.id ? ' selected' : ''}`,
+                  onClick: () => setSelectedId(event.id),
+                },
+                h('span', null, formatClock(event.at)),
+                h(
+                  'span',
+                  { class: event.direction === 'in' ? 'dir-in' : 'dir-out' },
+                  event.direction === 'in' ? '↓' : '↑'
+                ),
+                h(
+                  'span',
+                  { class: 'type' },
+                  event.message?.type ?? '(no type)'
+                ),
+                h(
+                  'span',
+                  { class: 'source' },
+                  event.bundleName || event.title || `#${event.windowId}`
+                )
+              )
+            )
+      )
     ),
-    h('div', { class: 'detail' },
+    h(
+      'div',
+      { class: 'detail' },
       selected
-        ? JSON.stringify({
-            at: selected.at,
-            direction: selected.direction,
-            windowId: selected.windowId,
-            processId: selected.processId,
-            bundleName: selected.bundleName,
-            title: selected.title,
-            message: selected.message,
-          }, null, 2)
-        : 'Select an event to inspect the full payload.',
+        ? JSON.stringify(
+            {
+              at: selected.at,
+              direction: selected.direction,
+              windowId: selected.windowId,
+              processId: selected.processId,
+              bundleName: selected.bundleName,
+              title: selected.title,
+              message: selected.message,
+            },
+            null,
+            2
+          )
+        : 'Select an event to inspect the full payload.'
     ),
-    h('div', { class: `statusbar${connectTask.error ? ' error' : ''}` }, statusText),
+    h(
+      'div',
+      { class: `statusbar${connectTask.error ? ' error' : ''}` },
+      statusText
+    )
   )
 }
 

@@ -16,7 +16,8 @@ export const authButtonCls =
 export const authSecondaryButtonCls =
   'w-full py-2.5 px-4 text-sm font-semibold text-violet-300 bg-white/5 border border-violet-400/30 hover:bg-violet-400/10 rounded-md transition-colors cursor-pointer text-center no-underline inline-block'
 
-export const authLinkCls = 'text-sm text-violet-400 hover:text-violet-300 font-medium no-underline'
+export const authLinkCls =
+  'text-sm text-violet-400 hover:text-violet-300 font-medium no-underline'
 
 export function AuthLayout({ children }: PropsWithChildren) {
   return (
@@ -29,7 +30,10 @@ export function AuthLayout({ children }: PropsWithChildren) {
     >
       <header className="bg-white/5 backdrop-blur-sm border-b border-white/10">
         <div className="max-w-5xl mx-auto px-6 py-4">
-          <Link to="/" className="text-xl font-bold tracking-tight text-violet-400 no-underline hover:text-violet-300">
+          <Link
+            to="/"
+            className="text-xl font-bold tracking-tight text-violet-400 no-underline hover:text-violet-300"
+          >
             GlobalOS
           </Link>
         </div>
@@ -49,7 +53,7 @@ export function AuthCard({
     <div
       className={cn(
         'w-full max-w-md backdrop-blur-sm rounded-lg shadow-[0_2px_40px_rgba(139,92,246,0.16)] border border-indigo-300/25 px-8 py-8',
-        className,
+        className
       )}
       style={{
         backgroundImage:

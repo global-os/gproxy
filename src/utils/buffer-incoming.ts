@@ -4,7 +4,7 @@ export type IncomingWithRawBody = IncomingMessage & { rawBody?: Buffer }
 
 export async function ensureIncomingRawBody(
   incoming: IncomingWithRawBody,
-  timeoutMs = 10_000,
+  timeoutMs = 10_000
 ): Promise<void> {
   if (incoming.method === 'GET' || incoming.method === 'HEAD') return
   if (incoming.rawBody instanceof Buffer) return

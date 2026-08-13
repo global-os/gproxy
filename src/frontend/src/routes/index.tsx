@@ -1,6 +1,11 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
-import { AuthLayout, AuthCard, authButtonCls, authSecondaryButtonCls } from '../components/AuthLayout'
+import {
+  AuthLayout,
+  AuthCard,
+  authButtonCls,
+  authSecondaryButtonCls,
+} from '../components/AuthLayout'
 import { useSession } from '../lib/auth-client'
 
 export const Route = createFileRoute('/')({
@@ -44,7 +49,9 @@ function Index() {
   return (
     <AuthLayout>
       <AuthCard>
-        <h1 className="m-0 text-xl font-medium text-gray-100">Welcome to GlobalOS</h1>
+        <h1 className="m-0 text-xl font-medium text-gray-100">
+          Welcome to GlobalOS
+        </h1>
         <p className="mt-2 mb-8 text-sm text-gray-400 leading-relaxed">
           Your workspace desktop, anywhere globally.
         </p>

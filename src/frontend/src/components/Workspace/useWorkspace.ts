@@ -1,6 +1,18 @@
-import { MouseEvent, useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
+import {
+  MouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+} from 'react'
 import { reducer } from './reducer'
-import { ResizeHandle, State, WorkspaceActionKind, WorkspaceActions } from './types'
+import {
+  ResizeHandle,
+  State,
+  WorkspaceActionKind,
+  WorkspaceActions,
+} from './types'
 
 const initialState: State = {
   nextWindowID: 1,
@@ -13,7 +25,11 @@ const initialState: State = {
   zIndexCounter: 1,
 }
 
-function persistWindowGeometry(workspaceId: string, windowId: number, patch: { x: number; y: number; width?: number; height?: number }) {
+function persistWindowGeometry(
+  workspaceId: string,
+  windowId: number,
+  patch: { x: number; y: number; width?: number; height?: number }
+) {
   void fetch(`/api/workspaces/${workspaceId}/windows/${windowId}`, {
     method: 'PATCH',
     credentials: 'include',
@@ -22,26 +38,32 @@ function persistWindowGeometry(workspaceId: string, windowId: number, patch: { x
   })
 }
 
-export function useWorkspace(workspaceId: string, onStartup?: (actions: WorkspaceActions) => void) {
+export function useWorkspace(
+  workspaceId: string,
+  onStartup?: (actions: WorkspaceActions) => void
+) {
   const [state, dispatch] = useReducer(reducer, initialState)
 
-  const actions = useMemo<WorkspaceActions>(() => ({
-    openWindow(windowSpec) {
-      dispatch({ type: WorkspaceActionKind.OPEN_WINDOW, payload: windowSpec })
-    },
-    setWindows(windows) {
-      dispatch({ type: WorkspaceActionKind.SET_WINDOWS, payload: windows })
-    },
-    focusWindow(windowId, zIndex) {
-      dispatch({ type: WorkspaceActionKind.FOCUS_WINDOW, windowId, zIndex })
-    },
-    closeWindow(windowId) {
-      dispatch({ type: WorkspaceActionKind.CLOSE_WINDOW, windowId })
-    },
-    closeProcessWindows(processId) {
-      dispatch({ type: WorkspaceActionKind.CLOSE_PROCESS_WINDOWS, processId })
-    },
-  }), [])
+  const actions = useMemo<WorkspaceActions>(
+    () => ({
+      openWindow(windowSpec) {
+        dispatch({ type: WorkspaceActionKind.OPEN_WINDOW, payload: windowSpec })
+      },
+      setWindows(windows) {
+        dispatch({ type: WorkspaceActionKind.SET_WINDOWS, payload: windows })
+      },
+      focusWindow(windowId, zIndex) {
+        dispatch({ type: WorkspaceActionKind.FOCUS_WINDOW, windowId, zIndex })
+      },
+      closeWindow(windowId) {
+        dispatch({ type: WorkspaceActionKind.CLOSE_WINDOW, windowId })
+      },
+      closeProcessWindows(processId) {
+        dispatch({ type: WorkspaceActionKind.CLOSE_PROCESS_WINDOWS, processId })
+      },
+    }),
+    []
+  )
 
   const hasRun = useRef(false)
   useEffect(() => {
@@ -56,7 +78,8 @@ export function useWorkspace(workspaceId: string, onStartup?: (actions: Workspac
     prevDraggingWindow.current = state.draggingWindow
     if (prev !== undefined && state.draggingWindow === undefined) {
       const win = state.windows[prev]
-      if (win) persistWindowGeometry(workspaceId, win.id, { x: win.x, y: win.y })
+      if (win)
+        persistWindowGeometry(workspaceId, win.id, { x: win.x, y: win.y })
     }
   }, [state.draggingWindow, state.windows, workspaceId])
 
@@ -66,7 +89,13 @@ export function useWorkspace(workspaceId: string, onStartup?: (actions: Workspac
     prevResizingWindow.current = state.resizingWindow
     if (prev !== undefined && state.resizingWindow === undefined) {
       const win = state.windows[prev]
-      if (win) persistWindowGeometry(workspaceId, win.id, { x: win.x, y: win.y, width: win.width, height: win.height })
+      if (win)
+        persistWindowGeometry(workspaceId, win.id, {
+          x: win.x,
+          y: win.y,
+          width: win.width,
+          height: win.height,
+        })
     }
   }, [state.resizingWindow, state.windows, workspaceId])
 
@@ -77,7 +106,7 @@ export function useWorkspace(workspaceId: string, onStartup?: (actions: Workspac
 
     const index = Number.parseInt(
       windowEl.getAttribute('data-window-index') ?? '-1',
-      10,
+      10
     )
     if (index < 0) return
 
@@ -85,9 +114,9 @@ export function useWorkspace(workspaceId: string, onStartup?: (actions: Workspac
 
     dispatch({ type: WorkspaceActionKind.RAISE_WINDOW, index })
 
-    const resizeHandle = target.closest('[data-resize-handle]')?.getAttribute(
-      'data-resize-handle',
-    ) as ResizeHandle | null
+    const resizeHandle = target
+      .closest('[data-resize-handle]')
+      ?.getAttribute('data-resize-handle') as ResizeHandle | null
 
     if (resizeHandle === 'bottom-left' || resizeHandle === 'bottom-right') {
       dispatch({

@@ -6,7 +6,10 @@ import { Env } from '../types.js'
 import * as schema from '../db/schema.js'
 import { resolveDesktopDirectoryId } from '../services/desktop-files.js'
 import { resolveDesktopEntryIcon } from '../services/global-pc-icons.js'
-import { ensureGlobalPcForUser, resolveGlobalPcIdForWorkspace } from '../services/global-pc.js'
+import {
+  ensureGlobalPcForUser,
+  resolveGlobalPcIdForWorkspace,
+} from '../services/global-pc.js'
 import { buildUserFileIndex } from '../services/file-index.js'
 import { readResourceIconBmp } from '../services/local-icons.js'
 import { hashDir } from '../db/file.js'
@@ -18,7 +21,7 @@ router.use(
   middleware.provideDb,
   middleware.parseCookies,
   middleware.betterAuthMiddleware,
-  middleware.setRlsUser,
+  middleware.setRlsUser
 )
 
 router.get('/desktop', async (c) => {
@@ -46,31 +49,44 @@ router.get('/desktop', async (c) => {
   if (!desktopId) return c.json({ globalPcId, items: [] })
 
   const [dirs, files] = await Promise.all([
-    db.select({ id: schema.directory.id, name: schema.directory.name })
+    db
+      .select({ id: schema.directory.id, name: schema.directory.name })
       .from(schema.directory)
       .where(eq(schema.directory.parent_id, desktopId)),
-    db.select({ id: schema.file.id, name: schema.file.name, mime_type: schema.file.mime_type })
+    db
+      .select({
+        id: schema.file.id,
+        name: schema.file.name,
+        mime_type: schema.file.mime_type,
+      })
       .from(schema.file)
       .where(eq(schema.file.parent_id, desktopId)),
   ])
 
-  const desktopDirs = await Promise.all(dirs.map(async (d) => {
-    const icon = d.name.endsWith('.gapp')
-      ? await resolveDesktopEntryIcon(db, globalPcId, d.id, d.name)
-      : undefined
-    return {
-      type: 'directory' as const,
-      id: d.id,
-      name: d.name,
-      ...(icon ? { icon } : {}),
-    }
-  }))
+  const desktopDirs = await Promise.all(
+    dirs.map(async (d) => {
+      const icon = d.name.endsWith('.gapp')
+        ? await resolveDesktopEntryIcon(db, globalPcId, d.id, d.name)
+        : undefined
+      return {
+        type: 'directory' as const,
+        id: d.id,
+        name: d.name,
+        ...(icon ? { icon } : {}),
+      }
+    })
+  )
 
   return c.json({
     globalPcId,
     items: [
       ...desktopDirs,
-      ...files.map(f => ({ type: 'file' as const, id: f.id, name: f.name, mime_type: f.mime_type })),
+      ...files.map((f) => ({
+        type: 'file' as const,
+        id: f.id,
+        name: f.name,
+        mime_type: f.mime_type,
+      })),
     ],
   })
 })
@@ -83,7 +99,10 @@ router.get('/checksum', async (c) => {
   const entryType = c.req.query('entryType')
   const idRaw = c.req.query('id')
   const id = Number.parseInt(idRaw ?? '', 10)
-  if (!Number.isFinite(id) || (entryType !== 'file' && entryType !== 'directory')) {
+  if (
+    !Number.isFinite(id) ||
+    (entryType !== 'file' && entryType !== 'directory')
+  ) {
     return c.json({ error: 'entryType and id are required' }, 400)
   }
 
@@ -93,8 +112,11 @@ router.get('/checksum', async (c) => {
       .from(schema.file)
       .where(eq(schema.file.id, id))
       .limit(1)
-    if (!row || row.user_id !== user.id) return c.json({ error: 'Not found' }, 404)
-    const bytes = Buffer.isBuffer(row.content) ? row.content : Buffer.from(row.content)
+    if (!row || row.user_id !== user.id)
+      return c.json({ error: 'Not found' }, 404)
+    const bytes = Buffer.isBuffer(row.content)
+      ? row.content
+      : Buffer.from(row.content)
     const checksum = createHash('sha1').update(bytes).digest('hex')
     return c.json({ checksum })
   }
@@ -104,7 +126,8 @@ router.get('/checksum', async (c) => {
     .from(schema.directory)
     .where(eq(schema.directory.id, id))
     .limit(1)
-  if (!row || row.user_id !== user.id) return c.json({ error: 'Not found' }, 404)
+  if (!row || row.user_id !== user.id)
+    return c.json({ error: 'Not found' }, 404)
   const checksum = await hashDir(id)
   return c.json({ checksum })
 })

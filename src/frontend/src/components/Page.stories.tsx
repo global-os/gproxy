@@ -11,7 +11,9 @@ export default meta
 export const Default: StoryObj = {
   render: () => (
     <Page>
-      <div style={{ color: 'white', padding: '2em' }}>Page content goes here</div>
+      <div style={{ color: 'white', padding: '2em' }}>
+        Page content goes here
+      </div>
     </Page>
   ),
 }

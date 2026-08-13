@@ -1,4 +1,9 @@
-import { ResizeHandle, State, WorkspaceAction, WorkspaceActionKind } from './types'
+import {
+  ResizeHandle,
+  State,
+  WorkspaceAction,
+  WorkspaceActionKind,
+} from './types'
 
 const MIN_WINDOW_WIDTH = 120
 const MIN_WINDOW_HEIGHT = 80
@@ -73,7 +78,7 @@ export function reducer(state: State, action: WorkspaceAction): State {
       }
     }
     case WorkspaceActionKind.FOCUS_WINDOW: {
-      const index = state.windows.findIndex(w => w.id === action.windowId)
+      const index = state.windows.findIndex((w) => w.id === action.windowId)
       if (index < 0) return state
       return {
         ...state,
@@ -87,7 +92,7 @@ export function reducer(state: State, action: WorkspaceAction): State {
     case WorkspaceActionKind.CLOSE_WINDOW: {
       return {
         ...state,
-        windows: state.windows.filter(w => w.id !== action.windowId),
+        windows: state.windows.filter((w) => w.id !== action.windowId),
         dragOrigin: undefined,
         draggingWindow: undefined,
         resizeOrigin: undefined,
@@ -98,7 +103,7 @@ export function reducer(state: State, action: WorkspaceAction): State {
     case WorkspaceActionKind.CLOSE_PROCESS_WINDOWS: {
       return {
         ...state,
-        windows: state.windows.filter(w => w.processId !== action.processId),
+        windows: state.windows.filter((w) => w.processId !== action.processId),
         dragOrigin: undefined,
         draggingWindow: undefined,
         resizeOrigin: undefined,
@@ -176,12 +181,7 @@ export function reducer(state: State, action: WorkspaceAction): State {
       const dx = action.payload[0] - state.resizeOrigin[0]
       const dy = action.payload[1] - state.resizeOrigin[1]
       const windows = [...state.windows]
-      windows[index] = applyResize(
-        windows[index],
-        state.resizeHandle,
-        dx,
-        dy
-      )
+      windows[index] = applyResize(windows[index], state.resizeHandle, dx, dy)
       return {
         ...state,
         windows,

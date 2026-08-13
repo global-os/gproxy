@@ -46,10 +46,13 @@ let ipProbe = { checked: false }
 
 async function fetchIp(withProxy) {
   try {
-    const opts = withProxy && PROXY_URL ? { dispatcher: new ProxyAgent(PROXY_URL) } : {}
+    const opts =
+      withProxy && PROXY_URL ? { dispatcher: new ProxyAgent(PROXY_URL) } : {}
     const res = await Promise.race([
       undiciFetch('https://api.ipify.org', opts),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 8_000)
+      ),
     ])
     return (await res.text()).trim()
   } catch {
@@ -132,7 +135,11 @@ const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
     ? {
         env: {
           ...process.env,
-          LD_LIBRARY_PATH: chromiumLibraryPath + (process.env.LD_LIBRARY_PATH ? ':' + process.env.LD_LIBRARY_PATH : ''),
+          LD_LIBRARY_PATH:
+            chromiumLibraryPath +
+            (process.env.LD_LIBRARY_PATH
+              ? ':' + process.env.LD_LIBRARY_PATH
+              : ''),
         },
       }
     : {}),
@@ -192,15 +199,27 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
 
       cdp.on('Fetch.requestPaused', async (event) => {
         sawAnyEvent = true
-        const { requestId, responseStatusCode, responseHeaders, responseErrorReason } = event
-        const isResponseStage = 'responseStatusCode' in event || responseErrorReason !== undefined
+        const {
+          requestId,
+          responseStatusCode,
+          responseHeaders,
+          responseErrorReason,
+        } = event
+        const isResponseStage =
+          'responseStatusCode' in event || responseErrorReason !== undefined
 
         if (!isResponseStage) {
-          const headers = Object.entries(headersObj).map(([name, value]) => ({ name, value }))
+          const headers = Object.entries(headersObj).map(([name, value]) => ({
+            name,
+            value,
+          }))
           try {
             await cdp.send('Fetch.continueRequest', { requestId, headers })
           } catch (err) {
-            console.error(`[sidecar] continueRequest (request stage) failed url=${url}:`, err.message)
+            console.error(
+              `[sidecar] continueRequest (request stage) failed url=${url}:`,
+              err.message
+            )
           }
           return
         }
@@ -208,28 +227,47 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
         clearTimeout(timeoutId)
 
         if (responseErrorReason) {
-          console.error(`[sidecar] responseErrorReason url=${url}: ${responseErrorReason}`)
-          await cdp.send('Fetch.continueRequest', { requestId }).catch((err) =>
-            console.error(`[sidecar] continueRequest (error cleanup) failed url=${url}:`, err.message)
+          console.error(
+            `[sidecar] responseErrorReason url=${url}: ${responseErrorReason}`
           )
+          await cdp
+            .send('Fetch.continueRequest', { requestId })
+            .catch((err) =>
+              console.error(
+                `[sidecar] continueRequest (error cleanup) failed url=${url}:`,
+                err.message
+              )
+            )
           reject(new Error(`network error: ${responseErrorReason}`))
           return
         }
 
         let bodyB64Resp = ''
         try {
-          const bodyResp = await cdp.send('Fetch.getResponseBody', { requestId })
-          bodyB64Resp = bodyResp.base64Encoded ? bodyResp.body : Buffer.from(bodyResp.body, 'utf-8').toString('base64')
+          const bodyResp = await cdp.send('Fetch.getResponseBody', {
+            requestId,
+          })
+          bodyB64Resp = bodyResp.base64Encoded
+            ? bodyResp.body
+            : Buffer.from(bodyResp.body, 'utf-8').toString('base64')
         } catch (err) {
-          console.error(`[sidecar] getResponseBody failed url=${url} status=${responseStatusCode}:`, err.message)
+          console.error(
+            `[sidecar] getResponseBody failed url=${url} status=${responseStatusCode}:`,
+            err.message
+          )
         }
 
         try {
           await cdp.send('Fetch.continueRequest', { requestId })
         } catch (err) {
-          console.error(`[sidecar] continueRequest (response stage) failed url=${url}:`, err.message)
+          console.error(
+            `[sidecar] continueRequest (response stage) failed url=${url}:`,
+            err.message
+          )
         }
-        console.log(`[sidecar] done url=${url} status=${responseStatusCode} ms=${Date.now() - t0}`)
+        console.log(
+          `[sidecar] done url=${url} status=${responseStatusCode} ms=${Date.now() - t0}`
+        )
         resolve({
           status: responseStatusCode,
           headers: (responseHeaders || []).map((h) => [h.name, h.value]),
@@ -245,12 +283,19 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
             fetch(url, {
               method,
               redirect: 'manual',
-              body: bodyB64 ? Uint8Array.from(atob(bodyB64), (c) => c.charCodeAt(0)) : undefined,
+              body: bodyB64
+                ? Uint8Array.from(atob(bodyB64), (c) => c.charCodeAt(0))
+                : undefined,
             }).catch(() => {})
           },
           { url, method, bodyB64 }
         )
-        .catch((err) => console.error(`[sidecar] in-page evaluate() threw url=${url}:`, err.message))
+        .catch((err) =>
+          console.error(
+            `[sidecar] in-page evaluate() threw url=${url}:`,
+            err.message
+          )
+        )
     })
   } finally {
     await page.close().catch(() => {})
@@ -263,13 +308,24 @@ async function chromeFetch(url, method, headersObj, bodyB64) {
   let currentBody = bodyB64
   let currentMethod = method
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const result = await chromeFetchOnce(currentUrl, currentMethod, headersObj, currentBody)
+    const result = await chromeFetchOnce(
+      currentUrl,
+      currentMethod,
+      headersObj,
+      currentBody
+    )
     if (result.status < 300 || result.status >= 400) return result
-    const location = result.headers.find(([name]) => name.toLowerCase() === 'location')?.[1]
+    const location = result.headers.find(
+      ([name]) => name.toLowerCase() === 'location'
+    )?.[1]
     if (!location) return result
     currentUrl = new URL(location, currentUrl).toString()
     // 303 always downgrades to GET; 301/302 downgrade POST to GET per widespread browser behavior
-    if (result.status === 303 || ((result.status === 301 || result.status === 302) && currentMethod === 'POST')) {
+    if (
+      result.status === 303 ||
+      ((result.status === 301 || result.status === 302) &&
+        currentMethod === 'POST')
+    ) {
       currentMethod = 'GET'
       currentBody = ''
     }
@@ -293,7 +349,9 @@ async function chromeFetchWithRetry(url, method, headersObj, bodyB64) {
       const msg = err instanceof Error ? err.message : String(err)
       if (!/^network error:/.test(msg) || attempt === FETCH_ATTEMPTS) break
       const delay = FETCH_RETRY_DELAY_MS * attempt
-      console.log(`[sidecar] fetch failed (attempt ${attempt}/${FETCH_ATTEMPTS}): ${msg} — retrying in ${delay}ms`)
+      console.log(
+        `[sidecar] fetch failed (attempt ${attempt}/${FETCH_ATTEMPTS}): ${msg} — retrying in ${delay}ms`
+      )
       await new Promise((r) => setTimeout(r, delay))
     }
   }
@@ -320,7 +378,9 @@ function isAuthorized(req, url) {
 }
 
 function renderAdminPage() {
-  const redactedProxyUrl = PROXY_URL ? PROXY_URL.replace(/:([^@]+)@/, ':***@') : '(none)'
+  const redactedProxyUrl = PROXY_URL
+    ? PROXY_URL.replace(/:([^@]+)@/, ':***@')
+    : '(none)'
   const rows = [
     ['Proxy URL', redactedProxyUrl],
     ['Server IP', ipProbe.serverIp ?? '(unchecked)'],
@@ -328,7 +388,9 @@ function renderAdminPage() {
     ['Proxy routing OK', String(ipProbe.proxyOk ?? false)],
     ['Uptime', `${Math.floor(process.uptime())}s`],
   ]
-  const tableRows = rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('\n')
+  const tableRows = rows
+    .map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`)
+    .join('\n')
   return `<!DOCTYPE html>
 <html><head><title>Sidecar admin</title>
 <style>
@@ -373,17 +435,31 @@ const server = createServer(async (req, res) => {
     try {
       const raw = await readBody(req)
       const body = JSON.parse(raw.toString('utf-8'))
-      const headersObj = Object.fromEntries((body.headers || []).map(([k, v]) => [k, v]))
-      console.log(`[sidecar] /fetch ${body.method} ${body.url} headerCount=${(body.headers || []).length}`)
+      const headersObj = Object.fromEntries(
+        (body.headers || []).map(([k, v]) => [k, v])
+      )
+      console.log(
+        `[sidecar] /fetch ${body.method} ${body.url} headerCount=${(body.headers || []).length}`
+      )
 
-      const result = await chromeFetchWithRetry(body.url, body.method, headersObj, body.body || '')
+      const result = await chromeFetchWithRetry(
+        body.url,
+        body.method,
+        headersObj,
+        body.body || ''
+      )
 
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(result))
     } catch (err) {
-      console.error(`[sidecar] /fetch failed:`, err instanceof Error ? err.stack || err.message : String(err))
+      console.error(
+        `[sidecar] /fetch failed:`,
+        err instanceof Error ? err.stack || err.message : String(err)
+      )
       res.writeHead(502)
-      res.end(`fetch error: ${err instanceof Error ? err.message : String(err)}`)
+      res.end(
+        `fetch error: ${err instanceof Error ? err.message : String(err)}`
+      )
     }
     return
   }

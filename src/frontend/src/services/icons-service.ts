@@ -23,9 +23,12 @@ function iconForEntry(entryName: string): string | undefined {
 }
 
 async function loadIcons(workspaceId: string): Promise<number> {
-  const r = await fetch(`/api/global-pc/icons?workspaceId=${encodeURIComponent(workspaceId)}`, {
-    credentials: 'include',
-  })
+  const r = await fetch(
+    `/api/global-pc/icons?workspaceId=${encodeURIComponent(workspaceId)}`,
+    {
+      credentials: 'include',
+    }
+  )
   if (!r.ok) throw new Error(`Failed to load icons (${r.status})`)
 
   const body = (await r.json()) as IconsApiResponse
@@ -37,7 +40,7 @@ async function loadIcons(workspaceId: string): Promise<number> {
 async function setIcon(
   workspaceId: string,
   entryName: string,
-  iconId: string,
+  iconId: string
 ): Promise<void> {
   const workspaceIdNum = Number.parseInt(workspaceId, 10)
   const r = await fetch('/api/global-pc/icons', {
@@ -52,7 +55,11 @@ async function setIcon(
   })
   if (!r.ok) throw new Error(`Failed to set icon (${r.status})`)
 
-  const body = (await r.json()) as { globalPcId: number; entryName: string; iconId: string }
+  const body = (await r.json()) as {
+    globalPcId: number
+    entryName: string
+    iconId: string
+  }
   const map = cacheByGlobalPc.get(body.globalPcId) ?? {}
   map[body.entryName] = body.iconId
   cacheByGlobalPc.set(body.globalPcId, map)
@@ -60,10 +67,13 @@ async function setIcon(
 }
 
 async function resetIcons(workspaceId: string): Promise<void> {
-  const r = await fetch(`/api/global-pc/icons?workspaceId=${encodeURIComponent(workspaceId)}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  })
+  const r = await fetch(
+    `/api/global-pc/icons?workspaceId=${encodeURIComponent(workspaceId)}`,
+    {
+      method: 'DELETE',
+      credentials: 'include',
+    }
+  )
   if (!r.ok) throw new Error(`Failed to reset icons (${r.status})`)
 
   const body = (await r.json()) as { globalPcId: number }
@@ -94,7 +104,11 @@ declare global {
     globalos?: {
       icons?: {
         reset: (workspaceId?: string) => Promise<void>
-        set: (entryName: string, iconId: string, workspaceId?: string) => Promise<void>
+        set: (
+          entryName: string,
+          iconId: string,
+          workspaceId?: string
+        ) => Promise<void>
         get: (entryName: string) => string | undefined
       }
     }

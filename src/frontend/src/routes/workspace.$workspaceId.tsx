@@ -11,7 +11,13 @@ export const Route = createFileRoute('/workspace/$workspaceId')({
 function RouteComponent() {
   const { workspaceId } = Route.useParams()
   const navigate = useNavigate()
-  const { data: authSession, isPending, error, isRefetching, refetch } = useSession()
+  const {
+    data: authSession,
+    isPending,
+    error,
+    isRefetching,
+    refetch,
+  } = useSession()
 
   useEffect(() => {
     if (isPending || isRefetching || error) return

@@ -19,7 +19,7 @@ router.use(
   middleware.provideDb,
   middleware.parseCookies,
   middleware.betterAuthMiddleware,
-  middleware.setRlsUser,
+  middleware.setRlsUser
 )
 
 router.get('/', async (c) => {
@@ -69,7 +69,7 @@ router.patch('/icons', async (c) => {
   const user = c.get('user')
   if (!user) return c.json({ error: 'Unauthorized' }, 401)
 
-  const body = await c.req.json().catch(() => null) as {
+  const body = (await c.req.json().catch(() => null)) as {
     workspaceId?: number
     entryName?: string
     iconId?: string
@@ -82,7 +82,11 @@ router.patch('/icons', async (c) => {
   const db = c.get('db')
   let globalPcId: number
   if (body.workspaceId != null) {
-    globalPcId = await resolveGlobalPcIdForWorkspace(db, user.id, body.workspaceId)
+    globalPcId = await resolveGlobalPcIdForWorkspace(
+      db,
+      user.id,
+      body.workspaceId
+    )
   } else {
     globalPcId = await ensureGlobalPcForUser(db, user.id)
   }
@@ -94,7 +98,12 @@ router.patch('/icons', async (c) => {
     return c.json({ error: message }, 400)
   }
 
-  return c.json({ ok: true, globalPcId, entryName: body.entryName, iconId: body.iconId })
+  return c.json({
+    ok: true,
+    globalPcId,
+    entryName: body.entryName,
+    iconId: body.iconId,
+  })
 })
 
 router.delete('/icons', async (c) => {

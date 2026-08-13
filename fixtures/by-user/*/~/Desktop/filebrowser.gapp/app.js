@@ -2,14 +2,28 @@
 import { toParent } from 'kernel'
 import { createBrowserPanel } from 'filepicker'
 
-const upBtn = /** @type {HTMLButtonElement} */ (document.getElementById('up-btn'))
-const mkdirBtn = /** @type {HTMLButtonElement} */ (document.getElementById('mkdir-btn'))
-const renameBtn = /** @type {HTMLButtonElement} */ (document.getElementById('rename-btn'))
-const deleteBtn = /** @type {HTMLButtonElement} */ (document.getElementById('delete-btn'))
-const refreshBtn = /** @type {HTMLButtonElement} */ (document.getElementById('refresh-btn'))
+const upBtn = /** @type {HTMLButtonElement} */ (
+  document.getElementById('up-btn')
+)
+const mkdirBtn = /** @type {HTMLButtonElement} */ (
+  document.getElementById('mkdir-btn')
+)
+const renameBtn = /** @type {HTMLButtonElement} */ (
+  document.getElementById('rename-btn')
+)
+const deleteBtn = /** @type {HTMLButtonElement} */ (
+  document.getElementById('delete-btn')
+)
+const refreshBtn = /** @type {HTMLButtonElement} */ (
+  document.getElementById('refresh-btn')
+)
 const pathbar = /** @type {HTMLElement} */ (document.getElementById('pathbar'))
-const listBody = /** @type {HTMLElement} */ (document.getElementById('list-body'))
-const statusEl = /** @type {HTMLElement} */ (document.getElementById('statusbar'))
+const listBody = /** @type {HTMLElement} */ (
+  document.getElementById('list-body')
+)
+const statusEl = /** @type {HTMLElement} */ (
+  document.getElementById('statusbar')
+)
 
 let busy = false
 
@@ -52,14 +66,21 @@ panel = createBrowserPanel(listBody, {
   },
 })
 
-upBtn.addEventListener('click', () => { withBusy(() => panel.goUp()) })
-refreshBtn.addEventListener('click', () => { withBusy(() => panel.refresh()) })
+upBtn.addEventListener('click', () => {
+  withBusy(() => panel.goUp())
+})
+refreshBtn.addEventListener('click', () => {
+  withBusy(() => panel.refresh())
+})
 
 mkdirBtn.addEventListener('click', () => {
   const name = window.prompt('New folder name:')
   if (name === null) return
   const trimmed = name.trim()
-  if (!trimmed) { setStatus('Folder name is required', true); return }
+  if (!trimmed) {
+    setStatus('Folder name is required', true)
+    return
+  }
   withBusy(async () => {
     await toParent('fs:mkdir', { parentId: panel.getCwd(), name: trimmed })
     setStatus(`Created folder "${trimmed}"`)
@@ -73,10 +94,17 @@ renameBtn.addEventListener('click', () => {
   const next = window.prompt('Rename to:', sel.name)
   if (next === null) return
   const trimmed = next.trim()
-  if (!trimmed) { setStatus('Name is required', true); return }
+  if (!trimmed) {
+    setStatus('Name is required', true)
+    return
+  }
   if (trimmed === sel.name) return
   withBusy(async () => {
-    await toParent('fs:rename', { entryType: sel.type, id: sel.id, name: trimmed })
+    await toParent('fs:rename', {
+      entryType: sel.type,
+      id: sel.id,
+      name: trimmed,
+    })
     setStatus(`Renamed to "${trimmed}"`)
     await panel.refresh()
   })

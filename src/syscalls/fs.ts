@@ -3,14 +3,17 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '../db/schema.js'
 import { cleanupDirectoryAppRefs } from '../services/directory-cleanup.js'
 import { resolveDirectoryPath } from '../services/directory-path.js'
-import { resolveDesktopDirectoryId, upsertDesktopFile } from '../services/desktop-files.js'
+import {
+  resolveDesktopDirectoryId,
+  upsertDesktopFile,
+} from '../services/desktop-files.js'
 import type { SyscallContext, SyscallHandler, SyscallResult } from './types.js'
 import { isVfsId, vfsBrowse, vfsRead, VfsError, MNT_ENTRY } from './vfs.js'
 
 class FsError extends Error {
   constructor(
     message: string,
-    readonly status: 400 | 403 | 404 | 409 = 400,
+    readonly status: 400 | 403 | 404 | 409 = 400
   ) {
     super(message)
   }
@@ -37,16 +40,18 @@ function normalizeEntryName(raw: string): string | null {
 
 async function resolveUsersDirectoryId(
   db: NodePgDatabase<typeof schema>,
-  userId: string,
+  userId: string
 ): Promise<number | null> {
   const [usersDir] = await db
     .select({ id: schema.directory.id })
     .from(schema.directory)
-    .where(and(
-      eq(schema.directory.user_id, userId),
-      eq(schema.directory.name, 'Users'),
-      isNull(schema.directory.parent_id),
-    ))
+    .where(
+      and(
+        eq(schema.directory.user_id, userId),
+        eq(schema.directory.name, 'Users'),
+        isNull(schema.directory.parent_id)
+      )
+    )
     .limit(1)
 
   return usersDir?.id ?? null
@@ -55,7 +60,7 @@ async function resolveUsersDirectoryId(
 async function isWithinUserTree(
   db: NodePgDatabase<typeof schema>,
   userId: string,
-  directoryId: number,
+  directoryId: number
 ): Promise<boolean> {
   let currentId: number | null = directoryId
 
@@ -80,7 +85,7 @@ async function isWithinUserTree(
 async function getDirectory(
   db: NodePgDatabase<typeof schema>,
   userId: string,
-  directoryId: number,
+  directoryId: number
 ) {
   const [dir] = await db
     .select({
@@ -93,7 +98,7 @@ async function getDirectory(
     .limit(1)
 
   if (!dir) throw new FsError('Directory not found', 404)
-  if (!await isWithinUserTree(db, userId, directoryId)) {
+  if (!(await isWithinUserTree(db, userId, directoryId))) {
     throw new FsError('Forbidden', 403)
   }
 
@@ -103,7 +108,7 @@ async function getDirectory(
 async function getFile(
   db: NodePgDatabase<typeof schema>,
   userId: string,
-  fileId: number,
+  fileId: number
 ) {
   const [row] = await db
     .select({
@@ -117,7 +122,10 @@ async function getFile(
     .limit(1)
 
   if (!row) throw new FsError('File not found', 404)
-  if (row.user_id !== userId && !await isWithinUserTree(db, userId, row.parent_id)) {
+  if (
+    row.user_id !== userId &&
+    !(await isWithinUserTree(db, userId, row.parent_id))
+  ) {
     throw new FsError('Forbidden', 403)
   }
 
@@ -129,15 +137,17 @@ async function assertNameAvailable(
   parentId: number,
   name: string,
   excludeDirId?: number,
-  excludeFileId?: number,
+  excludeFileId?: number
 ) {
   const [existingDir] = await db
     .select({ id: schema.directory.id })
     .from(schema.directory)
-    .where(and(
-      eq(schema.directory.parent_id, parentId),
-      eq(schema.directory.name, name),
-    ))
+    .where(
+      and(
+        eq(schema.directory.parent_id, parentId),
+        eq(schema.directory.name, name)
+      )
+    )
     .limit(1)
 
   if (existingDir && existingDir.id !== excludeDirId) {
@@ -147,10 +157,7 @@ async function assertNameAvailable(
   const [existingFile] = await db
     .select({ id: schema.file.id })
     .from(schema.file)
-    .where(and(
-      eq(schema.file.parent_id, parentId),
-      eq(schema.file.name, name),
-    ))
+    .where(and(eq(schema.file.parent_id, parentId), eq(schema.file.name, name)))
     .limit(1)
 
   if (existingFile && existingFile.id !== excludeFileId) {
@@ -165,8 +172,10 @@ export const fsBrowse: SyscallHandler = async ({ db, userId }, args) => {
       return { ok: true, result: await vfsBrowse(args.directoryId) }
     }
 
-    const directoryId = typeof args.directoryId === 'number' ? args.directoryId : undefined
-    const resolvedId = directoryId ?? await resolveDesktopDirectoryId(db, userId)
+    const directoryId =
+      typeof args.directoryId === 'number' ? args.directoryId : undefined
+    const resolvedId =
+      directoryId ?? (await resolveDesktopDirectoryId(db, userId))
     if (!resolvedId) throw new FsError('Desktop not found', 404)
 
     const dir = await getDirectory(db, userId, resolvedId)
@@ -174,17 +183,27 @@ export const fsBrowse: SyscallHandler = async ({ db, userId }, args) => {
     const isDesktop = dir.parent_id === null || dir.id === usersRootId
 
     const [dirs, files] = await Promise.all([
-      db.select({ id: schema.directory.id, name: schema.directory.name })
+      db
+        .select({ id: schema.directory.id, name: schema.directory.name })
         .from(schema.directory)
         .where(eq(schema.directory.parent_id, resolvedId)),
-      db.select({ id: schema.file.id, name: schema.file.name, mime_type: schema.file.mime_type })
+      db
+        .select({
+          id: schema.file.id,
+          name: schema.file.name,
+          mime_type: schema.file.mime_type,
+        })
         .from(schema.file)
         .where(eq(schema.file.parent_id, resolvedId)),
     ])
 
     const entries = [
-      ...dirs.map(d => ({ type: 'directory' as const, id: d.id as number | string, name: d.name })),
-      ...files.map(f => ({
+      ...dirs.map((d) => ({
+        type: 'directory' as const,
+        id: d.id as number | string,
+        name: d.name,
+      })),
+      ...files.map((f) => ({
         type: 'file' as const,
         id: f.id as number | string,
         name: f.name,
@@ -212,7 +231,9 @@ export const fsBrowse: SyscallHandler = async ({ db, userId }, args) => {
 export const fsMkdir: SyscallHandler = async ({ db, userId }, args) => {
   try {
     const parentId = args.parentId
-    const name = normalizeEntryName(typeof args.name === 'string' ? args.name : '')
+    const name = normalizeEntryName(
+      typeof args.name === 'string' ? args.name : ''
+    )
     if (typeof parentId !== 'number' || !name) {
       throw new FsError('parentId and name are required')
     }
@@ -235,7 +256,9 @@ export const fsRename: SyscallHandler = async ({ db, userId }, args) => {
   try {
     const entryType = args.entryType
     const id = args.id
-    const name = normalizeEntryName(typeof args.name === 'string' ? args.name : '')
+    const name = normalizeEntryName(
+      typeof args.name === 'string' ? args.name : ''
+    )
 
     if (
       (entryType !== 'directory' && entryType !== 'file') ||
@@ -255,13 +278,19 @@ export const fsRename: SyscallHandler = async ({ db, userId }, args) => {
       }
 
       await assertNameAvailable(db, dir.parent_id!, name, id)
-      await db.update(schema.directory).set({ name, updated_at: new Date() }).where(eq(schema.directory.id, id))
+      await db
+        .update(schema.directory)
+        .set({ name, updated_at: new Date() })
+        .where(eq(schema.directory.id, id))
       return { ok: true, result: { id, name } }
     }
 
     const row = await getFile(db, userId, id)
     await assertNameAvailable(db, row.parent_id, name, undefined, id)
-    await db.update(schema.file).set({ name, updated_at: new Date() }).where(eq(schema.file.id, id))
+    await db
+      .update(schema.file)
+      .set({ name, updated_at: new Date() })
+      .where(eq(schema.file.id, id))
     return { ok: true, result: { id, name } }
   } catch (err) {
     return fail(err)
@@ -273,7 +302,10 @@ export const fsDelete: SyscallHandler = async ({ db, userId }, args) => {
     const entryType = args.entryType
     const id = args.id
 
-    if ((entryType !== 'directory' && entryType !== 'file') || typeof id !== 'number') {
+    if (
+      (entryType !== 'directory' && entryType !== 'file') ||
+      typeof id !== 'number'
+    ) {
       throw new FsError('entryType and id are required')
     }
 
@@ -331,9 +363,9 @@ function isTextFile(mime_type: string, bytes: Buffer): boolean {
   }
   if (mime_type.startsWith('text/')) return true
   if (
-    mime_type === 'application/json'
-    || mime_type === 'application/javascript'
-    || mime_type === 'application/xml'
+    mime_type === 'application/json' ||
+    mime_type === 'application/javascript' ||
+    mime_type === 'application/xml'
   ) {
     return true
   }
@@ -373,7 +405,7 @@ export const fsRead: SyscallHandler = async ({ db, userId }, args) => {
       : Buffer.from(row.content)
 
     if (!isTextFile(row.mime_type, bytes)) {
-      throw new FsError('Cannot open, it\'s a binary file', 400)
+      throw new FsError("Cannot open, it's a binary file", 400)
     }
 
     return {
@@ -390,12 +422,17 @@ export const fsRead: SyscallHandler = async ({ db, userId }, args) => {
   }
 }
 
-export const fsSaveDesktopFile: SyscallHandler = async ({ db, userId }, args) => {
+export const fsSaveDesktopFile: SyscallHandler = async (
+  { db, userId },
+  args
+) => {
   try {
-    const filename = typeof args.filename === 'string' ? args.filename.trim() : ''
+    const filename =
+      typeof args.filename === 'string' ? args.filename.trim() : ''
     const content = args.content
     if (!filename) throw new FsError('filename is required')
-    if (typeof content !== 'string') throw new FsError('content must be a string')
+    if (typeof content !== 'string')
+      throw new FsError('content must be a string')
 
     const result = await upsertDesktopFile(db, userId, filename, content)
     return { ok: true, result }

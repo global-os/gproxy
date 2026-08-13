@@ -3,13 +3,19 @@ import { resolveImageMeta } from '../db/image.js'
 import { db } from '../db/index.js'
 import * as schema from '../db/schema.js'
 import { PENDING_INSTANCE_CHECKSUM } from '../runtime/instance/constants.js'
-import { generateInstanceSlug, isLegacyUuidSlug } from '../runtime/instance/slug.js'
+import {
+  generateInstanceSlug,
+  isLegacyUuidSlug,
+} from '../runtime/instance/slug.js'
 import { instancePublicUrl } from '../runtime/urls.js'
 import { LaunchError } from './errors.js'
 
 const SLUG_COLLISION = '23505'
 
-export async function upgradeLegacySlug(instanceId: number, slug: string): Promise<string> {
+export async function upgradeLegacySlug(
+  instanceId: number,
+  slug: string
+): Promise<string> {
   if (!isLegacyUuidSlug(slug)) return slug
 
   for (let attempt = 0; attempt < 8; attempt++) {
@@ -22,11 +28,14 @@ export async function upgradeLegacySlug(instanceId: number, slug: string): Promi
         .returning({ slug: schema.instances.slug })
 
       if (row) {
-        console.log(`[instance] upgraded slug ${instanceId}: ${slug} -> ${row.slug}`)
+        console.log(
+          `[instance] upgraded slug ${instanceId}: ${slug} -> ${row.slug}`
+        )
         return row.slug
       }
     } catch (err) {
-      const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : ''
+      const code =
+        err && typeof err === 'object' && 'code' in err ? String(err.code) : ''
       if (code !== SLUG_COLLISION) throw err
     }
   }
@@ -37,7 +46,7 @@ export async function upgradeLegacySlug(instanceId: number, slug: string): Promi
 function toCreatedInstance(
   instanceId: number,
   instanceSlug: string,
-  restarted: boolean,
+  restarted: boolean
 ): CreatedInstance {
   return {
     instanceId,
@@ -54,7 +63,9 @@ export type CreatedInstance = {
   restarted: boolean
 }
 
-export async function createInstanceForProcess(processId: number): Promise<CreatedInstance> {
+export async function createInstanceForProcess(
+  processId: number
+): Promise<CreatedInstance> {
   const [processRow] = await db
     .select({
       id: schema.process.id,
@@ -92,7 +103,9 @@ export async function createInstanceForProcess(processId: number): Promise<Creat
   return toCreatedInstance(instanceRow.id, instanceRow.slug, false)
 }
 
-export async function ensurePrimaryInstance(processId: number): Promise<CreatedInstance> {
+export async function ensurePrimaryInstance(
+  processId: number
+): Promise<CreatedInstance> {
   const [existing] = await db
     .select({
       id: schema.instances.id,

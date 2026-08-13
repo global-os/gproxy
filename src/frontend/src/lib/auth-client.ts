@@ -6,7 +6,7 @@ const baseURL = import.meta.env.DEV
   ? devPort === '443'
     ? 'https://app.app.dev.onetrueos.com'
     : `https://app.app.dev.onetrueos.com:${devPort || '3443'}`
-  : undefined;
+  : undefined
 
 export const authClient = createAuthClient({
   baseURL,
@@ -60,7 +60,8 @@ function humanizeAuthError(message: string): string {
   if (!match) return message
 
   const [, field, detail] = match
-  const label = AUTH_FIELD_LABELS[field] ?? field.charAt(0).toUpperCase() + field.slice(1)
+  const label =
+    AUTH_FIELD_LABELS[field] ?? field.charAt(0).toUpperCase() + field.slice(1)
 
   if (/too small|>=1 characters/i.test(detail)) {
     return `${label} is required.`
@@ -70,7 +71,9 @@ function humanizeAuthError(message: string): string {
 }
 
 export function authErrorMessage(ctx: AuthErrorContext): string {
-  const err = ctx.error as (AuthErrorContext['error'] & { error?: unknown }) | undefined
+  const err = ctx.error as
+    | (AuthErrorContext['error'] & { error?: unknown })
+    | undefined
   if (err?.message?.includes('Fetch related error') && err.error) {
     return authErrorFromUnknown(err.error)
   }
@@ -78,7 +81,10 @@ export function authErrorMessage(ctx: AuthErrorContext): string {
 
   if (ctx.responseText) {
     try {
-      const parsed = JSON.parse(ctx.responseText) as { message?: string; code?: string }
+      const parsed = JSON.parse(ctx.responseText) as {
+        message?: string
+        code?: string
+      }
       if (parsed.message) return humanizeAuthError(parsed.message)
     } catch {
       if (ctx.responseText.includes('FUNCTION_INVOCATION_TIMEOUT')) {
@@ -125,7 +131,7 @@ export function authErrorFromUnknown(err: unknown): string {
 
 export async function runAuthAction(
   action: () => Promise<unknown>,
-  setError: (message: string) => void,
+  setError: (message: string) => void
 ): Promise<void> {
   try {
     const result = await action()

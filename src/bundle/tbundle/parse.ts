@@ -38,8 +38,7 @@ export function parseTbundle(source: string): ParseTbundleResult {
 
   for (let i = 0; i < headers.length; i++) {
     const { path, bodyStart } = headers[i]!
-    const bodyEnd =
-      i + 1 < headers.length ? headers[i + 1]!.start : text.length
+    const bodyEnd = i + 1 < headers.length ? headers[i + 1]!.start : text.length
 
     const pathError = validateTbundlePath(path)
     if (pathError) {

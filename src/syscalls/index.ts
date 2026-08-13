@@ -23,7 +23,7 @@ const handlers: Record<string, SyscallHandler> = {
 export async function invokeSyscall(
   ctx: SyscallContext,
   op: string,
-  args: Record<string, unknown>,
+  args: Record<string, unknown>
 ): Promise<SyscallResult> {
   const handler = handlers[op]
   if (!handler) {

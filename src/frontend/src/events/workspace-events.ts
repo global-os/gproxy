@@ -22,11 +22,14 @@ export type WorkspaceEventTransport = {
   connect: (
     workspaceId: string,
     handlers: WorkspaceEventHandlers,
-    options?: { afterId?: number },
+    options?: { afterId?: number }
   ) => () => void
 }
 
-function dispatchEvent(record: WorkspaceEventRecord, handlers: WorkspaceEventHandlers) {
+function dispatchEvent(
+  record: WorkspaceEventRecord,
+  handlers: WorkspaceEventHandlers
+) {
   handlers.onEvent?.(record)
   if (record.type === 'process.killed') {
     handlers.onProcessKilled?.(record)
@@ -52,7 +55,9 @@ export function createSseWorkspaceEventTransport(): WorkspaceEventTransport {
       for (const type of ['process.killed'] as const) {
         source.addEventListener(type, (message) => {
           try {
-            const record = JSON.parse((message as MessageEvent).data) as WorkspaceEventRecord
+            const record = JSON.parse(
+              (message as MessageEvent).data
+            ) as WorkspaceEventRecord
             dispatchEvent(record, handlers)
           } catch (err) {
             handlers.onError?.(err)

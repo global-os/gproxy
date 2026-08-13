@@ -2,7 +2,9 @@ import { Readable } from 'node:stream'
 import * as tar from 'tar'
 
 /** Parse a .gapp image tar into a path → bytes map. */
-export async function parseTarBytes(tarBytes: Buffer): Promise<Map<string, Buffer>> {
+export async function parseTarBytes(
+  tarBytes: Buffer
+): Promise<Map<string, Buffer>> {
   const files = new Map<string, Buffer>()
 
   await new Promise<void>((resolve, reject) => {

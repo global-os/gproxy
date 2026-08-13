@@ -25,7 +25,7 @@ const DEFAULT_STATUS: InstancePrepareStatus = {
 export function setInstancePrepareProgress(
   instanceId: number,
   stage: PrepareStage,
-  message: string,
+  message: string
 ): void {
   statusByInstance.set(instanceId, {
     ready: false,
@@ -42,7 +42,10 @@ export function setInstancePrepareReady(instanceId: number): void {
   })
 }
 
-export function setInstancePrepareFailed(instanceId: number, error: string): void {
+export function setInstancePrepareFailed(
+  instanceId: number,
+  error: string
+): void {
   statusByInstance.set(instanceId, {
     ready: false,
     stage: 'failed',
@@ -53,7 +56,7 @@ export function setInstancePrepareFailed(instanceId: number, error: string): voi
 
 export function getInstancePrepareStatus(
   instanceId: number,
-  contentCached: boolean,
+  contentCached: boolean
 ): InstancePrepareStatus {
   if (contentCached) {
     return {

@@ -10,7 +10,7 @@ import {
 export async function ensureInstanceBundleCached(
   instanceId: number,
   tarBytes: Buffer,
-  checksum: string,
+  checksum: string
 ): Promise<void> {
   if (await isBundleCached(instanceId, checksum)) {
     await touchBundleCache(instanceId)

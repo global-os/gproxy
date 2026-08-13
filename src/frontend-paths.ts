@@ -7,7 +7,9 @@ const distRoot = frontendDistRoot
 
 function isInsideRoot(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate)
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+  return (
+    relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+  )
 }
 
 /** Prefer synced `public/` artifacts; fall back to `src/frontend/dist`. */

@@ -25,16 +25,16 @@ const createRenderer = () => {
       opacity: 0,
     },
     '50%': {
-      opacity: 1
+      opacity: 1,
     },
     '100%': {
       transform: 'translate(100%,75%)',
-      opacity: 0
-    }
+      opacity: 0,
+    },
   })
 
   const animations: Animations = {
-    fadingBoxes: renderer.renderKeyframe(fadingBoxes, { })
+    fadingBoxes: renderer.renderKeyframe(fadingBoxes, {}),
   }
 
   renderer.renderStatic(

@@ -12,5 +12,5 @@ export type SyscallResult =
 
 export type SyscallHandler = (
   ctx: SyscallContext,
-  args: Record<string, unknown>,
+  args: Record<string, unknown>
 ) => Promise<SyscallResult>
