@@ -57,7 +57,7 @@
     "postmark": "^4.0.7",
     "prettier": "^3.7.4",
     "squint-cljs": "^0.14.196",
-    "styled-components": "^6.1.19",
+    "styled-components": "^6.5.2",
     "tar": "^7.5.16",
     "tldts": "^7.4.10",
     "tsx": "^4.19.4",
