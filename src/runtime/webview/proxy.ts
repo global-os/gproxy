@@ -317,9 +317,9 @@ window.fetch=function(input,init){
 var _xo=XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open=function(m,u){
   var rw=_p(typeof u==='string'?u:String(u));
-  // Copy instead of mutating `arguments` — a second wrapper (e.g. the site's
-  // own Sentry instrumentation) calls us via apply(), and mutating the live
-  // arguments object there is a known footgun.
+  // Copy instead of mutating the arguments object -- a second wrapper (e.g.
+  // the site's own Sentry instrumentation) calls us via apply(), and mutating
+  // the live arguments object there is a known footgun.
   var args=Array.prototype.slice.call(arguments);
   args[1]=rw!==null?rw:u;
   return _xo.apply(this,args);
