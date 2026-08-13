@@ -58,7 +58,7 @@
     "prettier": "^3.7.4",
     "squint-cljs": "^0.14.196",
     "styled-components": "^6.5.2",
-    "tar": "^7.5.16",
+    "tar": "^7.5.22",
     "tldts": "^7.4.10",
     "tsx": "^4.19.4",
     "typescript": "^5.9.3",
