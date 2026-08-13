@@ -317,8 +317,12 @@ window.fetch=function(input,init){
 var _xo=XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open=function(m,u){
   var rw=_p(typeof u==='string'?u:String(u));
-  arguments[1]=rw!==null?rw:u;
-  return _xo.apply(this,arguments);
+  // Copy instead of mutating `arguments` — a second wrapper (e.g. the site's
+  // own Sentry instrumentation) calls us via apply(), and mutating the live
+  // arguments object there is a known footgun.
+  var args=Array.prototype.slice.call(arguments);
+  args[1]=rw!==null?rw:u;
+  return _xo.apply(this,args);
 };
 var _xs=XMLHttpRequest.prototype.send;
 XMLHttpRequest.prototype.send=function(body){
