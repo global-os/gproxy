@@ -594,15 +594,12 @@ const cross = extractCrossDomain(upstreamPath)
   const isHtml = contentType.includes('text/html')
 
   if (!isHtml) {
-    // X's Sentry integration chunk (sentry-filter-*.js) blanks the proxied
-    // page after a brief render: its error handling runs away in the iframe
-    // context and its envelope POST to sentry.io is CORS-rejected, and the
-    // app tears itself down. Blocking the chunk keeps X rendering (the app
-    // tolerates the import failing — verified against net::ERR_FAILED) and
-    // we lose only X's error telemetry, which the webview doesn't need.
-    if (/sentry-filter-[a-zA-Z0-9]+\.js$/.test(upstreamPath)) {
-      return new Response('', { status: 404 })
-    }
+    // X's Sentry integration chunk (sentry-filter-*.js) is a SHARED bundle — the
+    // entry chunk top-level-imports the i18n loader (r) and other helpers from
+    // it, so it must NOT be blocked wholesale (that leaves the app stuck in its
+    // skeleton, React never mounts). Its kl/Ol functions recurse infinitely in
+    // the proxied context (blanking the page); see CASTLE_TOKEN.md for the plan
+    // to patch that recursion specifically rather than block the chunk.
 
     // Rewrite CSS url() refs (fonts, images) to go through the proxy.
     if (contentType.includes('text/css')) {
