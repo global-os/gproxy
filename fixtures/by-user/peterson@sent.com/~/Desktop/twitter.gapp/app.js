@@ -39,7 +39,21 @@ window.addEventListener('message', function (event) {
       pendingRequestId
     )
     window.parent.postMessage(
-      { type: 'webview:create', requestId: pendingRequestId, domain: 'x.com' },
+      {
+        type: 'webview:create',
+        requestId: pendingRequestId,
+        domain: 'x.com',
+        rules: [
+          {
+            match: { domain: 'abs.twimg.com' },
+            action: {
+              type: 'rewrite-origin',
+              from: 'https://abs.twimg.com',
+              to: '/abs.twimg.com',
+            },
+          },
+        ],
+      },
       '*'
     )
     return

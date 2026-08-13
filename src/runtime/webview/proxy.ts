@@ -6,6 +6,7 @@ import { getDomain } from 'tldts'
 import { db } from '../../db/index.js'
 import * as schema from '../../db/schema.js'
 import { buildInterceptScript } from './intercept-script.js'
+import { applyOriginRewrites, type WebviewRule } from './rules.js'
 import {
   getActiveSessionId,
   captureResponseBody,
@@ -485,7 +486,8 @@ export async function proxyWebviewRequest(
   boundDomain: string,
   upstreamPath: string,
   incomingRequest: Request,
-  slug = ''
+  slug = '',
+  rules: WebviewRule[] = []
 ): Promise<Response> {
   const t0 = Date.now()
   const sessionId = await getActiveSessionId()
@@ -673,29 +675,31 @@ export async function proxyWebviewRequest(
     // of blanking the page, but the real cause was the split-brain module
     // double-load fixed by the origin rewrite below — so it's served as-is.
 
-    // Rewrite CSS url() refs (fonts, images) to go through the proxy.
+    // Rewrite CSS url() refs (fonts, images) to go through the proxy, then
+    // apply any rewrite-origin rules.
     if (contentType.includes('text/css')) {
       const css = await upstreamResponse.text()
+      const rewritten = applyOriginRewrites(
+        rewriteCss(css, boundDomain),
+        rules,
+        fetchDomain
+      )
       responseHeaders.delete('content-length')
-      return new Response(rewriteCss(css, boundDomain), {
+      return new Response(rewritten, {
         status: upstreamResponse.status,
         headers: responseHeaders,
       })
     }
 
-    // X's JS chunks hardcode the absolute CDN origin (https://abs.twimg.com) for
-    // modulepreload URLs, font refs, and other asset paths. Left absolute, those
-    // bypass the proxy entirely: chunks are fetched a second time straight from
-    // the CDN (two module instances — split-brain — that break the app) and
-    // fonts/assets hit the CDN directly. Rewrite just the origin to a
-    // proxy-relative path (keeping the upstream path) so everything routes
-    // through the proxy.
+    // JS chunk bodies can hardcode the CDN origin in string literals
+    // (modulepreload URLs, font refs, …). Left absolute, those bypass the proxy
+    // entirely: chunks are fetched a second time straight from the CDN (two
+    // module instances — split-brain — that break the app). rewrite-origin rules
+    // rewrite the origin to a proxy-relative path so everything routes through
+    // the proxy.
     if (contentType.includes('javascript')) {
       const realScript = await upstreamResponse.text()
-      const rewritten = realScript.replace(
-        /https:\/\/abs\.twimg\.com/g,
-        '/abs.twimg.com'
-      )
+      const rewritten = applyOriginRewrites(realScript, rules, fetchDomain)
 
       // Castle.io (X's bot-detection SDK, ondemand.castle.*.js) used to be
       // intercepted here and fully stubbed out (every module body replaced
@@ -775,7 +779,10 @@ export async function proxyWebviewRequest(
   // Only inject the intercept script into same-domain pages. Cross-domain HTML
   // (e.g. a Facebook endpoint returning an error page) is consumed as a fetch
   // response body by site JS — injecting script tags corrupts JSON.parse calls.
-  const rewritten = cross ? html : rewriteHtml(html, boundDomain)
+  const originRewritten = applyOriginRewrites(html, rules, fetchDomain)
+  const rewritten = cross
+    ? originRewritten
+    : rewriteHtml(originRewritten, boundDomain)
   responseHeaders.set('Content-Type', 'text/html; charset=utf-8')
   responseHeaders.delete('content-length')
   if (sessionId != null) {

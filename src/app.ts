@@ -626,7 +626,13 @@ app.all('/instance/*', async (c) => {
     console.log(
       `[webview-route] slug=${slug} path=${upstreamPath} cookies=${c.req.raw.headers.get('cookie') ? c.req.raw.headers.get('cookie')!.split(';').length : 0}`
     )
-    return proxyWebviewRequest(webview.domain, upstreamPath, c.req.raw, slug)
+    return proxyWebviewRequest(
+      webview.domain,
+      upstreamPath,
+      c.req.raw,
+      slug,
+      webview.rules
+    )
   }
 
   if (upstreamPath === '/_status') {

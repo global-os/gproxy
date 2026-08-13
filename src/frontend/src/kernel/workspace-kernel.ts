@@ -436,13 +436,18 @@ export class WorkspaceKernel {
       })
       return
     }
+    const rules = Array.isArray(message.rules) ? message.rules : undefined
     try {
       const result = await this.callApi<{
         webviewId: string
         slug: string
         domain: string
         proxyOrigin: string
-      }>('/api/webviews', 'POST', { processId: binding.processId, domain })
+      }>('/api/webviews', 'POST', {
+        processId: binding.processId,
+        domain,
+        rules,
+      })
       console.log('[kernel] webview:create succeeded:', result)
       post({ type: 'webview:create:complete', ...replyBase, ...result })
     } catch (err) {

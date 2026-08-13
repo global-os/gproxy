@@ -7,6 +7,7 @@ import { generateInstanceSlug } from '../runtime/instance/slug.js'
 import { instancePublicUrl } from '../runtime/urls.js'
 import { auth } from '../auth.js'
 import { evictWebviewCache } from '../runtime/webview/resolve.js'
+import { parseWebviewRule, type WebviewRule } from '../runtime/webview/rules.js'
 
 const router = new Hono<Env>()
 
@@ -23,12 +24,20 @@ router.post('/', async (c) => {
     return c.json({ message: 'Unauthorized', debug: { hasCookie } }, 401)
   }
 
-  const body = (await c.req.json()) as { processId?: number; domain?: string }
-  const { processId, domain } = body
+  const body = (await c.req.json()) as {
+    processId?: number
+    domain?: string
+    rules?: unknown[]
+  }
+  const { processId, domain, rules: rawRules } = body
 
   if (!processId || !domain) {
     return c.json({ message: 'processId and domain are required' }, 400)
   }
+
+  const rules = (rawRules ?? [])
+    .map(parseWebviewRule)
+    .filter((r): r is WebviewRule => r !== null)
 
   try {
     const [proc] = await globalDb
@@ -52,6 +61,17 @@ router.post('/', async (c) => {
       .returning({ id: schema.webview.id, slug: schema.webview.slug })
 
     if (!row) return c.json({ message: 'Failed to create webview' }, 500)
+
+    if (rules.length > 0) {
+      await globalDb.insert(schema.webviewRule).values(
+        rules.map((rule, ord) => ({
+          webview_id: row.id,
+          ord,
+          match: rule.match,
+          action: rule.action,
+        }))
+      )
+    }
 
     const proxyOrigin = instancePublicUrl(row.slug).replace(/\/$/, '')
 
