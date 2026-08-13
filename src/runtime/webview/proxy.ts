@@ -579,6 +579,16 @@ const cross = extractCrossDomain(upstreamPath)
   const isHtml = contentType.includes('text/html')
 
   if (!isHtml) {
+    // X's Sentry integration chunk (sentry-filter-*.js) blanks the proxied
+    // page after a brief render: its error handling runs away in the iframe
+    // context and its envelope POST to sentry.io is CORS-rejected, and the
+    // app tears itself down. Blocking the chunk keeps X rendering (the app
+    // tolerates the import failing — verified against net::ERR_FAILED) and
+    // we lose only X's error telemetry, which the webview doesn't need.
+    if (/sentry-filter-[a-zA-Z0-9]+\.js$/.test(upstreamPath)) {
+      return new Response('', { status: 404 })
+    }
+
     // Castle.io (X's bot-detection SDK, ondemand.castle.*.js) used to be
     // intercepted here and fully stubbed out (every module body replaced
     // with a no-op) because it was reported to crash in the cross-origin
