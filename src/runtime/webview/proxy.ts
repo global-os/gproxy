@@ -669,9 +669,9 @@ export async function proxyWebviewRequest(
     // X's Sentry integration chunk (sentry-filter-*.js) is a SHARED bundle — the
     // entry chunk top-level-imports the i18n loader (r) and other helpers from
     // it, so it must NOT be blocked wholesale (that leaves the app stuck in its
-    // skeleton, React never mounts). Its kl/Ol functions recurse infinitely in
-    // the proxied context (blanking the page); see CASTLE_TOKEN.md for the plan
-    // to patch that recursion specifically rather than block the chunk.
+    // skeleton, React never mounts). It was once blocked with a 404 on suspicion
+    // of blanking the page, but the real cause was the split-brain module
+    // double-load fixed by the origin rewrite below — so it's served as-is.
 
     // Rewrite CSS url() refs (fonts, images) to go through the proxy.
     if (contentType.includes('text/css')) {
@@ -683,45 +683,40 @@ export async function proxyWebviewRequest(
       })
     }
 
-    // X's preload-helper chunk hardcodes the absolute CDN origin
-    // (https://abs.twimg.com) and injects <link rel="modulepreload"> elements
-    // pointing at it. Those absolute URLs bypass the proxy entirely, so every
-    // chunk is fetched a second time straight from the CDN — two module
-    // instances (split-brain) that break the app. Rewrite just the origin to a
-    // proxy-relative path (keeping the upstream path) so modulepreloads route
-    // through the proxy like every other asset.
-    if (/preload-helper-[A-Za-z0-9_-]+\.js$/.test(upstreamPath)) {
+    // X's JS chunks hardcode the absolute CDN origin (https://abs.twimg.com) for
+    // modulepreload URLs, font refs, and other asset paths. Left absolute, those
+    // bypass the proxy entirely: chunks are fetched a second time straight from
+    // the CDN (two module instances — split-brain — that break the app) and
+    // fonts/assets hit the CDN directly. Rewrite just the origin to a
+    // proxy-relative path (keeping the upstream path) so everything routes
+    // through the proxy.
+    if (contentType.includes('javascript')) {
       const realScript = await upstreamResponse.text()
       const rewritten = realScript.replace(
         /https:\/\/abs\.twimg\.com/g,
         '/abs.twimg.com'
       )
-      responseHeaders.delete('content-length')
-      return new Response(rewritten, {
-        status: upstreamResponse.status,
-        headers: responseHeaders,
-      })
-    }
 
-    // Castle.io (X's bot-detection SDK, ondemand.castle.*.js) used to be
-    // intercepted here and fully stubbed out (every module body replaced
-    // with a no-op) because it was reported to crash in the cross-origin
-    // iframe context — but that also meant it never generates the
-    // $castle_token X's begin_login endpoint expects, which is the likely
-    // actual cause of the "Please use X.com or official X apps" login
-    // error, and the crash it worked around didn't reproduce in repeated
-    // local testing. Now served as-is (below), with one addition: its
-    // environment-tampering checks (functions shaped like
-    // `function uN(){try{return EXPR}catch{return!1}}`, checking whether
-    // globals like Element/AudioContext have been monkey-patched, via
-    // .toString() signature comparison) get instrumented with a
-    // console.log so real occurrences of the login-limit error can be
-    // correlated against what these checks actually see — see
-    // CASTLE_TOKEN.md. If it turns out to genuinely crash, patch the
-    // specific thing that breaks, not the whole module again.
-    if (/castle\.[a-f0-9]+\.js$/.test(upstreamPath)) {
-      const realScript = await upstreamResponse.text()
-      const instrumented = instrumentCastleTamperChecks(realScript)
+      // Castle.io (X's bot-detection SDK, ondemand.castle.*.js) used to be
+      // intercepted here and fully stubbed out (every module body replaced
+      // with a no-op) because it was reported to crash in the cross-origin
+      // iframe context — but that also meant it never generates the
+      // $castle_token X's begin_login endpoint expects, which is the likely
+      // actual cause of the "Please use X.com or official X apps" login
+      // error, and the crash it worked around didn't reproduce in repeated
+      // local testing. Now served as-is (below), with one addition: its
+      // environment-tampering checks (functions shaped like
+      // `function uN(){try{return EXPR}catch{return!1}}`, checking whether
+      // globals like Element/AudioContext have been monkey-patched, via
+      // .toString() signature comparison) get instrumented with a
+      // console.log so real occurrences of the login-limit error can be
+      // correlated against what these checks actually see — see
+      // CASTLE_TOKEN.md. If it turns out to genuinely crash, patch the
+      // specific thing that breaks, not the whole module again.
+      const output = /castle\.[a-f0-9]+\.js$/.test(upstreamPath)
+        ? instrumentCastleTamperChecks(rewritten)
+        : rewritten
+
       responseHeaders.delete('content-length')
       if (sessionId != null) {
         recordTraffic({
@@ -733,12 +728,12 @@ export async function proxyWebviewRequest(
           requestBody: body ? Buffer.from(body).toString('base64') : null,
           responseStatus: upstreamResponse.status,
           responseHeaders: headersToArray(responseHeaders),
-          responseBody: instrumented.slice(0, 512 * 1024),
+          responseBody: output.slice(0, 512 * 1024),
           responseBodyEncoding: null,
           durationMs: Date.now() - t0,
         })
       }
-      return new Response(instrumented, {
+      return new Response(output, {
         status: upstreamResponse.status,
         headers: responseHeaders,
       })
