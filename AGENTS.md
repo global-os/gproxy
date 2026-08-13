@@ -292,6 +292,28 @@ Recording uses a batched in-memory flush (500ms) to avoid adding DB connections 
 | X login "Please use X.com or official X apps" / "We've temporarily limited your login" | Confirm sidecar `/health` shows `engine=chrome(patchright)` and `proxyOk: true`; see `SETUP_SIDECAR.md` for the full real-Chrome-vs-Chromium-vs-headless breakdown |
 | X `ct0` cookie zeroed on page load | **Not necessarily a problem** — real Chrome also gets `ct0` zeroed on a bare document GET; X only issues a real `ct0` on the first API/GraphQL call. Don't treat this alone as a block signal (see `SETUP_SIDECAR.md`) |
 
+## Driving Chrome via Patchright (debugging the intercept script)
+
+When driving the webview with Patchright to debug the injected intercept script,
+`page.evaluate()` (and `page.addInitScript()`) run in an **isolated world**, not
+the page's main world:
+
+- They **share the DOM** — `document.body.innerHTML`, `document.querySelectorAll`,
+  etc. return the real page state.
+- They do **not** share JS globals that inline page scripts mutate. So
+  `page.evaluate(() => window.fetch.toString())` returns `"[native code]"` even
+  when the intercept script has already patched `window.fetch`, and
+  `page.evaluate(() => document.hasOwnProperty('cookie'))` is `false` even when
+  the intercept script's `Object.defineProperty(document, 'cookie', …)` ran.
+  This is a false negative — don't conclude "the patch didn't apply" from it.
+
+**Ground truth is the network layer:** `page.on('request')` / `page.on('response')`
+show the actual request URLs, which reveal whether the intercept script's
+URL rewrite is working (e.g. `api.x.com/…` → `…/api.x.com/…`) or a request is
+escaping to the origin directly. To inspect main-world globals, inject a
+diagnostic `<script>` into the HTML via `page.route` (same world as the intercept
+script) and read the output from `page.on('console')`.
+
 ## Conventions
 
 - ESM throughout (`"type": "module"`); imports use `.js` extensions in `src/`
