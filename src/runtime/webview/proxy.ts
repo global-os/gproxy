@@ -683,6 +683,26 @@ export async function proxyWebviewRequest(
       })
     }
 
+    // X's preload-helper chunk hardcodes the absolute CDN origin
+    // (https://abs.twimg.com) and injects <link rel="modulepreload"> elements
+    // pointing at it. Those absolute URLs bypass the proxy entirely, so every
+    // chunk is fetched a second time straight from the CDN — two module
+    // instances (split-brain) that break the app. Rewrite just the origin to a
+    // proxy-relative path (keeping the upstream path) so modulepreloads route
+    // through the proxy like every other asset.
+    if (/preload-helper-[A-Za-z0-9_-]+\.js$/.test(upstreamPath)) {
+      const realScript = await upstreamResponse.text()
+      const rewritten = realScript.replace(
+        /https:\/\/abs\.twimg\.com/g,
+        '/abs.twimg.com'
+      )
+      responseHeaders.delete('content-length')
+      return new Response(rewritten, {
+        status: upstreamResponse.status,
+        headers: responseHeaders,
+      })
+    }
+
     // Castle.io (X's bot-detection SDK, ondemand.castle.*.js) used to be
     // intercepted here and fully stubbed out (every module body replaced
     // with a no-op) because it was reported to crash in the cross-origin
