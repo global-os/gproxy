@@ -71,6 +71,7 @@ export const auth = betterAuth({
   trustedOrigins: [
     ...(process.env.VERCEL ? [] : [
       'https://app.app.dev.onetrueos.com:3443',
+      'https://app.app.dev.onetrueos.com',
       'http://127.0.0.1:3000',
     ]),
     'https://app.app.dev.onetrueos.com',

@@ -6,6 +6,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
+const port = parseInt(process.env.FRONTEND_PORT || '3443', 10)
+process.env.VITE_FRONTEND_PORT = String(port)
+
 const felaPackages = [
   'fela',
   'fela-beautifier',
@@ -65,8 +68,8 @@ export default defineConfig({
   }), react()],
   server: {
     host: '0.0.0.0',
-    port: 3443,
-    open: 'https://app.app.dev.onetrueos.com:3443',
+    port,
+    open: port === 443 ? 'https://app.app.dev.onetrueos.com' : `https://app.app.dev.onetrueos.com:${port}`,
     https: {
       cert: path.resolve(dirname, '../../certs/dev.pem'),
       key: path.resolve(dirname, '../../certs/dev-key.pem'),

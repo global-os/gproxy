@@ -8,7 +8,8 @@
   "packageManager": "npm@10.9.2",
   "scripts": {
     "dev:backend": "node scripts/kill-dev-servers.mjs 3000 && tsx src/index.tsx",
-    "dev:frontend": "node scripts/setup-dev-certs.mjs && node scripts/kill-dev-servers.mjs 3443 && cd src/frontend; npm run-script dev",
+    "dev:frontend": "node scripts/setup-dev-certs.mjs && node scripts/kill-dev-servers.mjs 443 && cd src/frontend; FRONTEND_PORT=443 npm run-script dev",
+    "dev:frontend:3443": "node scripts/setup-dev-certs.mjs && node scripts/kill-dev-servers.mjs 3443 && cd src/frontend; FRONTEND_PORT=3443 npm run-script dev",
     "clean:certs": "rm -f certs/dev.pem certs/dev-key.pem",
     "clean": "npm run clean:certs && rm -rf dist src/frontend/dist src/frontend/storybook-static public/assets public/storybook",
     "dev:storybook": "cd src/frontend && npm run storybook",

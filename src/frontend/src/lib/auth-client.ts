@@ -1,8 +1,11 @@
 import { createAuthClient } from 'better-auth/react'
 import { inferAdditionalFields } from 'better-auth/client/plugins'
 
+const devPort = import.meta.env.VITE_FRONTEND_PORT
 const baseURL = import.meta.env.DEV
-  ? 'https://app.app.dev.onetrueos.com:3443'
+  ? devPort === '443'
+    ? 'https://app.app.dev.onetrueos.com'
+    : `https://app.app.dev.onetrueos.com:${devPort || '3443'}`
   : undefined;
 
 export const authClient = createAuthClient({

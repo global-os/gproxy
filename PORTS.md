@@ -5,7 +5,8 @@
 | Port | What | Where |
 |------|------|-------|
 | **3000** | Hono backend (`tsx src/index.tsx`) | `src/index.tsx:49` |
-| **3443** | Vite frontend, HTTPS (`vite dev`) | `src/frontend/vite.config.ts:68` |
+| **3443** | Vite frontend, HTTPS (`vite dev`) — non-privileged | `src/frontend/vite.config.ts` |
+| **443** | Vite frontend, HTTPS (`vite dev`) — privileged | `src/frontend/vite.config.ts` |
 | **5173** | Vite default (legacy, unused) | killed on startup as cleanup |
 | **6006** | Storybook (`storybook dev`) | `src/frontend/package.json:12` |
 
@@ -21,8 +22,9 @@
 ## Rules
 
 - **Backend (`npm run dev:backend`)** kills old process on **3000** before starting.
-- **Frontend (`npm run dev:frontend`)** kills old processes on **3443** + **5173**, generates mkcert certs, then starts Vite.
-- Port 3443 was chosen instead of 443 because macOS requires `sudo` to bind to privileged ports (<1024).
+- **Frontend (`npm run dev:frontend`)** binds to **443** (requires `sudo` on macOS/Linux).
+  - **`npm run dev:frontend:3443`** binds to **3443** (no `sudo` needed) — secondary target.
+  - Both kill old processes on the target port + **5173**, generate mkcert certs, then start Vite.
 - On Vercel (production), the dev port logic is gated behind `!process.env.VERCEL` — none of these scripts run.
-- The browser auto-opens `https://app.app.dev.onetrueos.com:3443` when Vite is ready.
+- The browser auto-opens `https://app.app.dev.onetrueos.com:{port}` (no `:443` suffix when binding to 443).
 - Vite proxies `/api` → `http://127.0.0.1:3000/app/api` (rewrites the path prefix).

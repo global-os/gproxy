@@ -1,7 +1,10 @@
 import { test, expect } from 'vitest'
 import { page } from '@vitest/browser/context'
 
-const BASE = 'https://app.app.dev.onetrueos.com:3443'
+const devPort = import.meta.env.VITE_FRONTEND_PORT
+const BASE = devPort === '443'
+  ? 'https://app.app.dev.onetrueos.com'
+  : `https://app.app.dev.onetrueos.com:${devPort || '3443'}`
 
 test('login page loads', async () => {
   await page.goto(`${BASE}/login`)
