@@ -6,7 +6,7 @@ import { getDomain } from 'tldts'
 import { db } from '../../db/index.js'
 import * as schema from '../../db/schema.js'
 import { buildInterceptScript } from './intercept-script.js'
-import { applyOriginRewrites, type WebviewRule } from './rules.js'
+import { applyAppends, applyOriginRewrites, type WebviewRule } from './rules.js'
 import {
   getActiveSessionId,
   captureResponseBody,
@@ -682,7 +682,8 @@ export async function proxyWebviewRequest(
       const rewritten = applyOriginRewrites(
         rewriteCss(css, boundDomain),
         rules,
-        fetchDomain
+        fetchDomain,
+        fetchPath
       )
       responseHeaders.delete('content-length')
       return new Response(rewritten, {
@@ -699,7 +700,12 @@ export async function proxyWebviewRequest(
     // the proxy.
     if (contentType.includes('javascript')) {
       const realScript = await upstreamResponse.text()
-      const rewritten = applyOriginRewrites(realScript, rules, fetchDomain)
+      const rewritten = applyOriginRewrites(
+        realScript,
+        rules,
+        fetchDomain,
+        fetchPath
+      )
 
       // Castle.io (X's bot-detection SDK, ondemand.castle.*.js) used to be
       // intercepted here and fully stubbed out (every module body replaced
@@ -779,10 +785,18 @@ export async function proxyWebviewRequest(
   // Only inject the intercept script into same-domain pages. Cross-domain HTML
   // (e.g. a Facebook endpoint returning an error page) is consumed as a fetch
   // response body by site JS — injecting script tags corrupts JSON.parse calls.
-  const originRewritten = applyOriginRewrites(html, rules, fetchDomain)
-  const rewritten = cross
-    ? originRewritten
-    : rewriteHtml(originRewritten, boundDomain)
+  const originRewritten = applyOriginRewrites(
+    html,
+    rules,
+    fetchDomain,
+    fetchPath
+  )
+  const rewritten = applyAppends(
+    cross ? originRewritten : rewriteHtml(originRewritten, boundDomain),
+    rules,
+    fetchDomain,
+    fetchPath
+  )
   responseHeaders.set('Content-Type', 'text/html; charset=utf-8')
   responseHeaders.delete('content-length')
   if (sessionId != null) {

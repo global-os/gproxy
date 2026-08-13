@@ -43,13 +43,32 @@ window.addEventListener('message', function (event) {
         type: 'webview:create',
         requestId: pendingRequestId,
         domain: 'x.com',
+        // Per-webview rules (stored as webview_rule rows, evaluated in order):
         rules: [
+          // X's chunks hardcode the abs.twimg.com CDN origin; rewrite it to a
+          // proxy-relative path so they load through the proxy instead of a
+          // second time straight from the CDN (which blanked the page).
           {
             match: { domain: 'abs.twimg.com' },
             action: {
               type: 'rewrite-origin',
               from: 'https://abs.twimg.com',
               to: '/abs.twimg.com',
+            },
+          },
+          // Show a loading overlay on the first HTML load, hidden once React
+          // mounts (react-root gains children) or after a 2.5s fallback.
+          {
+            match: { path: '/' },
+            action: {
+              type: 'append',
+              html:
+                '<style>#gproxy-loading{position:fixed;inset:0;background:#15202b;color:#e7e9ea;display:flex;align-items:center;justify-content:center;z-index:99999;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}</style>' +
+                '<div id="gproxy-loading">Loading…</div>' +
+                '<script>(function(){var e=document.getElementById("gproxy-loading");if(!e)return;var t=Date.now();function hide(){if(e.parentNode)e.parentNode.removeChild(e)}' +
+                'window.addEventListener("load",function(){setTimeout(hide,2500)});' +
+                'new MutationObserver(function(){var r=document.getElementById("react-root");if(r&&r.childElementCount>0&&Date.now()-t>500)hide()})' +
+                '.observe(document.body,{childList:true,subtree:true})})()</script>',
             },
           },
         ],

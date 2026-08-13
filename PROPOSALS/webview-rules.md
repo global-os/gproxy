@@ -2,10 +2,10 @@
 
 ## Status (2026-08-13)
 
-`rewrite-origin` implemented end-to-end. More matchers/actions from
-[`webviews.md`](./webviews.md) remain unimplemented. One open problem: immutable
-upstream cache headers make proxy rewrites invisible to returning visitors (see
-below).
+`rewrite-origin` and `append` implemented end-to-end, plus a `path` matcher. More
+matchers/actions from [`webviews.md`](./webviews.md) remain unimplemented. One
+open problem: immutable upstream cache headers make proxy rewrites invisible to
+returning visitors (see below).
 
 ## Problem
 
@@ -24,22 +24,30 @@ or wrote it.
 ## What's implemented
 
 - `src/runtime/webview/rules.ts` — `WebviewRule` type
-  (`{ match: { domain }, action: { type: 'rewrite-origin', from, to } }`), a
-  `parseWebviewRule` validator used on both the POST body and the DB JSONB, and
-  `applyOriginRewrites` (literal `from` → `to` replacement for rules whose
-  `match.domain` equals the fetched upstream domain).
+  (`{ match: { domain?, path? }, action }`), a `parseWebviewRule` validator used
+  on both the POST body and the DB JSONB, `ruleMatches`, `applyOriginRewrites`
+  (literal `from` → `to` replacement), and `applyAppends` (inject an HTML
+  snippet before `</body>`).
 - `POST /api/webviews` accepts `rules: WebviewRule[]` and inserts `webview_rule`
   rows.
 - `resolveWebviewBySlug` loads + caches rules (same cache-miss path, so the hot
   path stays off the DB — see the pool-exhaustion pitfall).
-- `proxyWebviewRequest` evaluates `rewrite-origin` over HTML, CSS, and JS bodies.
+- `proxyWebviewRequest` evaluates `rewrite-origin` over HTML, CSS, and JS bodies,
+  and `append` over HTML bodies.
 - Kernel `webview:create` forwards `message.rules`.
-- `twitter.gapp` sends the `abs.twimg.com` rule instead of relying on the proxy.
+- `twitter.gapp` sends the `abs.twimg.com` rewrite rule and a loading-screen
+  `append` rule (`match: { path: '/' }`) instead of relying on the proxy.
 
-The matcher/action shapes are JSONB, so more matchers (`path`, `prefix`,
-`regex`) and actions (`block`, `remap`, …) from `webviews.md` can be added
-without a migration — `parseWebviewRule` just rejects anything unrecognized
-today.
+### Actions
+
+| Action | Shape | Applies to | Effect |
+|--------|-------|-----------|--------|
+| `rewrite-origin` | `{ from, to }` | HTML / CSS / JS | literal `from` → `to` replacement |
+| `append` | `{ html }` | HTML | inject `html` before `</body>` |
+
+The matcher/action shapes are JSONB, so more matchers (`prefix`, `regex`) and
+actions (`block`, `remap`, …) from `webviews.md` can be added without a
+migration — `parseWebviewRule` just rejects anything unrecognized today.
 
 ## Open problem: immutable upstream cache headers
 
