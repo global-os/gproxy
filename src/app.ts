@@ -372,21 +372,15 @@ app.get('/health', async (c) => {
 
 app.basePath('/app/api/auth').route('/', authRoutes)
 
-// The workspace shell (app.app.onetrueos.com) and instance/webview iframes
-// ({slug}.app.onetrueos.com) are different origins. The iframe polls /_status
-// same-origin, but the shell (and its dev variant) may query instance/webview
-// endpoints cross-origin, so allow those origins here.
-const SHELL_ORIGINS = [
-  'https://app.app.onetrueos.com',
-  'https://app.app.dev.onetrueos.com',
-  'https://app.app.dev.onetrueos.com:3443',
-  'https://app.app.dev.onetrueos.com:443',
-]
-
+// Instance/webview content is served into the workspace iframe and is public
+// (anyone can visit {slug}.app.onetrueos.com directly), and the iframe may run
+// under a different or opaque origin, so reflect whatever Origin arrived rather
+// than restrict to a fixed allowlist. This lets the shell (app.app.onetrueos.com),
+// the instance itself, and any sandboxed/opaque iframe all read the responses.
 app.use(
   '/instance/**',
   cors({
-    origin: SHELL_ORIGINS,
+    origin: (origin) => origin ?? '*',
     credentials: true,
   }),
   middleware.provideDb,
