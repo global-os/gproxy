@@ -34,7 +34,11 @@ function RouteComponent() {
     return () => clearInterval(id)
   }, [error, refetch])
 
-  if (isPending || isRefetching) {
+  // Only show the loading screen on the initial fetch. better-auth refetches
+  // the session on window focus, which flips `isRefetching` while the previous
+  // session data is still valid — gating on that would unmount the workspace
+  // (and redraw every window) every time the tab regains focus.
+  if (isPending) {
     return (
       <Page variant="workspace">
         <div className="h-full flex items-center justify-center bg-[#aca8c3] text-gray-800 text-sm font-sans">
