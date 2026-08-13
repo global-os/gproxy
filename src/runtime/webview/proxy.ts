@@ -389,6 +389,21 @@ function rewriteHtml(html: string, boundDomain: string): string {
   return result.replace(/(<script[\s>])/i, `${intercept}$1`)
 }
 
+/**
+ * Rewrite absolute `url(...)` references in CSS (e.g. @font-face src, images)
+ * so they route through the proxy like every other asset. HTML attributes and
+ * runtime fetch/XHR are already rewritten elsewhere, but CSS is a separate
+ * surface the browser resolves directly — without this, fonts (Chirp-*) and
+ * any CSS images hit abs.twimg.com cross-origin instead of the proxy.
+ */
+function rewriteCss(css: string, boundDomain: string): string {
+  const boundRe = new RegExp(escapeRegex(boundDomain), 'gi')
+  return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (match, quote: string, url: string) => {
+    if (!/^https?:\/\//i.test(url)) return match
+    return `url(${quote}${rewriteUrl(url, boundRe)}${quote})`
+  })
+}
+
 /** Probe a URL through the configured fetch path (sidecar → outboundProxy → direct) — used by /debug. */
 export async function probeOutboundProxy(url: string, timeoutMs = 8_000): Promise<{ ok: boolean; status?: number; ms: number; proxyActive: boolean; sidecarActive: boolean; error?: string }> {
   const t = Date.now()
@@ -587,6 +602,13 @@ const cross = extractCrossDomain(upstreamPath)
     // we lose only X's error telemetry, which the webview doesn't need.
     if (/sentry-filter-[a-zA-Z0-9]+\.js$/.test(upstreamPath)) {
       return new Response('', { status: 404 })
+    }
+
+    // Rewrite CSS url() refs (fonts, images) to go through the proxy.
+    if (contentType.includes('text/css')) {
+      const css = await upstreamResponse.text()
+      responseHeaders.delete('content-length')
+      return new Response(rewriteCss(css, boundDomain), { status: upstreamResponse.status, headers: responseHeaders })
     }
 
     // Castle.io (X's bot-detection SDK, ondemand.castle.*.js) used to be
