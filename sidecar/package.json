@@ -11,6 +11,6 @@
     "aws4": "^1.13.2",
     "patchright": "^1.61.1",
     "proxy-chain": "^3.0.0",
-    "undici": "^8.5.0"
+    "undici": "^8.9.0"
   }
 }
