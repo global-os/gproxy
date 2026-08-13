@@ -558,28 +558,49 @@ export async function proxyWebviewRequest(
     }
   }
 
-  let upstreamResponse: Response
-  try {
-    const fetchInit = {
-      method: incomingRequest.method,
-      headers: forwardHeaders,
-      body,
-      redirect: 'follow' as const,
+  const fetchInit = {
+    method: incomingRequest.method,
+    headers: forwardHeaders,
+    body,
+    redirect: 'follow' as const,
+  }
+  const { agent: outboundProxy } = await resolveOutboundProxy()
+
+  // Transient fetch failures surface as 502s/errors to the browser: the TLS
+  // sidecar intermittently drops chunk requests (net::ERR_FAILED), and the
+  // upstream sometimes 5xxes. Retry a few times before giving up.
+  const MAX_ATTEMPTS = 3
+  let upstreamResponse: Response | undefined
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      if (sidecarUrl) {
+        upstreamResponse = await fetchViaSidecar(upstream, fetchInit)
+      } else if (outboundProxy) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        upstreamResponse = (await undiciFetch(upstream, {
+          ...fetchInit,
+          dispatcher: outboundProxy,
+        } as any)) as unknown as Response
+      } else {
+        upstreamResponse = await fetch(upstream, fetchInit)
+      }
+      if (upstreamResponse.status < 500) break
+      lastErr = new Error(`upstream returned ${upstreamResponse.status}`)
+    } catch (err) {
+      lastErr = err
     }
-    const { agent: outboundProxy } = await resolveOutboundProxy()
-    if (sidecarUrl) {
-      upstreamResponse = await fetchViaSidecar(upstream, fetchInit)
-    } else if (outboundProxy) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      upstreamResponse = (await undiciFetch(upstream, {
-        ...fetchInit,
-        dispatcher: outboundProxy,
-      } as any)) as unknown as Response
-    } else {
-      upstreamResponse = await fetch(upstream, fetchInit)
+    if (attempt < MAX_ATTEMPTS) {
+      console.log(
+        `[webview] upstream fetch failed (attempt ${attempt}/${MAX_ATTEMPTS}) for ${upstream}: ` +
+          (lastErr instanceof Error ? lastErr.message : String(lastErr))
+      )
+      await new Promise((resolve) => setTimeout(resolve, 150 * attempt))
     }
-  } catch (err) {
-    console.error(`[webview] upstream fetch failed for ${upstream}:`, err)
+  }
+
+  if (!upstreamResponse) {
+    console.error(`[webview] upstream fetch failed for ${upstream}:`, lastErr)
     if (sessionId != null) {
       recordTraffic({
         sessionId,
@@ -590,7 +611,7 @@ export async function proxyWebviewRequest(
         requestBody: body ? Buffer.from(body).toString('base64') : null,
         responseStatus: 0,
         responseHeaders: [],
-        responseBody: err instanceof Error ? err.message : String(err),
+        responseBody: lastErr instanceof Error ? lastErr.message : String(lastErr),
         responseBodyEncoding: null,
         durationMs: Date.now() - t0,
       })
