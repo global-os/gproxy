@@ -16,6 +16,7 @@ import { chromium } from 'patchright'
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
 import { anonymizeProxy } from 'proxy-chain'
 import { resolveProxyUrl, startConfigPolling } from './config.mjs'
+import { resolveChromiumExecutable } from './chromium-artifact.mjs'
 
 const PORT = process.env.PORT || 8080
 const SECRET = process.env.SIDECAR_SECRET || ''
@@ -27,6 +28,10 @@ const MAX_REDIRECTS = 10
 // Optional path to a custom-built Chromium binary (see PROPOSALS/custom-chromium-build.md).
 // When set, the sidecar uses this binary instead of stock Google Chrome.
 const CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH || null
+// Optional git SHA of a chromium-fork CI build; when set, the sidecar
+// downloads that artifact from MinIO at startup and launches it instead of
+// stock Chrome. CHROMIUM_EXECUTABLE_PATH takes precedence over this.
+const CHROMIUM_ARTIFACT_SHA = process.env.CHROMIUM_ARTIFACT_SHA || ''
 
 // Real Chrome's UA with "Headless" stripped — see header comment above.
 const USER_AGENT =
@@ -97,15 +102,35 @@ async function probeIps() {
 // the CI build/deploy pipeline to produce the binary, hasn't happened yet.
 const anonymizedProxyUrl = PROXY_URL ? await anonymizeProxy(PROXY_URL) : null
 
+// Resolve which Chromium to launch. Precedence: explicit executable path >
+// MinIO artifact (downloaded at startup) > stock Google Chrome.
+let chromiumExecutable = CHROMIUM_EXECUTABLE_PATH
+let chromiumLibraryPath = ''
+if (!chromiumExecutable && CHROMIUM_ARTIFACT_SHA) {
+  const resolved = await resolveChromiumExecutable(CHROMIUM_ARTIFACT_SHA)
+  chromiumExecutable = resolved.executablePath
+  chromiumLibraryPath = resolved.libraryPath
+}
+
 const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
-  // Use custom-built Chromium if CHROMIUM_EXECUTABLE_PATH is set,
-  // otherwise fall back to stock Google Chrome.
-  ...(CHROMIUM_EXECUTABLE_PATH
-    ? { executablePath: CHROMIUM_EXECUTABLE_PATH }
+  // Use a custom-built Chromium if one was resolved, otherwise fall back to
+  // stock Google Chrome.
+  ...(chromiumExecutable
+    ? { executablePath: chromiumExecutable }
     : { channel: 'chrome' }),
   headless: true,
   userAgent: USER_AGENT,
   viewport: { width: 1920, height: 1080 },
+  // Component builds link against .so files living next to the binary;
+  // add their dir to the loader path so the downloaded artifact resolves.
+  ...(chromiumLibraryPath
+    ? {
+        env: {
+          ...process.env,
+          LD_LIBRARY_PATH: chromiumLibraryPath + (process.env.LD_LIBRARY_PATH ? ':' + process.env.LD_LIBRARY_PATH : ''),
+        },
+      }
+    : {}),
   args: [
     '--no-sandbox', // required running as root in a container
     '--enable-features=PreserveOverriddenSecFetchHeaders',

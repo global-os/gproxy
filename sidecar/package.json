@@ -8,6 +8,7 @@
     "build:chromium": "echo 'See PROPOSALS/custom-chromium-build.md for build instructions'"
   },
   "dependencies": {
+    "aws4": "^1.13.2",
     "patchright": "^1.61.1",
     "proxy-chain": "^3.0.0",
     "undici": "^8.5.0"
