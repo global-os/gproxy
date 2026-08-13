@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm'
 import { getDomain } from 'tldts'
 import { db } from '../../db/index.js'
 import * as schema from '../../db/schema.js'
+import { buildInterceptScript } from './intercept-script.js'
 import {
   getActiveSessionId,
   captureResponseBody,
@@ -360,139 +361,6 @@ function rewriteHtmlAttrs(html: string, boundDomain: string): string {
     (_match, attr: string, quote: string, url: string) =>
       `${attr}${quote}${rewriteUrl(url, boundRe)}${quote}`
   )
-}
-
-/**
- * Script injected at the top of every proxied HTML page. Two sections:
- *
- * REPLACEMENTS — intercept platform APIs and change what they do so that
- * cross-origin network requests are transparently rerouted through the proxy.
- * The proxy rewrites Origin/Referer server-side so upstream services see the
- * bound domain (e.g. x.com) rather than our proxy subdomain.
- *
- * SHIMS — restore behaviour the site expects on its real domain that breaks
- * in the proxy context. These don't change intent; they fix the mismatch
- * between where the site thinks it's running and where it actually is.
- */
-function buildInterceptScript(boundDomain: string): string {
-  return `<script>(function(){
-var _bound="https://${boundDomain}";
-
-/* ── REPLACEMENTS ─────────────────────────────────────────────────────── */
-
-var _o=location.origin;
-var _oHost=location.host;
-var _boundHost=new URL(_bound).host;
-function _p(u){
-  try{
-    var s=u instanceof Request?u.url:u instanceof URL?u.href:typeof u==='string'?u:null;
-    if(!s||!s.startsWith('http')||s.startsWith(_o))return null;
-    var r=new URL(s);
-    return '/'+r.host+r.pathname+r.search+r.hash;
-  }catch(e){return null;}
-}
-// The site's own JS can read the real proxy subdomain (location.href,
-// document.referrer, etc. — genuine properties of the real browser tab, not
-// spoofable, see SHIMS below) and embed it in outgoing request bodies (e.g.
-// analytics/onboarding payloads). Rewrite any occurrence of the real origin
-// or bare hostname in outgoing bodies to the bound domain before the request
-// leaves the browser — this only touches what gets sent over the wire, never
-// location.* itself, so it can't break any legitimate in-app use of location.
-function _rb(body){
-  if(typeof body!=='string')return body;
-  return body.split(_o).join(_bound).split(_oHost).join(_boundHost);
-}
-// X's Sentry SDK reports to sentry.io; its envelope POST is CORS-rejected in
-// this iframe context and the rejection cascades into a page teardown (blank).
-// Stub those requests out entirely -- return a fake success so Sentry thinks
-// the event was delivered and its error handling never throws.
-function _isSentry(u){
-  try{return typeof u==='string'&&u.indexOf('sentry.io')>-1;}catch(e){return false;}
-}
-var _f=window.fetch.bind(window);
-window.fetch=function(input,init){
-  var u=input instanceof Request?input.url:(typeof input==='string'?input:String(input));
-  if(_isSentry(u)){
-    return Promise.resolve(new Response('{}',{status:200,headers:{'Content-Type':'application/json'}}));
-  }
-  var rw=_p(input);
-  if(rw!==null)input=input instanceof Request?new Request(rw,input):rw;
-  if(init&&typeof init.body==='string'){init=Object.assign({},init,{body:_rb(init.body)});}
-  return _f(input,init);
-};
-var _xo=XMLHttpRequest.prototype.open;
-XMLHttpRequest.prototype.open=function(m,u){
-  var url=typeof u==='string'?u:String(u);
-  var args=Array.prototype.slice.call(arguments);
-  if(_isSentry(url)){
-    // Point the XHR at an empty JSON data URL so it "succeeds" without a real
-    // network request to sentry.io.
-    args[1]='data:application/json,{}';
-    return _xo.apply(this,args);
-  }
-  var rw=_p(url);
-  // Copy instead of mutating the arguments object -- a second wrapper (e.g.
-  // the site's own Sentry instrumentation) calls us via apply(), and mutating
-  // the live arguments object there is a known footgun.
-  args[1]=rw!==null?rw:url;
-  return _xo.apply(this,args);
-};
-var _xs=XMLHttpRequest.prototype.send;
-XMLHttpRequest.prototype.send=function(body){
-  return _xs.call(this,_rb(body));
-};
-var _sb=navigator.sendBeacon.bind(navigator);
-navigator.sendBeacon=function(u,d){
-  var url=typeof u==='string'?u:String(u);
-  if(_isSentry(url))return true;
-  var rw=_p(url);
-  return _sb(rw!==null?rw:url,_rb(d));
-};
-
-/* ── SHIMS ────────────────────────────────────────────────────────────── */
-
-// document.cookie: strip Domain= so cookies land on the proxy host instead
-// of the site's real domain, which the browser would reject.
-try{
-  var _cd=Object.getOwnPropertyDescriptor(Document.prototype,'cookie');
-  if(_cd&&_cd.set){
-    var _cs=_cd.set;
-    Object.defineProperty(document,'cookie',{configurable:true,get:_cd.get,set:function(v){
-      _cs.call(document,String(v).replace(/;\\s*domain=[^;,]*/gi,''));
-    }});
-  }
-}catch(e){}
-
-// Intercept dynamically injected <script> src so cross-origin script loads
-// are routed through the proxy just like fetch/XHR.
-try{
-  var _sd=Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype,'src');
-  if(_sd&&_sd.set){var _ss=_sd.set;Object.defineProperty(HTMLScriptElement.prototype,'src',{get:_sd.get,set:function(v){var rw=_p(typeof v==='string'?v:String(v));_ss.call(this,rw!==null?rw:v);},configurable:true});}
-}catch(e){}
-
-// window.location CANNOT be shimmed — confirmed empirically, not just in
-// theory: Object.defineProperty(location, 'origin', ...) throws "Cannot
-// redefine property: origin" in real Chrome. location.origin/href/hostname
-// /host/protocol are non-configurable by design specifically so a page's own
-// JS can never misrepresent its real origin — this is a foundational part of
-// the web security model, not a gap we can code around. The site's own JS
-// genuinely sees the real proxy subdomain here (it's a real property of the
-// real browser tab, unrelated to HTTP header spoofing), and that can leak
-// into things like analytics/onboarding payloads that embed location.href
-// directly. There is no client-side fix for that leak.
-//
-// document.referrer is different — it's a regular configurable accessor on
-// Document.prototype, not a Location property, so it *can* be shimmed. Mask
-// the real proxy subdomain with the bound origin, but only when there really
-// was a referrer (a direct/fresh load should still report no referrer).
-try{
-  var _realReferrer=document.referrer;
-  Object.defineProperty(Document.prototype,'referrer',{configurable:true,get:function(){
-    return _realReferrer?(_bound+'/'):'';
-  }});
-}catch(e){}
-
-})()</script>`
 }
 
 function rewriteHtml(html: string, boundDomain: string): string {
