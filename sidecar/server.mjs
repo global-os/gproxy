@@ -120,15 +120,16 @@ if (!chromiumExecutable && CHROMIUM_ARTIFACT_SHA) {
   chromiumLibraryPath = resolved.libraryPath
 }
 
-const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
+// Launch the browser once, but give every /fetch its own non-persistent
+// context (see chromeFetchOnce) so requests never share a cookie jar or other
+// session state.
+const browser = await chromium.launch({
   // Use a custom-built Chromium if one was resolved, otherwise fall back to
   // stock Google Chrome.
   ...(chromiumExecutable
     ? { executablePath: chromiumExecutable }
     : { channel: 'chrome' }),
   headless: true,
-  userAgent: USER_AGENT,
-  viewport: { width: 1920, height: 1080 },
   // Component builds link against .so files living next to the binary;
   // add their dir to the loader path so the downloaded artifact resolves.
   ...(chromiumLibraryPath
@@ -147,7 +148,6 @@ const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
     '--no-sandbox', // required running as root in a container
     '--enable-features=PreserveOverriddenSecFetchHeaders',
   ],
-  ...(anonymizedProxyUrl ? { proxy: { server: anonymizedProxyUrl } } : {}),
 })
 
 // Each /fetch call gets its own page + CDP session, created and torn down
@@ -178,6 +178,14 @@ const context = await chromium.launchPersistentContext('/tmp/chrome-profile', {
 // preflight.
 async function chromeFetchOnce(url, method, headersObj, bodyB64) {
   const t0 = Date.now()
+  // Fresh, non-persistent context per request — no shared cookie jar or other
+  // session state across requests or between concurrent webviews. (The old
+  // launchPersistentContext profile leaked cookies between them.)
+  const context = await browser.newContext({
+    userAgent: USER_AGENT,
+    viewport: { width: 1920, height: 1080 },
+    ...(anonymizedProxyUrl ? { proxy: { server: anonymizedProxyUrl } } : {}),
+  })
   const page = await context.newPage()
   let sawAnyEvent = false
   try {
@@ -298,7 +306,7 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
         )
     })
   } finally {
-    await page.close().catch(() => {})
+    await context.close().catch(() => {})
   }
 }
 
