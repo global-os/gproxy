@@ -197,6 +197,35 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
       ],
     })
 
+    // Capture the request Chromium actually puts on the wire — final headers
+    // and request priority — not just what we asked for via Fetch.continueRequest.
+    // Chrome recomputes Sec-Fetch-* and priority internally, so the CDP override
+    // alone is not ground truth. requestWillBeSentExtraInfo fires after the
+    // Fetch-domain override with the headers as actually sent.
+    await cdp.send('Network.enable')
+    let wireInfo = null
+    cdp.on('Network.requestWillBeSent', (params) => {
+      const req = params.request
+      // Skip the blank page's own about:blank load; only the fetch() we launched.
+      if (!/^https?:/.test(req.url)) return
+      wireInfo = {
+        requestId: params.requestId,
+        url: req.url,
+        method: req.method,
+        priority: req.priority ?? null,
+        initialPriority: req.initialPriority ?? null,
+        postData: req.postData ?? null,
+        headers: req.headers ?? {},
+      }
+    })
+    cdp.on('Network.requestWillBeSentExtraInfo', (params) => {
+      // Final headers as actually sent, after Fetch.continueRequest and Chrome's
+      // own recomputation of Sec-Fetch-*/etc.
+      if (wireInfo && params.requestId === wireInfo.requestId) {
+        wireInfo.headers = params.headers ?? wireInfo.headers
+      }
+    })
+
     return await new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         console.error(
@@ -284,6 +313,7 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
           status: responseStatusCode,
           headers: (responseHeaders || []).map((h) => [h.name, h.value]),
           body: bodyB64Resp,
+          wire: wireInfo,
         })
       })
 

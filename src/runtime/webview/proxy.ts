@@ -99,10 +99,24 @@ type SidecarFetchInit = {
   redirect: 'follow'
 }
 
+// What Chromium actually put on the wire for a sidecar-driven fetch, captured
+// via CDP Network.requestWillBeSent / requestWillBeSentExtraInfo. headers are
+// the final sent headers (after Fetch.continueRequest and Chrome's own
+// recomputation of Sec-Fetch-*); priority/initialPriority reflect the request
+// priority Chromium assigned (net::RequestPriority mapped to ResourcePriority).
+type SidecarWireInfo = {
+  url?: string
+  method?: string
+  priority?: string | null
+  initialPriority?: string | null
+  postData?: string | null
+  headers?: Record<string, string>
+}
+
 async function fetchViaSidecar(
   upstream: string,
   init: SidecarFetchInit
-): Promise<Response> {
+): Promise<{ response: Response; wire: SidecarWireInfo | null }> {
   const headers: [string, string][] = []
   init.headers.forEach((value, name) => {
     // Omit Accept-Encoding — Go's http client adds gzip and auto-decompresses,
@@ -135,6 +149,7 @@ async function fetchViaSidecar(
     status: number
     headers: [string, string][]
     body: string
+    wire?: SidecarWireInfo | null
   }
 
   const responseHeaders = new Headers()
@@ -142,10 +157,13 @@ async function fetchViaSidecar(
     responseHeaders.append(name, value)
   }
 
-  return new Response(Buffer.from(data.body, 'base64'), {
-    status: data.status,
-    headers: responseHeaders,
-  })
+  return {
+    response: new Response(Buffer.from(data.body, 'base64'), {
+      status: data.status,
+      headers: responseHeaders,
+    }),
+    wire: data.wire ?? null,
+  }
 }
 
 const STRIP_RESPONSE_HEADERS = new Set([
@@ -421,7 +439,7 @@ export async function probeOutboundProxy(
     }
     const res = await Promise.race([
       sidecarUrl
-        ? fetchViaSidecar(url, fetchInit)
+        ? fetchViaSidecar(url, fetchInit).then((v) => v.response)
         : outboundProxy
           ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ((await undiciFetch(url, {
@@ -454,6 +472,28 @@ export async function probeOutboundProxy(
 function headersToArray(h: Headers): { name: string; value: string }[] {
   const out: { name: string; value: string }[] = []
   h.forEach((value, name) => out.push({ name, value }))
+  return out
+}
+
+// Flatten the sidecar's captured wire request (plain-object headers) into the
+// recorder's header-array shape, tagging the Chromium-assigned priority as
+// synthetic entries so it's visible in the exported HAR alongside the headers.
+function wireHeadersToArray(
+  wire: SidecarWireInfo
+): { name: string; value: string }[] {
+  const out: { name: string; value: string }[] = []
+  for (const [name, value] of Object.entries(wire.headers ?? {})) {
+    out.push({ name, value: String(value) })
+  }
+  if (wire.priority != null) {
+    out.push({ name: 'x-gproxy-wire-priority', value: String(wire.priority) })
+  }
+  if (wire.initialPriority != null) {
+    out.push({
+      name: 'x-gproxy-wire-initial-priority',
+      value: String(wire.initialPriority),
+    })
+  }
   return out
 }
 
@@ -576,11 +616,14 @@ export async function proxyWebviewRequest(
   let lastErr: unknown
   let lastStatus: number | null = null
   let attempts = 0
+  let wireRequest: SidecarWireInfo | null = null
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     attempts = attempt
     try {
       if (sidecarUrl) {
-        upstreamResponse = await fetchViaSidecar(upstream, fetchInit)
+        const via = await fetchViaSidecar(upstream, fetchInit)
+        upstreamResponse = via.response
+        wireRequest = via.wire
       } else if (outboundProxy) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         upstreamResponse = (await undiciFetch(upstream, {
@@ -606,6 +649,12 @@ export async function proxyWebviewRequest(
     await new Promise((resolve) => setTimeout(resolve, 150 * attempt))
   }
 
+  // Prefer the sidecar's captured wire headers (what Chromium actually sent)
+  // over the proxy's intended forwardHeaders when recording.
+  const recordedRequestHeaders = wireRequest
+    ? wireHeadersToArray(wireRequest)
+    : headersToArray(forwardHeaders)
+
   if (!upstreamResponse) {
     console.error(`[webview] upstream fetch failed for ${upstream}:`, lastErr)
     if (sessionId != null) {
@@ -614,7 +663,7 @@ export async function proxyWebviewRequest(
         slug,
         method,
         upstreamUrl: upstream,
-        requestHeaders: headersToArray(forwardHeaders),
+        requestHeaders: recordedRequestHeaders,
         requestBody: body ? Buffer.from(body).toString('base64') : null,
         responseStatus: 0,
         responseHeaders: [],
@@ -743,7 +792,7 @@ export async function proxyWebviewRequest(
           slug,
           method,
           upstreamUrl: upstream,
-          requestHeaders: headersToArray(forwardHeaders),
+          requestHeaders: recordedRequestHeaders,
           requestBody: body ? Buffer.from(body).toString('base64') : null,
           responseStatus: upstreamResponse.status,
           responseHeaders: headersToArray(responseHeaders),
@@ -769,7 +818,7 @@ export async function proxyWebviewRequest(
         slug,
         method,
         upstreamUrl: upstream,
-        requestHeaders: headersToArray(forwardHeaders),
+        requestHeaders: recordedRequestHeaders,
         requestBody: body ? Buffer.from(body).toString('base64') : null,
         responseStatus: upstreamResponse.status,
         responseHeaders: headersToArray(responseHeaders),
@@ -814,7 +863,7 @@ export async function proxyWebviewRequest(
       slug,
       method,
       upstreamUrl: upstream,
-      requestHeaders: headersToArray(forwardHeaders),
+      requestHeaders: recordedRequestHeaders,
       requestBody: body ? Buffer.from(body).toString('base64') : null,
       responseStatus: upstreamResponse.status,
       responseHeaders: headersToArray(responseHeaders),
