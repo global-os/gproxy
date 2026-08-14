@@ -273,6 +273,7 @@ function isSameSite(a: string, b: string): boolean {
 function computeSecFetchHeaders(
   boundDomain: string,
   fetchDomain: string,
+  fetchPath: string,
   incomingRequest: Request
 ): Record<string, string> {
   const site =
@@ -284,11 +285,25 @@ function computeSecFetchHeaders(
 
   const headers: Record<string, string> = { 'Sec-Fetch-Site': site }
 
-  const mode = incomingRequest.headers.get('sec-fetch-mode')
-  const dest = incomingRequest.headers.get('sec-fetch-dest')
+  // X's onboarding "actions" (begin_login, etc.) are submitted as native form
+  // POSTs that navigate, not background fetch() calls — a real browser sends
+  // Sec-Fetch-Dest: document / Sec-Fetch-Mode: navigate for them. Cloudflare
+  // keys on those to distinguish a form submit from a fetch, so spoof the
+  // navigation values instead of forwarding the inbound fetch's empty/cors.
+  // (Whether they survive depends on PreserveOverriddenSecFetchHeaders — see
+  // the doc comment above.)
+  const isNavigationPost = fetchPath.includes('/onboarding/web/actions/')
+
+  if (isNavigationPost) {
+    headers['Sec-Fetch-Mode'] = 'navigate'
+    headers['Sec-Fetch-Dest'] = 'document'
+  } else {
+    const mode = incomingRequest.headers.get('sec-fetch-mode')
+    const dest = incomingRequest.headers.get('sec-fetch-dest')
+    if (mode) headers['Sec-Fetch-Mode'] = mode
+    if (dest) headers['Sec-Fetch-Dest'] = dest
+  }
   const user = incomingRequest.headers.get('sec-fetch-user')
-  if (mode) headers['Sec-Fetch-Mode'] = mode
-  if (dest) headers['Sec-Fetch-Dest'] = dest
   if (user) headers['Sec-Fetch-User'] = user
 
   return headers
@@ -584,7 +599,7 @@ export async function proxyWebviewRequest(
   // Sec-Fetch-Site/-Mode/-Dest/-User for the bound-domain relationship — see
   // computeSecFetchHeaders() for why these can't just be forwarded as-is.
   for (const [name, value] of Object.entries(
-    computeSecFetchHeaders(boundDomain, fetchDomain, incomingRequest)
+    computeSecFetchHeaders(boundDomain, fetchDomain, fetchPath, incomingRequest)
   )) {
     forwardHeaders.set(name, value)
   }
