@@ -1,6 +1,7 @@
 import { isNull, desc } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import * as schema from '../../db/schema.js'
+import { vercelContext } from '../instance/background.js'
 
 // In-flight promise — concurrent requests on a cold start share one DB query
 // instead of each racing to acquire a pool connection. Cleared as soon as the
@@ -41,6 +42,9 @@ export async function startRecording(): Promise<number> {
 }
 
 export async function stopRecording(): Promise<void> {
+  // Persist anything still pending before marking the session stopped, so a
+  // /stop immediately followed by /har doesn't miss the trailing batch.
+  await flushNow()
   await db
     .update(schema.proxyRecordingSession)
     .set({ stopped_at: new Date() })
@@ -69,23 +73,41 @@ export interface TrafficEntry {
 // instead of each acquiring their own pool connection.
 let pendingEntries: (typeof schema.proxyTraffic.$inferInsert)[] = []
 let flushTimer: ReturnType<typeof setTimeout> | null = null
+let flushPromise: Promise<void> | null = null
 
-function scheduleFlush(): void {
-  if (flushTimer) return
-  flushTimer = setTimeout(() => {
-    flushTimer = null
-    const batch = pendingEntries
-    pendingEntries = []
-    if (batch.length === 0) return
-    db.insert(schema.proxyTraffic)
-      .values(batch)
-      .catch((err) => {
-        console.error(
-          '[recording] flush failed:',
-          err instanceof Error ? err.message : String(err)
-        )
-      })
-  }, 500)
+// Flush whatever is pending right now. Returns a promise that settles once the
+// insert has (attempted to) complete, so callers can hold the Vercel function
+// open via waitUntil, or await it directly on /stop.
+function flushNow(): Promise<void> {
+  const batch = pendingEntries
+  pendingEntries = []
+  if (batch.length === 0) return Promise.resolve()
+  return db
+    .insert(schema.proxyTraffic)
+    .values(batch)
+    .then(() => undefined)
+    .catch((err) => {
+      console.error(
+        '[recording] flush failed:',
+        err instanceof Error ? err.message : String(err)
+      )
+    })
+}
+
+// Schedule a deferred flush, sharing one timer/promise across the burst of
+// requests that arrive together during a page load. The returned promise
+// resolves once that batch has been written (or the write failed).
+function scheduleFlush(): Promise<void> {
+  if (!flushPromise) {
+    flushPromise = new Promise<void>((resolve) => {
+      flushTimer = setTimeout(() => {
+        flushTimer = null
+        flushPromise = null
+        flushNow().finally(resolve)
+      }, 500)
+    })
+  }
+  return flushPromise
 }
 
 export function recordTraffic(entry: TrafficEntry): void {
@@ -102,7 +124,20 @@ export function recordTraffic(entry: TrafficEntry): void {
     response_body_encoding: entry.responseBodyEncoding,
     duration_ms: entry.durationMs,
   })
-  scheduleFlush()
+
+  // Vercel can freeze the function the moment the handler returns, before a
+  // bare setTimeout fires — which silently dropped trailing entries (e.g. a
+  // lone POST at the end of a session). Registering the flush via waitUntil
+  // keeps the instance alive until the batch is written. Falls back to
+  // fire-and-forget in non-Vercel contexts (local tsx), where the timer still
+  // fires normally.
+  const flush = scheduleFlush()
+  const ctx = vercelContext.getStore()
+  if (ctx?.waitUntil) {
+    ctx.waitUntil(flush)
+  } else {
+    void flush
+  }
 }
 
 const BODY_SIZE_LIMIT = 512 * 1024 // 512 KB
