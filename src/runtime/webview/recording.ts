@@ -87,9 +87,14 @@ function flushNow(): Promise<void> {
     .values(batch)
     .then(() => undefined)
     .catch((err) => {
+      const cause =
+        err instanceof Error && 'cause' in err && err.cause instanceof Error
+          ? err.cause.message
+          : ''
       console.error(
         '[recording] flush failed:',
-        err instanceof Error ? err.message : String(err)
+        err instanceof Error ? err.message : String(err),
+        cause
       )
     })
 }
@@ -110,6 +115,15 @@ function scheduleFlush(): Promise<void> {
   return flushPromise
 }
 
+// Postgres `text` columns reject null bytes (U+0000) with "invalid byte
+// sequence for encoding UTF8: 0x00". Upstream response bodies (X's HTML,
+// MessagePack action responses, etc.) can contain them; strip them so the
+// recorder doesn't silently drop those rows.
+function stripNullBytes(value: string | null): string | null {
+  if (value == null) return null
+  return value.includes('\u0000') ? value.replace(/\u0000/g, '') : value
+}
+
 export function recordTraffic(entry: TrafficEntry): void {
   pendingEntries.push({
     session_id: entry.sessionId,
@@ -117,10 +131,10 @@ export function recordTraffic(entry: TrafficEntry): void {
     method: entry.method,
     upstream_url: entry.upstreamUrl,
     request_headers: entry.requestHeaders,
-    request_body: entry.requestBody,
+    request_body: stripNullBytes(entry.requestBody),
     response_status: entry.responseStatus,
     response_headers: entry.responseHeaders,
-    response_body: entry.responseBody,
+    response_body: stripNullBytes(entry.responseBody),
     response_body_encoding: entry.responseBodyEncoding,
     duration_ms: entry.durationMs,
   })
