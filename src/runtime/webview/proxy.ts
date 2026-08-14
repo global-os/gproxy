@@ -574,7 +574,10 @@ export async function proxyWebviewRequest(
   const MAX_ATTEMPTS = 3
   let upstreamResponse: Response | undefined
   let lastErr: unknown
+  let lastStatus: number | null = null
+  let attempts = 0
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    attempts = attempt
     try {
       if (sidecarUrl) {
         upstreamResponse = await fetchViaSidecar(upstream, fetchInit)
@@ -587,18 +590,20 @@ export async function proxyWebviewRequest(
       } else {
         upstreamResponse = await fetch(upstream, fetchInit)
       }
+      lastStatus = upstreamResponse.status
       if (upstreamResponse.status < 500) break
       lastErr = new Error(`upstream returned ${upstreamResponse.status}`)
     } catch (err) {
+      lastStatus = null
       lastErr = err
     }
-    if (attempt < MAX_ATTEMPTS) {
-      console.log(
-        `[webview] upstream fetch failed (attempt ${attempt}/${MAX_ATTEMPTS}) for ${upstream}: ` +
-          (lastErr instanceof Error ? lastErr.message : String(lastErr))
-      )
-      await new Promise((resolve) => setTimeout(resolve, 150 * attempt))
-    }
+    const givingUp = attempt === MAX_ATTEMPTS
+    console.log(
+      `[webview] upstream fetch ${givingUp ? 'failed (giving up)' : 'failed, retrying'} attempt=${attempt}/${MAX_ATTEMPTS} status=${lastStatus ?? 'error'} url=${upstream}: ` +
+        (lastErr instanceof Error ? lastErr.message : String(lastErr))
+    )
+    if (givingUp) break
+    await new Promise((resolve) => setTimeout(resolve, 150 * attempt))
   }
 
   if (!upstreamResponse) {
@@ -620,6 +625,10 @@ export async function proxyWebviewRequest(
     }
     return new Response('Upstream unreachable', { status: 502 })
   }
+
+  console.log(
+    `[webview] upstream done url=${upstream} status=${upstreamResponse.status} attempts=${attempts} ms=${Date.now() - t0}`
+  )
 
   // If undici didn't auto-decompress brotli (or zstd), do it manually so the
   // browser receives raw bytes. We strip content-encoding before forwarding
