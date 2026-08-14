@@ -635,44 +635,55 @@ function wireHeadersToArray(
 const CASTLE_CHUNK_RE = /castle\.[A-Za-z0-9_-]+\.js$/i
 
 /**
- * The tamper-check function shape in the Castle build we've instrumented
- * against: `function uN(){try{return EXPR}catch{return!1}}`. Castle's minified
- * names are arbitrary and change between builds, so this is matched by *shape*,
- * not exact name. When X ships a differently-structured build this stops
- * matching — and we want that to be loud (see castleBuildIsRecognized + the
- * serving path) rather than silently serving an un-instrumented chunk.
+ * A known Castle build "version", identified by the *shape* of its minified
+ * tamper-check functions rather than by its filename hash (which rotates every
+ * deploy and can't be predicted). Castle's bundler renames these functions
+ * arbitrarily between builds, so each entry pins one observed shape plus the
+ * instrumentation that rewrites those checks to log what they return.
+ *
+ * When X ships a build whose shape matches none of these, the serving path logs
+ * a loud "[castle] UNRECOGNIZED" error — add a new entry here for that shape.
+ * Keep old entries: X may still serve an older build, and a shape-first registry
+ * instruments whichever one actually arrives.
  */
-const CASTLE_TAMPER_CHECK_RE =
-  /function (u\d+)\(\)\{try\{return ([^;]{5,80}?)\}catch\{return!1\}\}/
-
-/** True if `script` contains at least one recognizable tamper-check. */
-function castleBuildIsRecognized(script: string): boolean {
-  return CASTLE_TAMPER_CHECK_RE.test(script)
+interface CastleBuildVersion {
+  /** Human-readable label used in logs when this build is matched. */
+  name: string
+  /** Identifies this build: matches one of its tamper-check functions. */
+  fingerprint: RegExp
+  /** Rewrites the whole script to add console logging to its tamper checks. */
+  instrument: (script: string) => string
 }
 
-/**
- * Wraps Castle.io's environment-tampering checks with a console.log of their
- * return value, so a real occurrence of the login-limit error can be
- * correlated against what these checks actually observed in that browser.
- * Matches the shape empirically found in one snapshot of the real script
- * (`function uN(){try{return EXPR}catch{return!1}}`, checking whether
- * globals like Element/AudioContext have been monkey-patched via a
- * .toString() signature comparison) — matched generically by shape, not by
- * the specific minified names found in that snapshot, since those are
- * arbitrary and could shift in a different build. No-op (returns the script
- * unchanged) if the shape doesn't match at all, e.g. if X ships a
- * differently-structured bundle later.
- */
-function instrumentCastleTamperChecks(script: string): string {
-  return script.replace(
-    new RegExp(CASTLE_TAMPER_CHECK_RE.source, 'g'),
-    (_match, name: string, expr: string) =>
-      `function ${name}(){try{` +
-      `var __v=(${expr});` +
-      `console.log("[castle-probe] ${name} =",__v);` +
-      `return __v` +
-      `}catch(__e){console.log("[castle-probe] ${name} threw",__e&&__e.message);return!1}}`
-  )
+const CASTLE_BUILD_VERSIONS: CastleBuildVersion[] = [
+  {
+    // The shape observed in the original `ondemand.castle.<hex>.js` snapshot:
+    // `function uN(){try{return EXPR}catch{return!1}}` — checks whether globals
+    // like Element/AudioContext were monkey-patched via a .toString() compare.
+    name: 'uN-try-return-v1',
+    fingerprint:
+      /function (u\d+)\(\)\{try\{return ([^;]{5,80}?)\}catch\{return!1\}\}/,
+    instrument: (script) =>
+      script.replace(
+        /function (u\d+)\(\)\{try\{return ([^;]{5,80}?)\}catch\{return!1\}\}/g,
+        (_m, name: string, expr: string) =>
+          `function ${name}(){try{` +
+          `var __v=(${expr});` +
+          `console.log("[castle-probe] ${name} =",__v);` +
+          `return __v` +
+          `}catch(__e){console.log("[castle-probe] ${name} threw",__e&&__e.message);return!1}}`
+      ),
+  },
+  // Add new entries here as X ships new shapes, e.g. the current
+  // `castle.umd-<hash>.js` build once its tamper-check shape is identified.
+]
+
+/** Return the first known Castle build whose fingerprint matches `script`. */
+function matchCastleBuild(script: string): CastleBuildVersion | null {
+  for (const version of CASTLE_BUILD_VERSIONS) {
+    if (version.fingerprint.test(script)) return version
+  }
+  return null
 }
 
 export async function proxyWebviewRequest(
@@ -961,17 +972,18 @@ export async function proxyWebviewRequest(
       // what these checks actually see — see CASTLE_TOKEN.md.
       //
       // Guardrail: Castle's chunk name and minified shape drift between builds.
-      // If we recognize the build, instrument it; if we DON'T, serve it raw but
-      // scream in the logs so the stale instrumentation is impossible to miss
-      // and we go update the signature instead of silently shipping an
-      // un-instrumented bot-detection SDK.
+      // If a known build's fingerprint matches, instrument it; if NONE match,
+      // serve it raw but scream in the logs so the stale registry is impossible
+      // to miss and we go add a new CASTLE_BUILD_VERSIONS entry.
       let output = rewritten
       if (CASTLE_CHUNK_RE.test(upstreamPath)) {
-        if (castleBuildIsRecognized(rewritten)) {
-          output = instrumentCastleTamperChecks(rewritten)
+        const version = matchCastleBuild(rewritten)
+        if (version) {
+          console.log(`[castle] instrumenting build ${version.name} (${upstreamPath})`)
+          output = version.instrument(rewritten)
         } else {
           console.error(
-            `[castle] UNRECOGNIZED Castle build ${upstreamPath} — tamper-check instrumentation did not apply; update CASTLE_TAMPER_CHECK_RE in proxy.ts`
+            `[castle] UNRECOGNIZED Castle build ${upstreamPath} — add a new entry to CASTLE_BUILD_VERSIONS in proxy.ts`
           )
         }
       }
