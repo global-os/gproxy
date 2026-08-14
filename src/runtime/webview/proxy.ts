@@ -130,6 +130,12 @@ async function fetchViaSidecar(
       ? Buffer.from(init.body).toString('base64')
       : ''
 
+  // Hard timeout on the sidecar round-trip. The sidecar spawns a fresh Chrome
+  // context per request; under a burst of lazy-loaded chunks it can stall past
+  // Vercel's 30s limit and get killed as a 500. Fail fast instead (the caller
+  // sees a 502 the browser can retry) rather than hanging to the kill.
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15_000)
   const sidecarResp = await fetch(`${sidecarUrl}/fetch`, {
     method: 'POST',
     headers: {
@@ -137,7 +143,8 @@ async function fetchViaSidecar(
       ...(sidecarSecret ? { Authorization: `Bearer ${sidecarSecret}` } : {}),
     },
     body: JSON.stringify({ url: upstream, method: init.method, headers, body }),
-  })
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout))
 
   if (!sidecarResp.ok) {
     throw new Error(
