@@ -24,6 +24,10 @@ const KNOWN_FINGERPRINTS = [
     name: 'uN-try-return-v1',
     re: /function (u\d+)\(\)\{try\{return ([^;]{5,80}?)\}catch\{return!1\}\}/,
   },
+  {
+    name: 'anonymous-try-return-v2',
+    re: /function\(\)\{try\{[\s\S]{1,500}?\}catch\{return!1\}\}/,
+  },
 ]
 
 const filename = process.argv[2]

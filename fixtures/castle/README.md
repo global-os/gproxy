@@ -19,8 +19,8 @@ a "new Castle build" is a diff-able artifact, not a mystery.
 
 | File | Captured | `CASTLE_BUILD_VERSIONS` entry |
 |------|----------|-------------------------------|
-| `castle.umd-BXTZcB1z.js` | 2026-08-14 | (none yet) |
-| `castle.umd-Cs-TYKFF.js` | 2026-08-14 | (none yet) |
+| `castle.umd-BXTZcB1z.js` | 2026-08-14 | `anonymous-try-return-v2` |
+| `castle.umd-Cs-TYKFF.js` | 2026-08-14 | `anonymous-try-return-v2` |
 
 The original `ondemand.castle.<hex>.js` build (the `uN-try-return-v1` shape in
 `CASTLE_BUILD_VERSIONS`) predates this archive and isn't captured here.

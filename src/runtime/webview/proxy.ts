@@ -674,8 +674,27 @@ const CASTLE_BUILD_VERSIONS: CastleBuildVersion[] = [
           `}catch(__e){console.log("[castle-probe] ${name} threw",__e&&__e.message);return!1}}`
       ),
   },
-  // Add new entries here as X ships new shapes, e.g. the current
-  // `castle.umd-<hash>.js` build once its tamper-check shape is identified.
+  {
+    // The shape in the current `castle.umd-<hash>.js` build (captured
+    // 2026-08-14, see fixtures/castle/): tamper checks are ANONYMOUS functions
+    // packed into an array (`e[N]=function(){...}()`), with bodies like
+    // `return EXPR`, `return!EXPR`, or `var e;return EXPR`. Instrumented by
+    // wrapping the return value with a console.log, same intent as the v1 entry.
+    name: 'anonymous-try-return-v2',
+    fingerprint: /function\(\)\{try\{([\s\S]{1,500}?)\}catch\{return!1\}\}/,
+    instrument: (script) =>
+      script.replace(
+        /function\(\)\{try\{([\s\S]{1,500}?)\}catch\{return!1\}\}/g,
+        (_m, body: string) => {
+          const instrumented = body.replace(
+            /^((?:var [\w$]+;)?)\s*return\s*([\s\S]+)$/,
+            (_b, decl: string, expr: string) =>
+              `${decl}var __v=(${expr});console.log("[castle-probe] =",__v);return __v`
+          )
+          return `function(){try{${instrumented}}catch(__e){console.log("[castle-probe] threw",__e&&__e.message);return!1}}`
+        }
+      ),
+  },
 ]
 
 /** Return the first known Castle build whose fingerprint matches `script`. */
