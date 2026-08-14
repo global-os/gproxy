@@ -8,9 +8,11 @@ import { isAdminEmail } from '../constants/admin.js'
 
 const router = new Hono<Env>()
 
-// decodo residential-proxy URLs look like:
+// decodo residential-proxy URLs pin the exit IP to the username, which is
+// either a bare session (newer) or `user-<session>-asn-<asn>` (older):
+//   http://<session>:<password>@isp.decodo.com:10004
 //   http://user-<session>-asn-<asn>:<password>@isp.decodo.com:10001
-// The session segment pins the exit IP — a fresh session gets a fresh IP.
+// A fresh session gets a fresh IP.
 const DECODO_USERNAME_RE = /^user-([a-zA-Z0-9]+)-asn-(\d+)$/
 const SESSION_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
@@ -30,9 +32,10 @@ function rotateProxySession(proxyUrl: string): string | null {
   } catch {
     return null
   }
+  if (!url.hostname.includes('decodo')) return null
+  if (!url.username) return null
   const m = url.username.match(DECODO_USERNAME_RE)
-  if (!m) return null
-  url.username = `user-${newSession()}-asn-${m[2]}`
+  url.username = m ? `user-${newSession()}-asn-${m[2]}` : newSession()
   return url.toString().replace(/\/$/, '')
 }
 
@@ -113,8 +116,7 @@ router.post('/proxy-config/rotate', async (c) => {
   if (!rotated) {
     return c.json(
       {
-        message:
-          'Proxy URL is not a decodo session URL (expected user-<session>-asn-<asn>)',
+        message: 'Proxy URL is not a decodo proxy URL',
       },
       400
     )
