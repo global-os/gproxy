@@ -627,6 +627,30 @@ function wireHeadersToArray(
 }
 
 /**
+ * Castle.io is X's bot-detection SDK; its `$castle_token` is required by the
+ * `begin_login` endpoint. Its chunk filename has drifted over time
+ * (`ondemand.castle.<hex>.js` → `castle.umd-<hash>.js`), so match loosely by
+ * the stable `castle.` prefix and `.js` suffix rather than any one exact form.
+ */
+const CASTLE_CHUNK_RE = /castle\.[A-Za-z0-9_-]+\.js$/i
+
+/**
+ * The tamper-check function shape in the Castle build we've instrumented
+ * against: `function uN(){try{return EXPR}catch{return!1}}`. Castle's minified
+ * names are arbitrary and change between builds, so this is matched by *shape*,
+ * not exact name. When X ships a differently-structured build this stops
+ * matching — and we want that to be loud (see castleBuildIsRecognized + the
+ * serving path) rather than silently serving an un-instrumented chunk.
+ */
+const CASTLE_TAMPER_CHECK_RE =
+  /function (u\d+)\(\)\{try\{return ([^;]{5,80}?)\}catch\{return!1\}\}/
+
+/** True if `script` contains at least one recognizable tamper-check. */
+function castleBuildIsRecognized(script: string): boolean {
+  return CASTLE_TAMPER_CHECK_RE.test(script)
+}
+
+/**
  * Wraps Castle.io's environment-tampering checks with a console.log of their
  * return value, so a real occurrence of the login-limit error can be
  * correlated against what these checks actually observed in that browser.
@@ -641,7 +665,7 @@ function wireHeadersToArray(
  */
 function instrumentCastleTamperChecks(script: string): string {
   return script.replace(
-    /function (u\d+)\(\)\{try\{return ([^;]{5,80}?)\}catch\{return!1\}\}/g,
+    new RegExp(CASTLE_TAMPER_CHECK_RE.source, 'g'),
     (_match, name: string, expr: string) =>
       `function ${name}(){try{` +
       `var __v=(${expr});` +
@@ -932,17 +956,25 @@ export async function proxyWebviewRequest(
       // actual cause of the "Please use X.com or official X apps" login
       // error, and the crash it worked around didn't reproduce in repeated
       // local testing. Now served as-is (below), with one addition: its
-      // environment-tampering checks (functions shaped like
-      // `function uN(){try{return EXPR}catch{return!1}}`, checking whether
-      // globals like Element/AudioContext have been monkey-patched, via
-      // .toString() signature comparison) get instrumented with a
-      // console.log so real occurrences of the login-limit error can be
-      // correlated against what these checks actually see — see
-      // CASTLE_TOKEN.md. If it turns out to genuinely crash, patch the
-      // specific thing that breaks, not the whole module again.
-      const output = /castle\.[a-f0-9]+\.js$/.test(upstreamPath)
-        ? instrumentCastleTamperChecks(rewritten)
-        : rewritten
+      // environment-tampering checks get instrumented with a console.log so
+      // real occurrences of the login-limit error can be correlated against
+      // what these checks actually see — see CASTLE_TOKEN.md.
+      //
+      // Guardrail: Castle's chunk name and minified shape drift between builds.
+      // If we recognize the build, instrument it; if we DON'T, serve it raw but
+      // scream in the logs so the stale instrumentation is impossible to miss
+      // and we go update the signature instead of silently shipping an
+      // un-instrumented bot-detection SDK.
+      let output = rewritten
+      if (CASTLE_CHUNK_RE.test(upstreamPath)) {
+        if (castleBuildIsRecognized(rewritten)) {
+          output = instrumentCastleTamperChecks(rewritten)
+        } else {
+          console.error(
+            `[castle] UNRECOGNIZED Castle build ${upstreamPath} — tamper-check instrumentation did not apply; update CASTLE_TAMPER_CHECK_RE in proxy.ts`
+          )
+        }
+      }
 
       responseHeaders.delete('content-length')
       if (sessionId != null) {
