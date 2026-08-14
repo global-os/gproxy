@@ -559,6 +559,11 @@ export async function proxyWebviewRequest(
     }
     // Drop the browser's Accept-Encoding so we can control it below.
     if (lower === 'accept-encoding') continue
+    // Drop the browser's RFC 9218 Priority header too: forwarding the iframe's
+    // fetch priority (u=1) would override the patched Chromium's net::HIGHEST
+    // (u=0) that X's priority-patch is meant to produce — let Chrome compute
+    // its own instead.
+    if (lower === 'priority') continue
     forwardHeaders.set(key, value)
   }
   forwardHeaders.set(
