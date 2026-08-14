@@ -423,7 +423,11 @@ function renderAdminPage() {
   const redactedProxyUrl = PROXY_URL
     ? PROXY_URL.replace(/:([^@]+)@/, ':***@')
     : '(none)'
+  const chromiumBuild = chromiumExecutable
+    ? CHROMIUM_ARTIFACT_SHA || chromiumExecutable
+    : 'stock (channel: chrome)'
   const rows = [
+    ['Chromium build', chromiumBuild],
     ['Proxy URL', redactedProxyUrl],
     ['Server IP', ipProbe.serverIp ?? '(unchecked)'],
     ['Proxy IP', ipProbe.proxyIp ?? '(unchecked)'],
