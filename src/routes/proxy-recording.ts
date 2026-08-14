@@ -15,8 +15,8 @@ router.post('/start', async (c) => {
 })
 
 router.post('/stop', async (c) => {
-  await stopRecording()
-  return c.json({ ok: true })
+  const result = await stopRecording()
+  return c.json({ ok: true, ...result })
 })
 
 router.post('/clear', async (c) => {

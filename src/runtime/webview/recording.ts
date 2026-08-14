@@ -1,4 +1,4 @@
-import { isNull, desc } from 'drizzle-orm'
+import { isNull, desc, count } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import * as schema from '../../db/schema.js'
 import { vercelContext } from '../instance/background.js'
@@ -34,6 +34,7 @@ export function getActiveSessionId(): Promise<number | null> {
 
 export async function startRecording(): Promise<number> {
   await db.delete(schema.proxyRecordingSession)
+  flushFailureCount = 0
   const [row] = await db
     .insert(schema.proxyRecordingSession)
     .values({ started_at: new Date() })
@@ -41,7 +42,10 @@ export async function startRecording(): Promise<number> {
   return row.id
 }
 
-export async function stopRecording(): Promise<void> {
+export async function stopRecording(): Promise<{
+  recordedCount: number
+  flushFailures: number
+}> {
   // Persist anything still pending before marking the session stopped, so a
   // /stop immediately followed by /har doesn't miss the trailing batch.
   await flushNow()
@@ -49,6 +53,8 @@ export async function stopRecording(): Promise<void> {
     .update(schema.proxyRecordingSession)
     .set({ stopped_at: new Date() })
     .where(isNull(schema.proxyRecordingSession.stopped_at))
+  const [row] = await db.select({ n: count() }).from(schema.proxyTraffic)
+  return { recordedCount: Number(row.n), flushFailures: flushFailureCount }
 }
 
 export async function clearRecording(): Promise<void> {
@@ -74,6 +80,10 @@ export interface TrafficEntry {
 let pendingEntries: (typeof schema.proxyTraffic.$inferInsert)[] = []
 let flushTimer: ReturnType<typeof setTimeout> | null = null
 let flushPromise: Promise<void> | null = null
+// Rows whose flush insert failed on this instance, surfaced on /stop and reset
+// on /start. Per-instance only — other serverless instances may have failures
+// this instance can't see (the recordedCount on /stop is the DB-wide truth).
+let flushFailureCount = 0
 
 // Flush whatever is pending right now. Returns a promise that settles once the
 // insert has (attempted to) complete, so callers can hold the Vercel function
@@ -87,6 +97,7 @@ function flushNow(): Promise<void> {
     .values(batch)
     .then(() => undefined)
     .catch((err) => {
+      flushFailureCount += batch.length
       const cause =
         err instanceof Error && 'cause' in err && err.cause instanceof Error
           ? err.cause.message
