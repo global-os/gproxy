@@ -13,6 +13,17 @@ import { vercelContext } from '../instance/background.js'
 // traffic despite recording being active.
 let sessionPromise: Promise<number | null> | null = null
 
+// Short-TTL cache on top of the in-flight dedup. Querying Postgres on *every*
+// webview request (a page load fires dozens/hundreds of asset requests, each
+// hitting getActiveSessionId) adds up to "sorry, too many clients already"
+// under burst load across many serverless instances. Cache the result for a
+// few seconds so only the first request per window touches the DB. Tradeoff: a
+// freshly-started /start on a *different* instance may be missed for up to the
+// TTL — acceptable for a debug-only recorder, and the user's start→trigger→stop
+// flow is a manual, multi-second sequence that clears the window in practice.
+let sessionCache: { id: number | null; at: number } | null = null
+const SESSION_CACHE_TTL_MS = 3_000
+
 function querySession(): Promise<number | null> {
   if (sessionPromise) return sessionPromise
   sessionPromise = db
@@ -29,12 +40,20 @@ function querySession(): Promise<number | null> {
 }
 
 export function getActiveSessionId(): Promise<number | null> {
-  return querySession()
+  const now = Date.now()
+  if (sessionCache && now - sessionCache.at < SESSION_CACHE_TTL_MS) {
+    return Promise.resolve(sessionCache.id)
+  }
+  return querySession().then((id) => {
+    sessionCache = { id, at: Date.now() }
+    return id
+  })
 }
 
 export async function startRecording(): Promise<number> {
   await db.delete(schema.proxyRecordingSession)
   flushFailureCount = 0
+  sessionCache = null
   const [row] = await db
     .insert(schema.proxyRecordingSession)
     .values({ started_at: new Date() })
@@ -49,6 +68,7 @@ export async function stopRecording(): Promise<{
   // Persist anything still pending before marking the session stopped, so a
   // /stop immediately followed by /har doesn't miss the trailing batch.
   await flushNow()
+  sessionCache = null
   await db
     .update(schema.proxyRecordingSession)
     .set({ stopped_at: new Date() })
