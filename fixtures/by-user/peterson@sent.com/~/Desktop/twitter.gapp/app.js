@@ -56,8 +56,8 @@ window.addEventListener('message', function (event) {
               to: '/abs.twimg.com',
             },
           },
-          // Show a loading overlay on the first HTML load, hidden once React
-          // mounts (react-root gains children) or after a 2.5s fallback.
+          // Show a loading overlay on the first HTML load, hidden once the
+          // username/email input becomes focusable (or after a 4s fallback).
           {
             match: { path: '/' },
             action: {
@@ -66,9 +66,9 @@ window.addEventListener('message', function (event) {
                 '<style>#gproxy-loading{position:fixed;inset:0;background:#15202b;color:#e7e9ea;display:flex;align-items:center;justify-content:center;z-index:99999;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}</style>' +
                 '<div id="gproxy-loading">Loading…</div>' +
                 '<script>(function(){var e=document.getElementById("gproxy-loading");if(!e)return;var t=Date.now();function hide(){if(e.parentNode)e.parentNode.removeChild(e)}' +
-                'window.addEventListener("load",function(){setTimeout(hide,2500)});' +
-                'new MutationObserver(function(){var r=document.getElementById("react-root");if(r&&r.childElementCount>0&&Date.now()-t>500)hide()})' +
-                '.observe(document.body,{childList:true,subtree:true})})()</script>',
+                'function ready(){var l=document.querySelectorAll("input");for(var k=0;k<l.length;k++){var i=l[k];if((i.name==="username_or_email"||(i.getAttribute("autocomplete")||"").indexOf("username")===0)&&!i.disabled&&i.getBoundingClientRect().width>0)return true}return false}' +
+                'var iv=setInterval(function(){if(ready()&&Date.now()-t>300){clearInterval(iv);hide()}},100);' +
+                'window.addEventListener("load",function(){setTimeout(function(){clearInterval(iv);hide()},4000)})})()</script>',
             },
           },
         ],
