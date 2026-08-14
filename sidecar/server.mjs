@@ -221,17 +221,10 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
             name,
             value,
           }))
-          // TEMP diagnostic: log the internal request type + the navigation-
-          // relevant headers actually sent, to settle whether Cloudflare keys
-          // on headers or on the underlying request type (resourceType).
-          if (/x\.com|twimg\.com/.test(event.request.url)) {
-            const nav = headers.filter((h) =>
-              /^(sec-fetch|upgrade-insecure-requests|accept)$/i.test(h.name)
-            )
-            console.log(
-              `[sidecar][dump] resourceType=${event.resourceType} url=${event.request.url.slice(0, 80)} headers=${JSON.stringify(nav)}`
-            )
-          }
+          // Ask the custom Chromium (patched url_loader.cc) to treat this
+          // request as a top-level navigation for priority purposes — Cloudflare
+          // keys on the HTTP/2 priority, which header rewrites alone can't set.
+          headers.push({ name: 'X-Gproxy-Navigation', value: '1' })
           try {
             await cdp.send('Fetch.continueRequest', { requestId, headers })
           } catch (err) {
