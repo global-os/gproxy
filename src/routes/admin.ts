@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { randomBytes } from 'node:crypto'
 import { desc, eq } from 'drizzle-orm'
 import * as middleware from '../middleware.js'
 import * as schema from '../db/schema.js'
@@ -6,6 +7,34 @@ import { Env } from '../types.js'
 import { isAdminEmail } from '../constants/admin.js'
 
 const router = new Hono<Env>()
+
+// decodo residential-proxy URLs look like:
+//   http://user-<session>-asn-<asn>:<password>@isp.decodo.com:10001
+// The session segment pins the exit IP — a fresh session gets a fresh IP.
+const DECODO_USERNAME_RE = /^user-([a-zA-Z0-9]+)-asn-(\d+)$/
+const SESSION_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
+
+function newSession(): string {
+  const bytes = randomBytes(10)
+  let out = ''
+  for (let i = 0; i < 10; i++)
+    out += SESSION_ALPHABET[bytes[i]! % SESSION_ALPHABET.length]
+  return out
+}
+
+/** Regenerate the session (IP) in a decodo proxy URL, keeping everything else. */
+function rotateProxySession(proxyUrl: string): string | null {
+  let url: URL
+  try {
+    url = new URL(proxyUrl)
+  } catch {
+    return null
+  }
+  const m = url.username.match(DECODO_USERNAME_RE)
+  if (!m) return null
+  url.username = `user-${newSession()}-asn-${m[2]}`
+  return url.toString().replace(/\/$/, '')
+}
 
 router.use(
   '*',
@@ -63,6 +92,43 @@ router.put('/proxy-config', async (c) => {
   return c.json({
     proxyUrl: row?.proxy_url ?? null,
     updatedAt: row?.updated_at ?? null,
+  })
+})
+
+router.post('/proxy-config/rotate', async (c) => {
+  const user = c.get('user')
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+  if (!isAdminEmail(user.email)) return c.json({ message: 'Forbidden' }, 403)
+
+  const db = c.get('db')
+  const [row] = await db
+    .select()
+    .from(schema.proxyConfig)
+    .where(eq(schema.proxyConfig.id, 1))
+
+  const current = row?.proxy_url ?? null
+  if (!current) return c.json({ message: 'No proxy URL configured' }, 400)
+
+  const rotated = rotateProxySession(current)
+  if (!rotated) {
+    return c.json(
+      {
+        message:
+          'Proxy URL is not a decodo session URL (expected user-<session>-asn-<asn>)',
+      },
+      400
+    )
+  }
+
+  const [updated] = await db
+    .update(schema.proxyConfig)
+    .set({ proxy_url: rotated, updated_at: new Date() })
+    .where(eq(schema.proxyConfig.id, 1))
+    .returning()
+
+  return c.json({
+    proxyUrl: updated?.proxy_url ?? null,
+    updatedAt: updated?.updated_at ?? null,
   })
 })
 

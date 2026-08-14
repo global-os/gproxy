@@ -53,6 +53,21 @@ async function saveProxyConfig(proxyUrl: string): Promise<ProxyConfigResponse> {
   return r.json()
 }
 
+async function rotateProxyConfig(): Promise<ProxyConfigResponse> {
+  const r = await fetch('/api/admin/proxy-config/rotate', {
+    method: 'POST',
+    credentials: 'include',
+  })
+  if (!r.ok) {
+    let msg = `Failed to rotate proxy (${r.status})`
+    try {
+      msg = ((await r.json()) as { message?: string }).message ?? msg
+    } catch {}
+    throw new Error(msg)
+  }
+  return r.json()
+}
+
 function ProxyConfigSection() {
   const queryClient = useQueryClient()
   const { data, isPending } = useQuery<ProxyConfigResponse>({
@@ -63,6 +78,13 @@ function ProxyConfigSection() {
   const [draft, setDraft] = useState<string | null>(null)
   const mutation = useMutation({
     mutationFn: saveProxyConfig,
+    onSuccess: (result) => {
+      queryClient.setQueryData(['admin', 'proxy-config'], result)
+      setDraft(null)
+    },
+  })
+  const rotateMutation = useMutation({
+    mutationFn: rotateProxyConfig,
     onSuccess: (result) => {
       queryClient.setQueryData(['admin', 'proxy-config'], result)
       setDraft(null)
@@ -103,7 +125,23 @@ function ProxyConfigSection() {
           >
             {mutation.isPending ? 'Saving…' : 'Save'}
           </button>
+          <button
+            type="button"
+            disabled={rotateMutation.isPending}
+            onClick={() => rotateMutation.mutate()}
+            title="Regenerate the decodo session ID so the sidecar exits through a fresh IP"
+            className="rounded-lg border border-violet-300 px-4 py-2 text-sm font-semibold text-violet-700 disabled:opacity-40"
+          >
+            {rotateMutation.isPending ? 'Rotating…' : 'New IP'}
+          </button>
         </div>
+      )}
+      {rotateMutation.isError && (
+        <p className="mt-2 text-xs text-red-600">
+          {rotateMutation.error instanceof Error
+            ? rotateMutation.error.message
+            : 'Failed to rotate'}
+        </p>
       )}
       {mutation.isError && (
         <p className="mt-2 text-xs text-red-600">
