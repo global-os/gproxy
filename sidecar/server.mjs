@@ -37,6 +37,10 @@ const CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH || null
 // downloads that artifact from MinIO at startup and launches it instead of
 // stock Chrome. CHROMIUM_EXECUTABLE_PATH takes precedence over this.
 const CHROMIUM_ARTIFACT_SHA = process.env.CHROMIUM_ARTIFACT_SHA || ''
+// git SHA of the gproxy commit this image was built from (baked in by CI via
+// --build-arg). Surfaced on the /admin page so the running image can be tied
+// back to a source commit.
+const SIDECAR_SHA = process.env.SIDECAR_SHA || ''
 
 // Real Chrome's UA with "Headless" stripped — see header comment above.
 const USER_AGENT =
@@ -427,6 +431,7 @@ function renderAdminPage() {
     ? CHROMIUM_ARTIFACT_SHA || chromiumExecutable
     : 'stock (channel: chrome)'
   const rows = [
+    ['Sidecar image', SIDECAR_SHA || '(unknown)'],
     ['Chromium build', chromiumBuild],
     ['Proxy URL', redactedProxyUrl],
     ['Server IP', ipProbe.serverIp ?? '(unchecked)'],

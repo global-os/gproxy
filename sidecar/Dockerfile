@@ -1,5 +1,10 @@
 FROM docker.io/library/node:22-bookworm
 
+# git SHA of the gproxy commit this image is built from (set by CI via
+# `podman build --build-arg SIDECAR_SHA=...`); surfaced on the /admin page.
+ARG SIDECAR_SHA
+ENV SIDECAR_SHA=${SIDECAR_SHA}
+
 WORKDIR /app
 COPY package.json ./
 RUN npm install

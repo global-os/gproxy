@@ -46,7 +46,9 @@ jobs:
           REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
           REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
         run: |
-          podman build --layers=false --platform linux/amd64 -t "$IMAGE:${{ github.sha }}" ./sidecar
+          podman build --layers=false --platform linux/amd64 \
+            --build-arg SIDECAR_SHA="${{ github.sha }}" \
+            -t "$IMAGE:${{ github.sha }}" ./sidecar
           podman push "$IMAGE:${{ github.sha }}"
           DIGEST=$(curl -sf \
             -u "${REGISTRY_USERNAME}:${REGISTRY_PASSWORD}" \
