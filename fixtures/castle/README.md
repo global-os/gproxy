@@ -17,13 +17,34 @@ a "new Castle build" is a diff-able artifact, not a mystery.
 
 ## Contents
 
-| File | Captured | `CASTLE_BUILD_VERSIONS` entry |
-|------|----------|-------------------------------|
-| `castle.umd-BXTZcB1z.js` | 2026-08-14 | `anonymous-try-return-v2` |
-| `castle.umd-Cs-TYKFF.js` | 2026-08-14 | `anonymous-try-return-v2` |
+| File | Captured | `CASTLE_BUILD_VERSIONS` entry | Castle SDK version |
+|------|----------|-------------------------------|--------------------|
+| `castle.umd-BXTZcB1z.js` | 2026-08-14 | `anonymous-try-return-v2` | `@castleio/castle-js@2.8.3` |
+| `castle.umd-Cs-TYKFF.js` | 2026-08-14 | `anonymous-try-return-v2` | `@castleio/castle-js@2.8.3` |
 
 The original `ondemand.castle.<hex>.js` build (the `uN-try-return-v1` shape in
-`CASTLE_BUILD_VERSIONS`) predates this archive and isn't captured here.
+`CASTLE_BUILD_VERSIONS`) predates this archive, isn't captured here, and its SDK
+version is unknown.
+
+## How the version was identified (v2.8.3)
+
+These chunks are X's *own webpack build* of Castle — not byte-identical to the
+npm `@castleio/castle-js` dist, and obfuscated differently (X: base64 →
+UTF-16BE → XOR with a rolling LCG; npm 2.8.3–2.8.5: deflate → base64 →
+per-call factory decoders). So the version can't be matched by diffing bytes.
+
+Instead the SDK's **font-fingerprint list** (data that survives re-bundling and
+changes across releases) was used:
+
+- 2.8.3 contains both `Sitka` and `Candara`.
+- 2.8.4 dropped `Candara`.
+- 2.8.5 dropped `Sitka`.
+
+Both archived chunks contain **both** `Sitka` and `Candara` → they're built from
+**`@castleio/castle-js@2.8.3`** (the last release before that list reshuffled).
+This is recorded in the `sdkVersion` field of the `anonymous-try-return-v2`
+entry in `CASTLE_BUILD_VERSIONS` (reference only — the fingerprint regex, not
+the version, is what selects a build).
 
 ## Adding a new build
 
@@ -37,5 +58,6 @@ Then:
 
 1. Diff the new file against the previous one to locate the tamper-check
    functions (search for `try{return` / `catch{return!1}` patterns).
-2. Add a `{ name, fingerprint, instrument }` entry to `CASTLE_BUILD_VERSIONS`.
-3. Update the table above with the filename → entry mapping.
+2. Add a `{ name, fingerprint, instrument, sdkVersion? }` entry to
+   `CASTLE_BUILD_VERSIONS`.
+3. Update the table above with the filename → entry → version mapping.

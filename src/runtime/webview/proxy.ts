@@ -653,6 +653,9 @@ interface CastleBuildVersion {
   fingerprint: RegExp
   /** Rewrites the whole script to add console logging to its tamper checks. */
   instrument: (script: string) => string
+  /** Upstream Castle SDK version (npm `@castleio/castle-js`) this shape was
+   *  observed in. Reference only — never used at runtime. */
+  sdkVersion?: string
 }
 
 const CASTLE_BUILD_VERSIONS: CastleBuildVersion[] = [
@@ -660,6 +663,7 @@ const CASTLE_BUILD_VERSIONS: CastleBuildVersion[] = [
     // The shape observed in the original `ondemand.castle.<hex>.js` snapshot:
     // `function uN(){try{return EXPR}catch{return!1}}` — checks whether globals
     // like Element/AudioContext were monkey-patched via a .toString() compare.
+    // Predates the fixtures/castle/ archive, so its SDK version is unknown.
     name: 'uN-try-return-v1',
     fingerprint:
       /function (u\d+)\(\)\{try\{return ([^;]{5,80}?)\}catch\{return!1\}\}/,
@@ -676,11 +680,18 @@ const CASTLE_BUILD_VERSIONS: CastleBuildVersion[] = [
   },
   {
     // The shape in the current `castle.umd-<hash>.js` build (captured
-    // 2026-08-14, see fixtures/castle/): tamper checks are ANONYMOUS functions
-    // packed into an array (`e[N]=function(){...}()`), with bodies like
-    // `return EXPR`, `return!EXPR`, or `var e;return EXPR`. Instrumented by
-    // wrapping the return value with a console.log, same intent as the v1 entry.
+    // 2026-08-14, archived in fixtures/castle/castle.umd-BXTZcB1z.js and
+    // castle.umd-Cs-TYKFF.js). Tamper checks are ANONYMOUS functions packed
+    // into an array (`e[N]=function(){...}()`), with bodies like `return EXPR`,
+    // `return!EXPR`, or `var e;return EXPR`.
+    //
+    // Identified as @castleio/castle-js v2.8.3 by deobfuscating the SDK's
+    // string table and diffing Castle's font-fingerprint list across npm
+    // versions: `Sitka` and `Candara` both appear here, and they only coexist
+    // in <=2.8.3 (2.8.4 dropped `Candara`, 2.8.5 dropped `Sitka`). Reference
+    // only — the fingerprint regex, not the version, is what selects a build.
     name: 'anonymous-try-return-v2',
+    sdkVersion: '2.8.3',
     fingerprint: /function\(\)\{try\{([\s\S]{1,500}?)\}catch\{return!1\}\}/,
     instrument: (script) =>
       script.replace(
