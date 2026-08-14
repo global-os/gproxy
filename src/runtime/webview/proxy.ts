@@ -173,6 +173,113 @@ async function fetchViaSidecar(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Cloudflare challenge clearance
+//
+// Cloudflare's managed challenge mints a `cf_clearance` cookie only after a
+// browser *genuinely* solves its JS proof-of-work. We cannot produce that cookie
+// by faking headers or reimplementing the script in Node — the challenge is
+// designed to detect exactly that. Instead the sidecar runs the challenge in a
+// throwaway, isolated Chrome context (a real `goto()`, not a fetch) and hands
+// back the resulting `cf_clearance` value. All the proxy does is cache that
+// value and inject it into the outgoing Cookie header for the bound domain and
+// its subdomains. See sidecar/server.mjs → solveCloudflareChallenge.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// domain -> { cookie, at }: cache of solved clearances. cf_clearance is
+// short-lived and IP-bound, so this is a short TTL cache, not a permanent one.
+const cfClearanceCache = new Map<string, { cookie: string; at: number }>()
+const CF_CLEARANCE_TTL_MS = 5 * 60 * 1000
+
+/**
+ * Fetch (or retrieve from cache) a solved cf_clearance cookie for `domain`.
+ * Returns the ready-to-inject header fragment (`cf_clearance=<value>`) or null
+ * if no sidecar is configured or the solve failed.
+ */
+async function getCfClearance(domain: string): Promise<string | null> {
+  const cached = cfClearanceCache.get(domain)
+  if (cached && Date.now() - cached.at < CF_CLEARANCE_TTL_MS) {
+    return cached.cookie
+  }
+
+  if (!sidecarUrl) return null
+
+  // Give the solve a bounded lifetime; a hung sidecar must not stall the
+  // request past Vercel's cap (the sidecar already self-limits to 15s).
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 25_000)
+  try {
+    const res = await fetch(`${sidecarUrl}/solve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(sidecarSecret ? { Authorization: `Bearer ${sidecarSecret}` } : {}),
+      },
+      body: JSON.stringify({ domain }),
+      signal: controller.signal,
+    })
+    if (!res.ok) return null
+    const data = (await res.json()) as { cfClearance?: string | null }
+    const value = data.cfClearance || null
+    if (value) {
+      const cookie = `cf_clearance=${value}`
+      cfClearanceCache.set(domain, { cookie, at: Date.now() })
+      return cookie
+    }
+    return null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+/** Drop a stale cached clearance so the next request re-solves. */
+function evictCfClearance(domain: string): void {
+  cfClearanceCache.delete(domain)
+}
+
+/**
+ * True if the upstream response is a Cloudflare challenge. Cloudflare tags
+ * challenge responses with `cf-mitigated: challenge` (or `managed_challenge`);
+ * the body is a JS challenge we can't solve on the fetch path, so we detect the
+ * header and re-solve instead.
+ */
+function isCloudflareChallenge(res: Response): boolean {
+  const mitigated = res.headers.get('cf-mitigated') ?? ''
+  return res.status === 403 && mitigated.includes('challenge')
+}
+
+/**
+ * Append a solved cf_clearance to `forwardHeaders` when the target is the bound
+ * domain or one of its subdomains (same registrable domain). Returns true if a
+ * clearance was attached. No-op for unrelated domains (e.g. abs.twimg.com) or
+ * when the sidecar isn't configured.
+ */
+async function attachCloudflareClearance(
+  forwardHeaders: Headers,
+  boundDomain: string,
+  fetchDomain: string
+): Promise<boolean> {
+  if (!sidecarUrl) return false
+  const sameSite =
+    fetchDomain === boundDomain || isSameSite(fetchDomain, boundDomain)
+  if (!sameSite) return false
+
+  const clearance = await getCfClearance(boundDomain)
+  if (!clearance) return false
+
+  // Fold the clearance into whatever cookie line the browser already sent (the
+  // incoming request's own cookies for the proxy subdomain, e.g. gt/cuid/g_state)
+  // rather than replacing it.
+  const existing = forwardHeaders.get('cookie') ?? ''
+  forwardHeaders.set(
+    'Cookie',
+    existing ? `${existing}; ${clearance}` : clearance
+  )
+  return true
+}
+
 const STRIP_RESPONSE_HEADERS = new Set([
   'content-security-policy',
   'content-security-policy-report-only',
@@ -644,6 +751,9 @@ export async function proxyWebviewRequest(
   let lastStatus: number | null = null
   let attempts = 0
   let wireRequest: SidecarWireInfo | null = null
+  // Whether we've already evicted a stale clearance and re-solved for this
+  // request. Guards against looping forever if the challenge never clears.
+  let challengeRetried = false
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     attempts = attempt
     try {
@@ -661,7 +771,29 @@ export async function proxyWebviewRequest(
         upstreamResponse = await fetch(upstream, fetchInit)
       }
       lastStatus = upstreamResponse.status
-      if (upstreamResponse.status < 500) break
+      if (upstreamResponse.status < 500) {
+        // Cloudflare challenged us: our cf_clearance is missing or stale. Evict
+        // the cached clear, ask the sidecar to solve the challenge in its
+        // isolated context, and retry once with the fresh cookie before giving
+        // up and surfacing the challenge response as-is.
+        if (
+          isCloudflareChallenge(upstreamResponse) &&
+          !challengeRetried
+        ) {
+          challengeRetried = true
+          evictCfClearance(boundDomain)
+          if (
+            await attachCloudflareClearance(
+              forwardHeaders,
+              boundDomain,
+              fetchDomain
+            )
+          ) {
+            continue
+          }
+        }
+        break
+      }
       lastErr = new Error(`upstream returned ${upstreamResponse.status}`)
     } catch (err) {
       lastStatus = null

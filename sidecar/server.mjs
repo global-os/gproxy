@@ -30,6 +30,10 @@ const MAX_REDIRECTS = 10
 // than surface a 502 to the caller on a transient drop.
 const FETCH_ATTEMPTS = 3
 const FETCH_RETRY_DELAY_MS = 250
+// How long to wait for Cloudflare's invisible managed challenge to self-solve
+// (proof-of-work + a self-submit) and drop a cf_clearance cookie before giving
+// up. Kept under Vercel's 30s function cap so a solve + a re-fetch both fit.
+const SOLVE_TIMEOUT_MS = 15_000
 // Optional path to a custom-built Chromium binary (see PROPOSALS/custom-chromium-build.md).
 // When set, the sidecar uses this binary instead of stock Google Chrome.
 const CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH || null
@@ -404,6 +408,76 @@ async function chromeFetchWithRetry(url, method, headersObj, bodyB64) {
   throw lastErr
 }
 
+/**
+ * Solve Cloudflare's managed challenge for a domain and return the resulting
+ * cf_clearance cookie value.
+ *
+ * WHY A SEPARATE, THROWAWAY CONTEXT:
+ *   The challenge is a JS proof-of-work that can only run in a real browser
+ *   engine — it fingerprints navigator/document/timing and interacts with
+ *   Cloudflare's token service, so a Node-side reimplementation gets flagged.
+ *   But it must NOT share ANY state with the per-request fetch contexts: the
+ *   challenge's cookies/localStorage (or a half-solved challenge) would leak
+ *   into proxied requests, and vice-versa. So we spin up a fresh, isolated
+ *   context, let it genuinely navigate and solve, read out the ONE value we
+ *   need (cf_clearance), then discard the whole context. The only thing that
+ *   crosses this boundary is the cf_clearance string itself.
+ *
+ * WHY THE SAME PROXY:
+ *   cf_clearance is bound to the exit IP. The solve and every subsequent fetch
+ *   must egress through the same proxy IP, so the context reuses the same
+ *   anonymized proxy the /fetch path already uses. If the proxy rotates IPs,
+ *   the cached clear goes stale and the caller re-solves.
+ *
+ * @param {string} domain e.g. 'x.com'
+ * @returns {Promise<{ ok: boolean, cfClearance: string | null }>}
+ */
+async function solveCloudflareChallenge(domain) {
+  const context = await browser.newContext({
+    userAgent: USER_AGENT,
+    viewport: { width: 1920, height: 1080 },
+    ...(anonymizedProxyUrl ? { proxy: { server: anonymizedProxyUrl } } : {}),
+  })
+  try {
+    const page = await context.newPage()
+    const target = `https://${domain}/`
+
+    // Real navigation, not fetch(): the browser renders the challenge page,
+    // runs its script, and the challenge self-solves + reloads. This is the
+    // whole point of doing it in Chrome rather than in Node.
+    await page
+      .goto(target, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      .catch(() => {})
+
+    // Poll the cookie jar for cf_clearance. The invisible challenge usually
+    // solves in a few seconds; give it the full window before reporting failure.
+    const deadline = Date.now() + SOLVE_TIMEOUT_MS
+    let cfClearance = null
+    while (Date.now() < deadline) {
+      const cookies = await context.cookies(target).catch(() => [])
+      const found = cookies.find((c) => c.name === 'cf_clearance')
+      if (found) {
+        cfClearance = found.value
+        break
+      }
+      await new Promise((r) => setTimeout(r, 500))
+    }
+
+    console.log(`[sidecar] /solve domain=${domain} solved=${!!cfClearance}`)
+    return { ok: true, cfClearance }
+  } catch (err) {
+    console.error(
+      '[sidecar] /solve failed:',
+      err instanceof Error ? err.message : String(err)
+    )
+    return { ok: false, cfClearance: null }
+  } finally {
+    // Discard the context entirely: no cookies, storage, or challenge state
+    // survive to pollute any other request's context.
+    await context.close().catch(() => {})
+  }
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = []
@@ -510,6 +584,47 @@ const server = createServer(async (req, res) => {
       res.writeHead(502)
       res.end(
         `fetch error: ${err instanceof Error ? err.message : String(err)}`
+      )
+    }
+    return
+  }
+
+  // Solve Cloudflare's managed challenge for a domain in a throwaway, isolated
+  // Chrome context and return the cf_clearance cookie value. The main app
+  // caches it and injects it into proxied requests to that domain.
+  if (url.pathname === '/solve' && req.method === 'POST') {
+    if (!isAuthorized(req, url)) {
+      res.writeHead(401)
+      res.end('unauthorized')
+      return
+    }
+
+    try {
+      const raw = await readBody(req)
+      const body = JSON.parse(raw.toString('utf-8'))
+      // Only accept a bare hostname (e.g. 'x.com'); never let a caller pass an
+      // arbitrary path/URL into page.goto.
+      const domain = String(body.domain || '')
+        .trim()
+        .replace(/^https?:\/\//i, '')
+        .split('/')[0]
+        .replace(/[^a-z0-9.-]/gi, '')
+      if (!domain || !domain.includes('.')) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'bad domain' }))
+        return
+      }
+
+      const result = await solveCloudflareChallenge(domain)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(result))
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        })
       )
     }
     return
