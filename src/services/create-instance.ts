@@ -3,6 +3,7 @@ import { resolveImageMeta } from '../db/image.js'
 import { db } from '../db/index.js'
 import * as schema from '../db/schema.js'
 import { PENDING_INSTANCE_CHECKSUM } from '../runtime/instance/constants.js'
+import { evictInstanceSlugCache } from '../runtime/instance/resolve.js'
 import {
   generateInstanceSlug,
   isLegacyUuidSlug,
@@ -31,6 +32,7 @@ export async function upgradeLegacySlug(
         console.log(
           `[instance] upgraded slug ${instanceId}: ${slug} -> ${row.slug}`
         )
+        evictInstanceSlugCache(slug)
         return row.slug
       }
     } catch (err) {
