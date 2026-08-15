@@ -137,8 +137,24 @@ folded into the `/eb` post). Result is posted to `parent` via `postMessage` with
 
 ### 1. Bootstrap (the 403 body, not `main.js`)
 
-Creates a 1×1 hidden `iframe`, injects `window.__CF$cv$params={r,t}`, and loads
-`main.js` in it. `main.js` runs in that **isolated iframe**, not in the page.
+```js
+a = document.createElement("iframe");  a.height = a.width = 1;  a.style.visibility = "hidden";
+document.body.appendChild(a);
+// inside the iframe's document:
+b.innerHTML =
+  "window.__CF$cv$params = { r:'a2b7dc252a9d87cd', t:'MTc4Njc5MzM0OQ==' };
+   var s = document.createElement('script');
+   s.src = '/cdn-cgi/challenge-platform/scripts/jsd/main.js';
+   document.head.appendChild(s);"
+```
+
+The 403 body is a ~1 KB shim: it creates a 1×1 **hidden iframe**, injects
+`window.__CF$cv$params = { r: <cf-ray>, t: <base64 issued-at> }` into *that*
+iframe's document, then loads `main.js` there. (`t` here decodes to `1786793349`,
+the challenge issue time — the same value that shows up in the submit nonce.)
+`main.js` runs in that **isolated iframe**, not in the page, and its first line
+sets `window._cf_chl_opt = { <random-key>: 'g' }` — the challenge mode `g` stored
+under a per-instance random key so it can't be grepped.
 
 ### 2. Fresh-iframe fingerprint sampling (the interesting part)
 
