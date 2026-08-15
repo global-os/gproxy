@@ -1,0 +1,10 @@
+{
+  "name": "gproxy-deobfuscation",
+  "private": true,
+  "type": "module",
+  "description": "De-obfuscation tooling for the Castle (and later Cloudflare) chunks. Kept separate from the main Vercel package.json so these deps never enter the serverless bundle.",
+  "dependencies": {
+    "acorn": "^8.18.0",
+    "eslint-scope": "^9.1.2"
+  }
+}

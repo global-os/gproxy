@@ -20,7 +20,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { dirname, basename, join } from 'node:path'
 import { tokenize } from './lexer.mjs'
-import { prettyPrint } from './pipeline.mjs'
+import { prettyPrint } from './pretty.mjs'
 import { resolveScopes } from './scope.mjs'
 
 const TOOL_DIR = dirname(fileURLToPath(import.meta.url))

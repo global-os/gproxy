@@ -31,7 +31,8 @@ names Castle fingerprints with are directly greppable in the minified source.
 
 ### Layer 1 — the LCG-XOR string program (a tiny VM)
 
-Two `atob` blobs decoded into UTF-16 code-unit arrays (see `deobfuscated-arrays.json`):
+Two `atob` blobs decoded into UTF-16 code-unit arrays (the decode program and its
+key material):
 
 | array | seed | code units | role |
 |-------|------|-----------|------|

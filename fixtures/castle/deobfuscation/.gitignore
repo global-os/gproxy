@@ -5,3 +5,4 @@
 *.annotated.pretty.js
 *.decoded.json
 *.decoded.js
+node_modules
