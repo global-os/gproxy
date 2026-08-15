@@ -1,3 +1,4 @@
+// (build trigger) — the sidecar workflow is gated on sidecar/** paths.
 // TLS-impersonation sidecar, v2: real Chrome (via Patchright) instead of
 // tls-client. Real Google Chrome is required — Playwright's bundled Chromium
 // gets detected regardless of headers/UA. Headless is fine as long as the UA
