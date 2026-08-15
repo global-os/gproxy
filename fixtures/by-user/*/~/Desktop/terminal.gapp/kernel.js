@@ -1,5 +1,6 @@
 // Parent kernel bridge — postMessage activates platform syscalls (POST /api/syscalls):
 //   fs:browse -> fs.browse -> fs:browse:complete | fs:browse:error
+//   fs:read   -> fs.read   -> fs:read:complete   | fs:read:error
 //   fs:delete -> fs.delete -> fs:delete:complete | fs:delete:error
 
 const pending = new Map()
