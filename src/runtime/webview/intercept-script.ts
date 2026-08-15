@@ -52,24 +52,14 @@ export function buildInterceptScript(boundDomain: string): string {
     return body.split(proxyOrigin).join(boundOrigin).split(proxyHost).join(boundHost)
   }
 
-  // X's Sentry SDK reports to sentry.io; its envelope POST is CORS-rejected in
-  // this iframe context and the rejection cascades into a page teardown
-  // (blank). Stub those requests out entirely — return a fake success so
-  // Sentry thinks the event was delivered and its error handling never throws.
-  function isSentryUrl(url) {
-    try {
-      return typeof url === 'string' && url.indexOf('sentry.io') > -1
-    } catch (e) {
-      return false
-    }
-  }
+  // X's Sentry SDK reports to sentry.io. Like every other cross-origin
+  // request, route the envelope through the proxy — the proxy rewrites Origin
+  // to the bound domain (x.com), which sentry.io's DSN allows. Sending it
+  // direct would leak the proxy subdomain as Origin and get rejected with
+  // "event submission rejected with_reason: Cors".
 
   var origFetch = window.fetch.bind(window)
   window.fetch = function (input, init) {
-    var url = input instanceof Request ? input.url : typeof input === 'string' ? input : String(input)
-    if (isSentryUrl(url)) {
-      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }))
-    }
     var rewritten = proxyUrl(input)
     if (rewritten !== null) input = input instanceof Request ? new Request(rewritten, input) : rewritten
     if (init && typeof init.body === 'string') init = Object.assign({}, init, { body: rewriteBody(init.body) })
@@ -80,12 +70,6 @@ export function buildInterceptScript(boundDomain: string): string {
   XMLHttpRequest.prototype.open = function (method, url) {
     var urlStr = typeof url === 'string' ? url : String(url)
     var args = Array.prototype.slice.call(arguments)
-    if (isSentryUrl(urlStr)) {
-      // Point the XHR at an empty JSON data URL so it "succeeds" without a
-      // real network request to sentry.io.
-      args[1] = 'data:application/json,{}'
-      return origXhrOpen.apply(this, args)
-    }
     var rewritten = proxyUrl(urlStr)
     // Copy instead of mutating the arguments object — a second wrapper (e.g.
     // the site's own Sentry instrumentation) calls us via apply(), and
@@ -102,7 +86,6 @@ export function buildInterceptScript(boundDomain: string): string {
   var origSendBeacon = navigator.sendBeacon.bind(navigator)
   navigator.sendBeacon = function (url, data) {
     var urlStr = typeof url === 'string' ? url : String(url)
-    if (isSentryUrl(urlStr)) return true
     var rewritten = proxyUrl(urlStr)
     return origSendBeacon(rewritten !== null ? rewritten : urlStr, rewriteBody(data))
   }
