@@ -14,3 +14,7 @@ src/gapp/registry/*.js
 *.har
 sidecar/.http-mitm-proxy
 .DS_Store
+# local WIP — not for commit
+sidecar/_nav.mjs
+sidecar/manual-chrome.mjs
+fixtures/by-user/[*]/~/Desktop/terminal.gapp/
