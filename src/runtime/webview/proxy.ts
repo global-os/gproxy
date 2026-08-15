@@ -643,8 +643,10 @@ interface CastleBuildVersion {
   name: string
   /** Identifies this build: matches one of its tamper-check functions. */
   fingerprint: RegExp
-  /** Rewrites the whole script to add console logging to its tamper checks. */
-  instrument: (script: string) => string
+  /** Rewrites the whole script: adds console logging to its tamper checks and
+   *  patches the location reads to report `boundDomain` (see
+   *  fixtures/castle/deobfuscation.md). */
+  instrument: (script: string, boundDomain: string) => string
   /** Upstream Castle SDK version (npm `@castleio/castle-js`) this shape was
    *  observed in. Reference only — never used at runtime. */
   sdkVersion?: string
@@ -685,8 +687,9 @@ const CASTLE_BUILD_VERSIONS: CastleBuildVersion[] = [
     name: 'anonymous-try-return-v2',
     sdkVersion: '2.8.3',
     fingerprint: /function\(\)\{try\{([\s\S]{1,500}?)\}catch\{return!1\}\}/,
-    instrument: (script) =>
-      script.replace(
+    instrument: (script, boundDomain) => {
+      const boundOrigin = `https://${boundDomain}`
+      const withProbes = script.replace(
         /function\(\)\{try\{([\s\S]{1,500}?)\}catch\{return!1\}\}/g,
         (_m, body: string) => {
           const instrumented = body.replace(
@@ -696,7 +699,55 @@ const CASTLE_BUILD_VERSIONS: CastleBuildVersion[] = [
           )
           return `function(){try{${instrumented}}catch(__e){console.log("[castle-probe] threw",__e&&__e.message);return!1}}`
         }
-      ),
+      )
+
+      // Hide the proxy context from Castle's location fingerprints. There is no
+      // global shim for window.location (non-configurable in real Chrome), so
+      // rewrite the read sites inside the bundle instead (see
+      // fixtures/castle/deobfuscation.md for the de-obfuscated offsets). \s*
+      // tolerance guards against the chunk being re-wrapped across lines; each
+      // patch logs loudly if it matches nothing (e.g. the minifier renamed
+      // rO/iO in a new build), so a drift can't fail silently.
+      const patchLocation = (
+        out: string,
+        re: RegExp,
+        repl: string,
+        label: string
+      ): string => {
+        let hits = 0
+        out = out.replace(re, () => {
+          hits++
+          return repl
+        })
+        if (hits === 0) {
+          console.error(
+            `[castle] location patch missed "${label}" — read-site shape drifted, update CASTLE_BUILD_VERSIONS`
+          )
+        }
+        return out
+      }
+
+      let patched = withProbes
+      patched = patchLocation(
+        patched,
+        /window\s*\[\s*rO\s*\]\s*\[\s*iO\s*\]/g,
+        JSON.stringify(boundDomain),
+        'hostname'
+      )
+      patched = patchLocation(
+        patched,
+        /window\s*\[\s*rO\s*\]\s*\.\s*ancestorOrigins/g,
+        '[]',
+        'ancestorOrigins'
+      )
+      patched = patchLocation(
+        patched,
+        /function\s*\(\s*e\s*\)\s*\{\s*return\s+e\.origin\s*\}/g,
+        `function(e){return ${JSON.stringify(boundOrigin)}}`,
+        'origin'
+      )
+      return patched
+    },
   },
 ]
 
@@ -1026,7 +1077,7 @@ export async function proxyWebviewRequest(
         const version = matchCastleBuild(rewritten)
         if (version) {
           console.log(`[castle] instrumenting build ${version.name} (${upstreamPath})`)
-          output = version.instrument(rewritten)
+          output = version.instrument(rewritten, boundDomain)
         } else {
           console.error(
             `[castle] UNRECOGNIZED Castle build ${upstreamPath} — add a new entry to CASTLE_BUILD_VERSIONS in proxy.ts`
