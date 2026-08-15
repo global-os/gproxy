@@ -128,35 +128,44 @@ if (!chromiumExecutable && CHROMIUM_ARTIFACT_SHA) {
   chromiumLibraryPath = resolved.libraryPath
 }
 
-// Launch the browser once, but give every /fetch its own non-persistent
-// context (see chromeFetchOnce) so requests never share a cookie jar or other
-// session state.
-const browser = await chromium.launch({
-  // Use a custom-built Chromium if one was resolved, otherwise fall back to
-  // stock Google Chrome.
-  ...(chromiumExecutable
-    ? { executablePath: chromiumExecutable }
-    : { channel: 'chrome' }),
-  headless: true,
-  // Component builds link against .so files living next to the binary;
-  // add their dir to the loader path so the downloaded artifact resolves.
-  ...(chromiumLibraryPath
-    ? {
-        env: {
-          ...process.env,
-          LD_LIBRARY_PATH:
-            chromiumLibraryPath +
-            (process.env.LD_LIBRARY_PATH
-              ? ':' + process.env.LD_LIBRARY_PATH
-              : ''),
-        },
-      }
-    : {}),
-  args: [
-    '--no-sandbox', // required running as root in a container
-    '--enable-features=PreserveOverriddenSecFetchHeaders',
-  ],
-})
+// Launch N Chrome processes and spread the context pool across them. A single
+// Chrome process has a soft ceiling on concurrent contexts; separate processes
+// multiply throughput (each with its own share of the pool — see makeContext
+// below, which round-robins new contexts across these browsers). Each /fetch
+// still gets its own non-persistent context (see chromeFetchOnce) so requests
+// never share a cookie jar or other session state.
+const BROWSER_INSTANCES = 2
+const browsers = []
+for (let i = 0; i < BROWSER_INSTANCES; i++) {
+  browsers.push(
+    await chromium.launch({
+      // Use a custom-built Chromium if one was resolved, otherwise fall back to
+      // stock Google Chrome.
+      ...(chromiumExecutable
+        ? { executablePath: chromiumExecutable }
+        : { channel: 'chrome' }),
+      headless: true,
+      // Component builds link against .so files living next to the binary;
+      // add their dir to the loader path so the downloaded artifact resolves.
+      ...(chromiumLibraryPath
+        ? {
+            env: {
+              ...process.env,
+              LD_LIBRARY_PATH:
+                chromiumLibraryPath +
+                (process.env.LD_LIBRARY_PATH
+                  ? ':' + process.env.LD_LIBRARY_PATH
+                  : ''),
+            },
+          }
+        : {}),
+      args: [
+        '--no-sandbox', // required running as root in a container
+        '--enable-features=PreserveOverriddenSecFetchHeaders',
+      ],
+    })
+  )
+}
 
 // Each /fetch call gets its own page + CDP session, created and torn down
 // per call (reused only across a single call's own redirect chain, which is
@@ -198,7 +207,11 @@ const contextWaiters = []  // requests waiting for a context
 let contextsOut = 0        // contexts currently in use
 let refilling = false
 
+// Round-robin new contexts across the browser processes so the pool's load is
+// spread evenly (each context lives in whichever process created it).
+let makeContextCounter = 0
 function makeContext() {
+  const browser = browsers[makeContextCounter++ % browsers.length]
   return browser.newContext({
     userAgent: USER_AGENT,
     viewport: { width: 1920, height: 1080 },
@@ -502,7 +515,7 @@ async function chromeFetchWithRetry(url, method, headersObj, bodyB64) {
  * @returns {Promise<{ ok: boolean, cfClearance: string | null }>}
  */
 async function solveCloudflareChallenge(domain) {
-  const context = await browser.newContext({
+  const context = await browsers[0].newContext({
     userAgent: USER_AGENT,
     viewport: { width: 1920, height: 1080 },
     ...(anonymizedProxyUrl ? { proxy: { server: anonymizedProxyUrl } } : {}),
