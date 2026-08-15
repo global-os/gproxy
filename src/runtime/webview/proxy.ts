@@ -755,6 +755,22 @@ const CASTLE_BUILD_VERSIONS: CastleBuildVersion[] = [
         `function(e){return ${JSON.stringify(boundOrigin)}}`,
         'origin'
       )
+      // Parent-window iframe detection (KF='top', qF='href'): window.top is
+      // non-configurable and its .location.href throws cross-origin, so a
+      // real browser reads it fine (top-level) while our iframe throws and
+      // leaks "in an iframe". Replace the reads so Castle thinks it's top-level.
+      patched = patchLocation(
+        patched,
+        /window\s*\[\s*KF\s*\]\s*\[\s*rO\s*\]\s*\[\s*qF\s*\]/g,
+        JSON.stringify(boundOrigin + '/'),
+        'top.location.href'
+      )
+      patched = patchLocation(
+        patched,
+        /window\s*\.\s*self\s*===\s*window\s*\[\s*KF\s*\]/g,
+        'true',
+        'self===top'
+      )
       return patched
     },
   },

@@ -77,18 +77,39 @@ Helpers:
 re-processes subdomains — so the value Castle fingerprints is the proxy slug host,
 not `x.com`.
 
-## Patch strategy (unimplemented)
+## Patch strategy (implemented in `proxy.ts` → `CASTLE_BUILD_VERSIONS`)
 
 `window.location` is non-configurable in real Chrome (verified: `defineProperty`
 throws "Cannot redefine property: location" on `window`, `document`, and the instance
-props `hostname`/`origin`). So there is no global shim — the only option is to rewrite
-the read sites *inside* the Castle bundle, via `instrumentCastleBuild` (shape-matched,
-registered in `CASTLE_BUILD_VERSIONS`), replacing:
+props `hostname`/`origin`), and so are `window.top`/`window.parent`/`window.self`.
+So there is no global shim — the only option is to rewrite the read sites *inside*
+the Castle bundle, via `instrumentCastleBuild` (shape-matched, registered in
+`CASTLE_BUILD_VERSIONS`), replacing:
 
-- `window[rO][iO]` → `'x.com'` (bound domain)
+- `window[rO][iO]` → `'x.com'` (bound domain) — hostname
 - `window[rO].ancestorOrigins` → `[]` (hide the iframe)
 - `sa(function(e){return e.origin})` result → `'https://x.com'`
+- `window[KF][rO][qF]` → `'https://x.com/'` (top.location.href; throws cross-origin
+  in the iframe, so replace it to make the `Aq` check report top-level)
+- `window.self===window[KF]` → `true` (self===top, the `lZ` top-level check)
 
-The `window[rO][iO]` / `window[rO].ancestorOrigins` shapes are stable and greppable,
-so the replacement is a literal-substitution on those two/four token sequences, keyed
-to the `anonymous-try-return-v2` build.
+## Parent-window reads (the "mocking parent" set)
+
+Searched the chunk for every parent/top/opener/frame access. Result: Castle reads
+`window.top` (`KF='top'`) and `window.self`, but **not** `window.parent`,
+`window.opener`, `window.frameElement`, or `window.frames`. The `parent` hits in the
+string table are DOM traversal names (`parentNode`, `parentElement`), not the window.
+
+| read | minified site | in real tab | in our iframe |
+|------|---------------|-------------|---------------|
+| `window.top.location.href` | `(window[KF][rO][qF], xn(!0))` in `Aq` ~378588 | reads fine → `xn(!0)` | **throws** → `xn(cw)` |
+| `window.self === window.top` | `window.self===window[KF]` in `lZ` ~445089 | `true` | `false` |
+| `window.location.ancestorOrigins` | `window[rO].ancestorOrigins` in `si` ~74200 | `[]` | `['https://app.app.onetrueos.com']` |
+
+All three are patched (ancestorOrigins in the location section above; the two
+`window.top` reads here).
+
+The `window[rO][iO]` / `window[rO].ancestorOrigins` / `window[KF]…` shapes are stable
+and greppable, so the replacement is a literal-substitution on those token sequences,
+keyed to the `anonymous-try-return-v2` build. Each patch is whitespace-tolerant and
+logs loudly if it matches nothing, so a minifier rename can't fail silently.

@@ -286,8 +286,12 @@ This matters for `CASTLE_BUILD_VERSIONS` (see `proxy.ts`): we instrument the tam
 | `window.location.origin` | `sa(function(e){return e.origin})` (fn `vJ`) ~415191 | proxy origin |
 | `window.location.protocol` | `sa(function(e){return e[SO]})`, `SO='protocol'` (fn `YY`) ~415191 | `https:` — harmless |
 | `document.referrer` | `_i(function(e){return e.referrer})` (fn `jW`) ~415191 | already shimmed to `x.com/` |
+| `window.top.location.href` | `(window[KF][rO][qF], xn(!0))`, `KF='top'`, `qF='href'` (fn `Aq`) ~378588 | **iframe detection — throws cross-origin in the iframe** |
+| `window.self === window.top` | `window.self===window[KF]` (fn `lZ`) ~445089 | **iframe detection — `false` in the iframe** |
 
-`window.location` is **non-configurable** in real Chrome (verified: `Object.defineProperty(window, 'location', …)` / `(location, 'hostname', …)` / `(document, 'location', …)` all throw "Cannot redefine property"), so there is no global shim — the only fix is to rewrite these read sites *inside* the bundle via `instrumentCastleBuild` (shape-matched, registered in `CASTLE_BUILD_VERSIONS`), replacing `window[rO][iO]` → `'x.com'` and `window[rO].ancestorOrigins` → `[]`. The two hostname/ancestorOrigins shapes are stable and greppable. This is the leading suspect for the remaining "We've temporarily limited your login" after the sec-fetch/priority/Set-Cookie/TLS fixes all landed.
+Castle reads `window.top`/`window.self` but **not** `window.parent`, `window.opener`, `window.frameElement`, or `window.frames` (the `parent` hits are DOM `parentNode`/`parentElement`).
+
+`window.location` (and `window.top`/`window.self`) are **non-configurable** in real Chrome (verified: `Object.defineProperty(window, 'location', …)` / `(location, 'hostname', …)` / `(document, 'location', …)` all throw "Cannot redefine property"), so there is no global shim — the only fix is to rewrite these read sites *inside* the bundle via `instrumentCastleBuild` (shape-matched, registered in `CASTLE_BUILD_VERSIONS`), replacing `window[rO][iO]` → `'x.com'`, `window[rO].ancestorOrigins` → `[]`, `window[KF][rO][qF]` → `'https://x.com/'`, and `window.self===window[KF]` → `true`. All shapes are stable and greppable, each patch is whitespace-tolerant and logs loudly if it matches nothing. This is the leading suspect for the remaining "We've temporarily limited your login" after the sec-fetch/priority/Set-Cookie/TLS fixes all landed.
 
 **`/cdn-cgi/` paths:** Previously returned 404. Now proxied through to upstream (some Cloudflare challenge scripts at these paths are needed for bot scoring).
 
