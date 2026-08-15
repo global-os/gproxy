@@ -14,15 +14,48 @@
 // Usage: node pipeline.mjs ../castle.umd-Cs-TYKFF.js
 
 import { readFileSync, writeFileSync } from 'node:fs'
-import { pathToFileURL } from 'node:url'
+import { pathToFileURL, fileURLToPath } from 'node:url'
+import { dirname, basename, join } from 'node:path'
 import { tokenize, reemit } from './lexer.mjs'
 
+// Outputs land alongside the tooling, not next to the input source.
+const TOOL_DIR = dirname(fileURLToPath(import.meta.url))
+
 // Re-emit tokens with readable indentation. Only the whitespace changes; every
-// token's text is verbatim, so renaming done on this view still round-trips.
+// token's text is verbatim. A space is inserted between two operator tokens
+// whose concatenation would otherwise merge into a longer token (e.g. `-` `-`
+// → `--`, `/` `/` → `//`), so re-tokenizing yields the same token sequence.
+const MERGE_PAIRS = new Set([
+  '++', '--', '==', '!=', '===', '!==', '<=', '>=', '&&', '||', '??', '=>',
+  '<<', '>>', '>>>', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '**',
+  '?.', '...', '<<=', '>>=', '**=', '&&=', '||=', '??=', '/*', '//',
+])
+
+const isOpChar = (c) => c !== undefined && '+-<>=!&|*/.?%^:'.includes(c)
+const isWordChar = (c) => c !== undefined && /[A-Za-z0-9_$]/.test(c)
+
+function wouldMerge(prevText, curText) {
+  if (!prevText || !curText) return false
+  const a = prevText[prevText.length - 1]
+  const b = curText[0]
+  // Two word-ish tokens (ident/keyword/number) would merge into one identifier.
+  if (isWordChar(a) && isWordChar(b)) return true
+  // Two operator tokens could merge into a longer operator (or a comment).
+  if (isOpChar(a) && isOpChar(b)) {
+    return (
+      MERGE_PAIRS.has(a + b) ||
+      MERGE_PAIRS.has(prevText.slice(-2) + b) ||
+      MERGE_PAIRS.has(a + curText.slice(0, 2))
+    )
+  }
+  return false
+}
+
 export function prettyPrint(tokens) {
   let out = ''
   let indent = 0
   let lineStart = true
+  let lastText = ''
   const pad = () => (lineStart ? '  '.repeat(indent) : '')
 
   for (const t of tokens) {
@@ -30,6 +63,7 @@ export function prettyPrint(tokens) {
     if (t.type === 'comment') {
       out += pad() + t.text
       lineStart = /\n$/.test(t.text)
+      lastText = t.text
       continue
     }
 
@@ -39,6 +73,8 @@ export function prettyPrint(tokens) {
     const isComma = t.text === ','
 
     if (isClose) indent = Math.max(0, indent - 1)
+
+    const needSpace = !lineStart && wouldMerge(lastText, t.text)
 
     if (isOpen) {
       out += (out && !lineStart ? ' ' : pad()) + t.text + '\n'
@@ -54,9 +90,10 @@ export function prettyPrint(tokens) {
       out += t.text + '\n'
       lineStart = true
     } else {
-      out += pad() + t.text
+      out += (needSpace ? ' ' : '') + pad() + t.text
       lineStart = false
     }
+    lastText = t.text
   }
   return out
 }
@@ -74,8 +111,8 @@ function main() {
   const pretty = prettyPrint(tokens)
   const reugly = reemit(tokens)
 
-  const prettyPath = input.replace(/\.js$/, '.pretty.js')
-  const reuglyPath = input.replace(/\.js$/, '.reugly.js')
+  const prettyPath = join(TOOL_DIR, basename(input).replace(/\.js$/, '.pretty.js'))
+  const reuglyPath = join(TOOL_DIR, basename(input).replace(/\.js$/, '.reugly.js'))
 
   writeFileSync(prettyPath, pretty)
   writeFileSync(reuglyPath, reugly)

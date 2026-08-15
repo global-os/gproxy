@@ -1,88 +1,77 @@
 # Castle de-obfuscation workflow
 
-Reversibly de-obfuscate the Castle SDK chunk (`castle.umd-*.js`) so the proxy
-patch targets can be *proven* to stay in sync with the shipped, obfuscated
-source.
+Reversibly de-obfuscate the Castle SDK chunk (`castle.umd-*.js`). The goal is a
+**human-maintained "nice" file** — indented, with meaningful names — that is
+provably a faithful de-obfuscation of the shipped, obfuscated source.
 
-## The core idea
+## The workflow
 
-Obfuscation here is just **symbol minification + string encoding**. We don't
-need a full de-obfuscator — we need a *reversible* transform plus a way to
-annotate what each minified symbol means. The whole thing rests on one
-invariant:
+The **nice file is the source of truth** (`*.deobfuscated.js`, committed). The
+shipped ugly file (`../castle.umd-*.js`) is the fixture. The only direction we
+maintain and assert is **nice → ugly**:
 
-> re-joining the original tokens reproduces the original file **byte-for-byte**.
+```bash
+# bootstrap (or regenerate) the nice file from the ugly chunk
+node deobfuscation/deobfuscate.mjs ../castle.umd-Cs-TYKFF.js
 
-Because the lexer records exact token text *and* the exact whitespace before
-each token, "re-obfuscating" is literally re-concatenating those slices. Any
-edit we layer on top (annotation comments, later renames) is provably
-undoable — and the tools assert that on every run.
+# assert the nice file still maps back to the shipped ugly file
+node deobfuscation/verify.mjs \
+  deobfuscation/castle.umd-Cs-TYKFF.deobfuscated.js \
+  ../castle.umd-Cs-TYKFF.js
+```
+
+`deobfuscate.mjs` renames every `IDENT = 'string'` constant whose string value is
+a clean, non-colliding identifier, and puts the correspondence as a comment at
+its **first occurrence only**:
+
+```js
+    // opr -> e
+    opr = `opr`,
+    // cookie -> KD
+    cookie = `cookie`,
+```
+
+The comment means "the identifier `opr` (nice) was `e` (ugly)". After that first
+occurrence the name is used bare — the mapping is understood everywhere else.
 
 ## Files
 
 | file | purpose |
 |------|---------|
-| `lexer.mjs` | whitespace-preserving JS lexer. `reemit(tokenize(x)) === x`. |
-| `pipeline.mjs` | pretty-print + re-uglify + assertion (the round-trip proof). |
-| `annotate.mjs` | insert `// 'value' -> symbol` comments at each string-constant definition; strip them back to the original. |
+| `lexer.mjs` | whitespace-preserving JS lexer (`reemit(tokenize(x)) === x`). |
+| `pipeline.mjs` | `prettyPrint` (indent + merge-safe spacing) + `reemit`. |
+| `deobfuscate.mjs` | ugly → nice: rename string constants + `// nice -> ugly` comments + pretty-print. |
+| `verify.mjs` | nice → ugly: parse comments, reverse-rename, assert the token *text* sequence equals the ugly file's. |
+| `*.deobfuscated.js` | the maintained nice artifact (committed). |
 
-## Workflow
+## The assertion (`verify.mjs`)
 
-From `fixtures/castle/`:
+`verify.mjs` tokenizes the nice file, strips the `// nice -> ugly` comments,
+reverse-renames, and asserts the resulting token sequence is **identical** to the
+ugly file's (same texts, same order). Whitespace is irrelevant — the ugly file
+owns its own whitespace — so this is a pure "the nice file is a faithful
+de-obfuscation" check. A human edit that breaks the correspondence (renaming
+without a comment, dropping a token, …) fails it and names the first diverging
+token.
 
-```bash
-# 1. Prove the lexer is lossless and generate readable views
-node deobfuscation/pipeline.mjs castle.umd-Cs-TYKFF.js
-
-# 2. Annotate every `IDENT = 'string'` assignment with its correspondence
-node deobfuscation/annotate.mjs castle.umd-Cs-TYKFF.js
-```
-
-Each step emits derived files next to the input:
-
-- `*.pretty.js` — tokens re-indented (readable; token text untouched).
-- `*.reugly.js` — tokens re-joined with their original whitespace; asserted
-  byte-equal to the input.
-- `*.annotated.js` — the source with `// 'string' -> symbol` comments inserted
-  above each string-constant assignment, original whitespace otherwise intact.
-- `*.annotated.pretty.js` — the annotated source, re-indented for reading.
-
-The annotated output looks like:
-
-```js
-    // `location` -> rO
-    rO=`location`,
-    // `hostname` -> iO
-    iO=`hostname`,
-```
-
-## The correspondence is the comments, not a side file
-
-`annotate.mjs` treats the comments themselves as the map: a comment
-`// 'value' -> symbol` directly above `symbol = 'value'` is the whole
-correspondence, colocated with its definition. No separate `rename-map.json`
-to drift out of sync.
-
-The comment "carries" the identifier's original leading whitespace, so
-stripping it (and handing that whitespace back) is lossless. The strip-and-
-re-emit assertion is the contract: if the annotated file ever stops round-
-tripping, you know it drifted from the shipped chunk.
+We deliberately do **not** maintain ugly → nice (regenerating the nice file from
+the ugly) — the nice file is hand-maintained and the ugly file is fixed.
 
 ## Progressive de-obfuscation
 
-The `annotate` pass covers every *plaintext* string-constant assignment
-automatically. The remaining obfuscated strings — the `u(50,182,8,…)` /
-`t('…')` lookups decoded separately (see `../deobfuscation.md`) — can be added
-as hand-written annotations of the same shape later, once their values are
-decoded. Each addition is verified by the same round-trip.
+`deobfuscate.mjs` covers the *plaintext* string constants automatically. The
+obfuscated strings (the `u(50,…)` / `t('…')` lookups — font list, error
+messages) and the non-string identifiers can be renamed by hand: edit the nice
+file, rename the identifier, and add a `// nice -> ugly` comment at its first
+occurrence, then re-run `verify.mjs`. Every such edit is checked against the
+shipped chunk.
 
 ## Caveats
 
-- The lexer is intentionally not a parser: it doesn't resolve scopes, so a
-  rename is *global and textual*. That's fine for the string-constant table
-  (top-level, uniquely named), but a future scope-aware rename would need a
-  parser (or a collision check like the one the earlier map-based tool had).
-- `annotate.mjs` matches `IDENT = <string literal>`; it does not annotate
-  `IDENT = u(...)` (obfuscated) or numeric constants. Those are hand-added.
-- Generated `*.pretty.js` / `*.reugly.js` / `*.annotated*.js` files are
-  derived and gitignored; regenerate them from the source + tools.
+- The lexer is a lexer, not a parser: it doesn't resolve scopes, so renames are
+  global and textual. That's fine for the top-level string table (each minified
+  name is unique and used consistently). A scope-aware rename would need a parser.
+- `prettyPrint` only re-indents and adds merge-safe spacing (`-` `-` → `- -`,
+  `typeof window` → `typeof window`); it does not otherwise reformat, so the nice
+  file still looks fairly dense.
+- Derived views (`*.pretty.js`, `*.reugly.js`, `*.decoded.*`) are gitignored.

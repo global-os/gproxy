@@ -1,0 +1,7 @@
+# transient/derived views — regenerate from ../castle.umd-*.js
+*.pretty.js
+*.reugly.js
+*.annotated.js
+*.annotated.pretty.js
+*.decoded.json
+*.decoded.js
