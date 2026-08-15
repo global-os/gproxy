@@ -315,6 +315,22 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
         wireInfo.headers = params.headers ?? wireInfo.headers
       }
     })
+    // Chrome's cookie jar consumes Set-Cookie, so it never appears in
+    // Fetch.requestPaused.responseHeaders — it only surfaces here, on
+    // Network.responseReceivedExtraInfo (raw wire headers, where duplicate
+    // Set-Cookie lines are joined by \n). Capture it and let the response
+    // stage merge it in so cookies reach the proxy → browser.
+    let responseExtraHeaders = null
+    let resolveResponseExtra = null
+    const responseExtraPromise = new Promise((resolve) => {
+      resolveResponseExtra = resolve
+    })
+    cdp.on('Network.responseReceivedExtraInfo', (params) => {
+      if (wireInfo && params.requestId === wireInfo.requestId) {
+        responseExtraHeaders = params.headers ?? null
+        resolveResponseExtra()
+      }
+    })
 
     return await new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
@@ -395,9 +411,27 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
         console.log(
           `[sidecar] done url=${url} status=${responseStatusCode} ms=${Date.now() - t0}`
         )
+        // Wait (bounded) for the raw response headers so Set-Cookie can be
+        // merged; Fetch.requestPaused.responseHeaders omits them.
+        await Promise.race([
+          responseExtraPromise,
+          new Promise((r) => setTimeout(r, 100)),
+        ])
+        const raw = responseExtraHeaders || {}
+        const setCookieValue = raw['Set-Cookie'] ?? raw['set-cookie'] ?? null
+        const setCookies = setCookieValue
+          ? setCookieValue.split('\n').map((v) => ['Set-Cookie', v])
+          : []
+        if (setCookies.length) {
+          console.log(
+            `[sidecar] set-cookie url=${url} count=${setCookies.length}`
+          )
+        }
         resolve({
           status: responseStatusCode,
-          headers: (responseHeaders || []).map((h) => [h.name, h.value]),
+          headers: (responseHeaders || [])
+            .map((h) => [h.name, h.value])
+            .concat(setCookies),
           body: bodyB64Resp,
           wire: wireInfo,
         })
