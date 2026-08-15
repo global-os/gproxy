@@ -863,6 +863,13 @@ export async function proxyWebviewRequest(
     } catch (err) {
       lastStatus = null
       lastErr = err
+      // A hung sidecar fetch aborts with AbortError after the 15s timeout.
+      // Retrying it would just hang again and blow past Vercel's 30s cap as a
+      // 500 — fail fast as a 502 (the browser can retry) instead.
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.log(`[webview] sidecar timeout, failing fast url=${upstream}`)
+        break
+      }
     }
     const givingUp = attempt === MAX_ATTEMPTS
     console.log(
