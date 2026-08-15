@@ -270,6 +270,76 @@ function releaseContext(context) {
 // Pre-warm the pool at startup so the first burst doesn't pay newContext().
 refillPool()
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Cloudflare challenge detection + loud logging.
+//
+// The main app decides to route a solve to us via isCloudflareChallenge() — but
+// a challenge can also flash past *inside* this sidecar: a proxied fetch that
+// comes back 403 + `cf-mitigated: challenge`, or solveCloudflareChallenge's own
+// goto() hitting the "Just a moment" interstitial. Log those loudly so an
+// operator can see exactly when and where Cloudflare challenged us.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CHALLENGE_BODY_MARKERS = [
+  '__CF$cv$params',
+  'challenge-platform',
+  'cdn-cgi/challenge',
+  'cf_chl_',
+  'cf-chl-',
+  'Just a moment',
+  'checking your browser',
+]
+
+// Case-insensitive header lookup that accepts the CDP `[{ name, value }, …]`
+// array, the mapped `[[name, value], …]` array, or a plain `{ name: value }`
+// object (Playwright's response.headers()).
+function findHeader(headers, name) {
+  if (!headers) return undefined
+  const lower = name.toLowerCase()
+  if (Array.isArray(headers)) {
+    const hit = headers.find((h) => {
+      const n = Array.isArray(h) ? h[0] : h.name
+      return String(n).toLowerCase() === lower
+    })
+    if (!hit) return undefined
+    return Array.isArray(hit) ? hit[1] : hit.value
+  }
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() === lower) return v
+  }
+  return undefined
+}
+
+// Decode at most `maxLen` bytes of a base64 body to text (challenge HTML is
+// ~1 KB, so a small prefix is plenty and avoids buffering big pages).
+function bodyB64ToTextPrefix(bodyB64, maxLen = 8192) {
+  if (!bodyB64) return ''
+  try {
+    return Buffer.from(bodyB64, 'base64').slice(0, maxLen).toString('utf-8')
+  } catch {
+    return ''
+  }
+}
+
+// { header, markers } if this response is a Cloudflare challenge, else null.
+function detectCloudflareChallenge(status, headers, bodyText) {
+  const mitigated = findHeader(headers, 'cf-mitigated')
+  const header = mitigated && /challenge/i.test(String(mitigated)) ? mitigated : null
+  const markers = CHALLENGE_BODY_MARKERS.filter((m) => (bodyText || '').includes(m))
+  if (!header && markers.length === 0) return null
+  return { header, markers }
+}
+
+function logCloudflareChallenge(context, url, status, desc) {
+  const bar = '='.repeat(78)
+  console.log(bar)
+  console.log(`[sidecar] !!! CLOUDFLARE CHALLENGE — ${context}`)
+  console.log(`[sidecar] !!! url=${url}`)
+  console.log(`[sidecar] !!! status=${status ?? '?'} cf-mitigated=${desc.header ?? '(none)'}`)
+  console.log(`[sidecar] !!! body markers: ${desc.markers.length ? desc.markers.join(', ') : '(none)'}`)
+  console.log(bar)
+}
+
 async function chromeFetchOnce(url, method, headersObj, bodyB64) {
   // Take a fresh context from the pre-warmed pool (waits if none ready). Each
   // request gets an untouched context and discards it when done — see the pool
@@ -411,6 +481,19 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
         console.log(
           `[sidecar] done url=${url} status=${responseStatusCode} ms=${Date.now() - t0}`
         )
+        // Loudly flag a Cloudflare challenge response. The cf-mitigated header
+        // is the authoritative signal (cheap); otherwise a 403/429 gets its
+        // body scanned for the challenge HTML markers as a fallback.
+        const challengeDesc = detectCloudflareChallenge(
+          responseStatusCode,
+          responseHeaders,
+          responseStatusCode === 403 || responseStatusCode === 429
+            ? bodyB64ToTextPrefix(bodyB64Resp)
+            : ''
+        )
+        if (challengeDesc) {
+          logCloudflareChallenge('chromeFetch', url, responseStatusCode, challengeDesc)
+        }
         // Wait (bounded) for the raw response headers so Set-Cookie can be
         // merged; Fetch.requestPaused.responseHeaders omits them.
         await Promise.race([
@@ -546,6 +629,13 @@ async function chromeFetchWithRetry(url, method, headersObj, bodyB64) {
  * @returns {Promise<{ ok: boolean, cfClearance: string | null }>}
  */
 async function solveCloudflareChallenge(domain) {
+  // Being asked to solve means the main app already saw a challenge — log it
+  // loudly up front, then watch the navigation for the challenge HTML too.
+  const solveBar = '='.repeat(78)
+  console.log(solveBar)
+  console.log(`[sidecar] !!! CLOUDFLARE CHALLENGE — solve requested for ${domain}`)
+  console.log(solveBar)
+
   const context = await browsers[0].newContext({
     userAgent: USER_AGENT,
     viewport: { width: 1920, height: 1080 },
@@ -554,6 +644,23 @@ async function solveCloudflareChallenge(domain) {
   try {
     const page = await context.newPage()
     const target = `https://${domain}/`
+
+    // Flag any response during the solve that carries cf-mitigated: challenge
+    // (the interstitial itself, plus any sub-request Cloudflare re-challenges).
+    page.on('response', (resp) => {
+      try {
+        const h = resp.headers()
+        const mitigated = h && h['cf-mitigated']
+        if (mitigated && /challenge/i.test(String(mitigated))) {
+          logCloudflareChallenge('solve goto', resp.url(), resp.status(), {
+            header: mitigated,
+            markers: [],
+          })
+        }
+      } catch {
+        // headers() can throw on a raced/closed response; not worth surfacing.
+      }
+    })
 
     // Real navigation, not fetch(): the browser renders the challenge page,
     // runs its script, and the challenge self-solves + reloads. This is the
