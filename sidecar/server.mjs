@@ -565,19 +565,23 @@ async function solveCloudflareChallenge(domain) {
     // Poll the cookie jar for cf_clearance. The invisible challenge usually
     // solves in a few seconds; give it the full window before reporting failure.
     const deadline = Date.now() + SOLVE_TIMEOUT_MS
-    let cfClearance = null
+    let cookieHeader = null
     while (Date.now() < deadline) {
       const cookies = await context.cookies(target).catch(() => [])
       const found = cookies.find((c) => c.name === 'cf_clearance')
       if (found) {
-        cfClearance = found.value
+        // Return the FULL cookie header, not just cf_clearance: Cloudflare also
+        // mints __cf_bm (bot management) and cf_chl_* (challenge session), and
+        // the origin sets its own once the challenge is cleared. A real browser
+        // sends them all together, so capture every cookie in the jar.
+        cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ')
         break
       }
       await new Promise((r) => setTimeout(r, 500))
     }
 
-    console.log(`[sidecar] /solve domain=${domain} solved=${!!cfClearance}`)
-    return { ok: true, cfClearance }
+    console.log(`[sidecar] /solve domain=${domain} solved=${!!cookieHeader}`)
+    return { ok: true, cookies: cookieHeader }
   } catch (err) {
     console.error(
       '[sidecar] /solve failed:',

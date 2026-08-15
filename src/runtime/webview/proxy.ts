@@ -196,9 +196,10 @@ const cfClearanceCache = new Map<string, { cookie: string; at: number }>()
 const CF_CLEARANCE_TTL_MS = 5 * 60 * 1000
 
 /**
- * Fetch (or retrieve from cache) a solved cf_clearance cookie for `domain`.
- * Returns the ready-to-inject header fragment (`cf_clearance=<value>`) or null
- * if no sidecar is configured or the solve failed.
+ * Fetch (or retrieve from cache) a solved Cloudflare clearance for `domain`.
+ * Returns the ready-to-inject full Cookie header (all cookies the challenge
+ * context ended up with — cf_clearance, __cf_bm, cf_chl_*, origin cookies) or
+ * null if no sidecar is configured or the solve failed.
  */
 async function getCfClearance(domain: string): Promise<string | null> {
   const cached = cfClearanceCache.get(domain)
@@ -223,12 +224,18 @@ async function getCfClearance(domain: string): Promise<string | null> {
       signal: controller.signal,
     })
     if (!res.ok) return null
-    const data = (await res.json()) as { cfClearance?: string | null }
-    const value = data.cfClearance || null
+    const data = (await res.json()) as {
+      cookies?: string | null
+      cfClearance?: string | null
+    }
+    // Prefer the full header; fall back to the old bare cf_clearance value so
+    // a not-yet-redeployed sidecar still works.
+    const value =
+      data.cookies ??
+      (data.cfClearance ? `cf_clearance=${data.cfClearance}` : null)
     if (value) {
-      const cookie = `cf_clearance=${value}`
-      cfClearanceCache.set(domain, { cookie, at: Date.now() })
-      return cookie
+      cfClearanceCache.set(domain, { cookie: value, at: Date.now() })
+      return value
     }
     return null
   } catch {
@@ -255,10 +262,12 @@ function isCloudflareChallenge(res: Response): boolean {
 }
 
 /**
- * Append a solved cf_clearance to `forwardHeaders` when the target is the bound
- * domain or one of its subdomains (same registrable domain). Returns true if a
- * clearance was attached. No-op for unrelated domains (e.g. abs.twimg.com) or
- * when the sidecar isn't configured.
+ * Append a solved Cloudflare clearance to `forwardHeaders` when the target is
+ * the bound domain or one of its subdomains (same registrable domain). The
+ * clearance is the full Cookie header from the solve (cf_clearance + __cf_bm +
+ * cf_chl_* + origin cookies). Returns true if a clearance was attached. No-op
+ * for unrelated domains (e.g. abs.twimg.com) or when the sidecar isn't
+ * configured.
  */
 async function attachCloudflareClearance(
   forwardHeaders: Headers,
