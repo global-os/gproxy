@@ -184,19 +184,87 @@ const browser = await chromium.launch({
 // Fetch.continueRequest, which is below the JS-level CORS decision, so
 // overriding forbidden headers there doesn't retroactively trigger a
 // preflight.
-async function chromeFetchOnce(url, method, headersObj, bodyB64) {
-  const t0 = Date.now()
-  // Fresh, non-persistent context per request — no shared cookie jar or other
-  // session state across requests or between concurrent webviews. (The old
-  // launchPersistentContext profile leaked cookies between them.)
-  const context = await browser.newContext({
+// Bounded pool of pre-created (fresh, unused) browser contexts. Each /fetch
+// takes a context from the pool and, when done, the context is CLOSED — never
+// reused — and a brand-new one is created in the background to replace it. This
+// keeps per-request isolation (each request gets an untouched context) while
+// hiding the expensive newContext() latency behind pre-creation, and the fixed
+// pool size caps concurrency: a request that finds the pool empty queues for a
+// context (backpressure) instead of letting a burst of chunk requests thrash
+// Chrome until fetches hang past the timeout.
+const CONTEXT_POOL_SIZE = 8
+const readyContexts = []   // fresh contexts sitting ready
+const contextWaiters = []  // requests waiting for a context
+let contextsOut = 0        // contexts currently in use
+let refilling = false
+
+function makeContext() {
+  return browser.newContext({
     userAgent: USER_AGENT,
     viewport: { width: 1920, height: 1080 },
     ...(anonymizedProxyUrl ? { proxy: { server: anonymizedProxyUrl } } : {}),
   })
-  const page = await context.newPage()
-  let sawAnyEvent = false
+}
+
+// Top the pool up to CONTEXT_POOL_SIZE in the background, handing each fresh
+// context to a waiting request first, otherwise holding it ready.
+function refillPool() {
+  if (refilling) return
+  refilling = true
+  void (async () => {
+    try {
+      while (contextsOut + readyContexts.length < CONTEXT_POOL_SIZE) {
+        const ctx = await makeContext()
+        const waiter = contextWaiters.shift()
+        if (waiter) {
+          contextsOut++
+          waiter(ctx)
+        } else {
+          readyContexts.push(ctx)
+        }
+      }
+    } catch (err) {
+      console.error(
+        '[sidecar] context pool refill failed:',
+        err instanceof Error ? err.message : String(err)
+      )
+    } finally {
+      refilling = false
+    }
+  })()
+}
+
+// Take a fresh context (from the pool, or wait for one to be created).
+async function acquireContext() {
+  if (readyContexts.length > 0) {
+    contextsOut++
+    return readyContexts.shift()
+  }
+  return new Promise((resolve) => {
+    contextWaiters.push(resolve)
+    refillPool()
+  })
+}
+
+// Close a used context (never reuse) and replenish the pool.
+function releaseContext(context) {
+  contextsOut--
+  void context.close().catch(() => {})
+  refillPool()
+}
+
+// Pre-warm the pool at startup so the first burst doesn't pay newContext().
+refillPool()
+
+async function chromeFetchOnce(url, method, headersObj, bodyB64) {
+  // Take a fresh context from the pre-warmed pool (waits if none ready). Each
+  // request gets an untouched context and discards it when done — see the pool
+  // comment above for why this beats letting a burst hit Chrome at once.
+  const context = await acquireContext()
+  const t0 = Date.now()
   try {
+    const page = await context.newPage()
+    let sawAnyEvent = false
     const cdp = await context.newCDPSession(page)
     await cdp.send('Fetch.enable', {
       patterns: [
@@ -348,7 +416,8 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
         )
     })
   } finally {
-    await context.close().catch(() => {})
+    // Close the context (never reuse it) and replenish the pool.
+    releaseContext(context)
   }
 }
 
