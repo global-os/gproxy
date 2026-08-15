@@ -391,7 +391,6 @@ function isSameSite(a: string, b: string): boolean {
 function computeSecFetchHeaders(
   boundDomain: string,
   fetchDomain: string,
-  fetchPath: string,
   incomingRequest: Request
 ): Record<string, string> {
   const site =
@@ -403,24 +402,13 @@ function computeSecFetchHeaders(
 
   const headers: Record<string, string> = { 'Sec-Fetch-Site': site }
 
-  // X's onboarding "actions" (begin_login, etc.) are submitted as native form
-  // POSTs that navigate, not background fetch() calls — a real browser sends
-  // Sec-Fetch-Dest: document / Sec-Fetch-Mode: navigate for them. Cloudflare
-  // keys on those to distinguish a form submit from a fetch, so spoof the
-  // navigation values instead of forwarding the inbound fetch's empty/cors.
-  // (Whether they survive depends on PreserveOverriddenSecFetchHeaders — see
-  // the doc comment above.)
-  const isNavigationPost = fetchPath.includes('/onboarding/web/actions/')
-
-  if (isNavigationPost) {
-    headers['Sec-Fetch-Mode'] = 'navigate'
-    headers['Sec-Fetch-Dest'] = 'document'
-  } else {
-    const mode = incomingRequest.headers.get('sec-fetch-mode')
-    const dest = incomingRequest.headers.get('sec-fetch-dest')
-    if (mode) headers['Sec-Fetch-Mode'] = mode
-    if (dest) headers['Sec-Fetch-Dest'] = dest
-  }
+  // Pass the mode/dest through from the inbound request — these describe the
+  // request itself (a background fetch() → empty/cors) and the browser already
+  // computes them correctly for its same-origin request to our proxy subdomain.
+  const mode = incomingRequest.headers.get('sec-fetch-mode')
+  const dest = incomingRequest.headers.get('sec-fetch-dest')
+  if (mode) headers['Sec-Fetch-Mode'] = mode
+  if (dest) headers['Sec-Fetch-Dest'] = dest
   const user = incomingRequest.headers.get('sec-fetch-user')
   if (user) headers['Sec-Fetch-User'] = user
 
@@ -757,11 +745,6 @@ export async function proxyWebviewRequest(
     }
     // Drop the browser's Accept-Encoding so we can control it below.
     if (lower === 'accept-encoding') continue
-    // Drop the browser's RFC 9218 Priority header too: forwarding the iframe's
-    // fetch priority (u=1) would override the patched Chromium's net::HIGHEST
-    // (u=0) that X's priority-patch is meant to produce — let Chrome compute
-    // its own instead.
-    if (lower === 'priority') continue
     forwardHeaders.set(key, value)
   }
   forwardHeaders.set(
@@ -782,7 +765,7 @@ export async function proxyWebviewRequest(
   // Sec-Fetch-Site/-Mode/-Dest/-User for the bound-domain relationship — see
   // computeSecFetchHeaders() for why these can't just be forwarded as-is.
   for (const [name, value] of Object.entries(
-    computeSecFetchHeaders(boundDomain, fetchDomain, fetchPath, incomingRequest)
+    computeSecFetchHeaders(boundDomain, fetchDomain, incomingRequest)
   )) {
     forwardHeaders.set(name, value)
   }
