@@ -1,4 +1,5 @@
 [
+  { "at": 0, "comment": "Cloudflare managed-challenge main.js (build aae2b9a1c261), de-obfuscated. The obfuscator replaces every operator with a map lookup {\"<key>\": fn(a,b){return a OP b}}; the string keys (gypWF, cyxhk, …) are stable across the file. See deobfuscation.md § Rosetta stone for the full key->operator / type-code / _cf_chl_opt tables." },
   { "name": "g",  "at": 17835, "comment": "string-array decoder: stringArray()[arg-213]" },
   { "name": "f",  "at": 12490, "comment": "string array builder: one semicolon-delimited string, split on ';' (252 entries)" },
   { "name": "p",  "at": 51,    "comment": "DEFLATE compressor (LZ77 hash + Huffman, classic length/distance tables)" },

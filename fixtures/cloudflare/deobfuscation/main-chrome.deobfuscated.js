@@ -1,3 +1,4 @@
+// Cloudflare managed-challenge main.js (build aae2b9a1c261), de-obfuscated. The obfuscator replaces every operator with a map lookup {"<key>": fn(a,b){return a OP b}}; the string keys (gypWF, cyxhk, …) are stable across the file. See deobfuscation.md § Rosetta stone for the full key->operator / type-code / _cf_chl_opt tables.
 window._cf_chl_opt= {
   STupN6:'g'}
 ;

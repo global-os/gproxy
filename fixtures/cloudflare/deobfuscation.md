@@ -83,6 +83,56 @@ The remaining strings (≈120) are obfuscator junk: rotation-check filler
 (`257RaulUz`, `1002VJbAHI`, …), the operator-map keys (`gypWF`, `cyxhk`, …),
 and the state-machine case orders.
 
+## Rosetta stone (the obfuscation's operator map)
+
+The obfuscator replaces **every operator** with a lookup into a function-local
+map `{ "<random-key>": function(a,b){ return a OP b } }`. The keys are the
+random-looking strings above; the mapping is stable across the whole file:
+
+| key | operator |
+|-----|----------|
+| `gypWF` / `elFLS` / `riphT` | `>` |
+| `cyxhk` / `JkbfP` / `AfcKN` | `<<` |
+| `EmJfi` / `LyPqx` / `fCRYV` / `cHtno` / `SrJsV` / `TeryN` | `<` |
+| `sAmlv` / `yEWwH` / `guHLp` | `<=` |
+| `eiYIY` / `Ewxqb` / `rmhtR` / `RWPXQ` / `SyheD` / `gmCPd` | `+` |
+| `MxOUj` / `hIQZR` | `-` |
+| `ePjnu` / `EDgeG` / `hcFES` / `CHLJd` / `RvHuf` / `cWwbi` / `YNtft` | `&` |
+| `ODmrR` / `QBZau` / `VePCj` / `oXGcb` | `===` |
+| `TNtgO` / `aYzwh` / `qWaRi` | `!==` |
+| `pjkMt` | `^` |
+| `nqqfI` / `sUZld` / `cIxNT` / `SnyjK` / `WKIXS` | `>>>` |
+| `RaLgV` | `%` |
+| `aJfUr` / `cJGCD` | `/` |
+| `nppWT` | `\|` |
+| `dwWtY` / `lZtUq` | `==` |
+| `wKKyr` | `>=` |
+| `ZgqkN` | `instanceof` |
+| `AxXti` / `pyqSM` / `YNhUH` / `GNWmp` / `fnQgW` / `hdChW` / `ZNvtZ` / `RBphY` / `xGpNZ` / `RVSsc` / `ReRjJ` / `YcuVP` | `f(x)` — unary call |
+| `dYEEl` / `JntBN` / `Hgivi` / `LuCOq` | `f(x, y)` — binary call |
+
+String-valued config keys (not functions) that ride through the same maps:
+`GEYGP` = `"d.cookie"`, `XmFne`/`ORZFo` = `"timeout"`, `dsHHY`/`Acqye` = `"success"`,
+`GcIeO` = `"cloudflare-invisible"`, `NZxYc` = `"DOMContentLoaded"`, `tlbLb` = `"display: none"`,
+`LjQem` = `"script"`, `ndoPZ` = `"clientInformation"`, `zxpwE` = `"navigator"`,
+`fqAao` = `"contentDocument"`, `uMNNs` = `"/cdn-cgi/challenge-platform/h/"`, `arRwm` = `"_cb"`.
+
+### Fingerprint type codes
+
+`classifyValue` maps each sampled value to one char: `o` object, `s` string,
+`n` number, `I` bigint, `z` symbol, `u` undefined, `x` null, `p` promise, `a` array,
+`D` Date, `T` true, `F` false, `N` native function (`[native code]` — the
+anti-monkey-patch check), `f` plain function, `?` unknown.
+
+### Challenge params and message protocol
+
+`__CF$cv$params = { r: <ray>, t: <b64 issued-at> }` (injected by the bootstrap's
+hidden iframe). `_cf_chl_opt` fields: `STupN6` (challenge mode — the `/h/{mode}/`
+path segment), `pp` (precomputed params), `api` (flag), `u`/`i`/`ut`
+(update / interval / update-token), `ZSOv1`/`sJcj4`/`WAiB1`/`MJLB4` (beacon fields
+folded into the `/eb` post). Result is posted to `parent` via `postMessage` with
+`{ source: "cloudflare-invisible", sid: r, event: "success"|"error", detail }`.
+
 ## The challenge's actual logic
 
 ### 1. Bootstrap (the 403 body, not `main.js`)
@@ -134,17 +184,39 @@ A small self-contained coder stack, all inside `main.js`:
 So the fingerprint + a hashcash-style nonce is deflated, XOR-obfuscated, and
 base64'd into `payload`.
 
-### 5. The submit (oneshot)
+### 5. The submit (oneshot + event beacon)
 
 ```js
 Z = "/cdn-cgi/challenge-platform/h/" + _cf_chl_opt.STupN6
-  + "/jsd/oneshot/aae2b9a1c261/<0.04746454347771223:1786791917:SI2K…>/" + X.r;
+  + "/jsd/oneshot/aae2b9a1c261/<nonce>/" + params.r;
 H = new XMLHttpRequest(); H.open("POST", Z); H.timeout = 5000;
-H.send(JSON.stringify({ t:F(), lhr:location.href, api:…, c:length, payload:… }));
+H.send(encodePayload(JSON.stringify({ t:F(), lhr:location.href, api:…, c:length, payload:… })));
 ```
 
-On a valid solve Cloudflare drops `cf_clearance` (bound to the exit IP) and the
-challenge reports back to its parent via `b.parent.postMessage({source:"cloudflare-invisible", …}, "*")`.
+Two submission endpoints, both to the same `challenge-platform/h/{mode}/…` base:
+
+| path | when | payload |
+|------|------|---------|
+| `/jsd/oneshot/{build}/{nonce}/{ray}` | every solve | `encodePayload({ t, lhr, api, c, payload })` |
+| `/eb/{nonce}/{ray}/jsd` | **0.1% sample** (`randomChance(.001)`) | `encodePayload({ props, beacon-fields, "jsd" })` |
+
+The `<nonce>` is `<randomFloat>:<issuedAtUnix>:<b64url(32-byte sig)>` — e.g.
+`0.04746454347771223:1786791917:SI2K2foUc3vriBuvjfQ9BbgWqqVIO7damTJOoppKeJ8`
+(that timestamp decodes to the challenge issue time). The `/eb` "event beacon"
+is gated behind `Math.random() < 0.001`, so only ~1 in 1000 challenges posts it
+— a sampling/telemetry beacon, separate from the actual solve.
+
+**Both bodies are `encodePayload`-wrapped** (UTF-8 → deflate → XOR → base64),
+not plain JSON — the coder stack exists to encode the *outbound* submit, not to
+obfuscate the script itself.
+
+**Lifecycle:** `isChallengeFresh` expires the challenge after 1 hour
+(`now - issuedAt > 3600`). `shouldPoll` continues only when there's no `api`
+flag and `interval > 0`; `schedulePoll` re-runs `runChallenge` after
+`interval * 1000` ms, and `applyUpdate` flips `shouldUpdate`/`intervalUpdated`
+from the parent's postMessage to change the cadence. On a valid solve Cloudflare
+drops `cf_clearance` (bound to the exit IP) and the challenge reports back to its
+parent via `b.parent.postMessage({source:"cloudflare-invisible", …}, "*")`.
 
 ## Tooling (mirrors the Castle workflow)
 
