@@ -192,7 +192,7 @@ const browser = await chromium.launch({
 // pool size caps concurrency: a request that finds the pool empty queues for a
 // context (backpressure) instead of letting a burst of chunk requests thrash
 // Chrome until fetches hang past the timeout.
-const CONTEXT_POOL_SIZE = 8
+const CONTEXT_POOL_SIZE = 16
 const readyContexts = []   // fresh contexts sitting ready
 const contextWaiters = []  // requests waiting for a context
 let contextsOut = 0        // contexts currently in use
