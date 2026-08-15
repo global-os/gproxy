@@ -946,7 +946,29 @@ export async function proxyWebviewRequest(
     responseHeaders.set(key, value)
   }
 
-  const contentType = upstreamResponse.headers.get('content-type') ?? ''
+  const upstreamContentType = upstreamResponse.headers.get('content-type') ?? ''
+
+  // Defensive: the sidecar occasionally returns a response with a missing or
+  // wrong content-type (text/plain / octet-stream) for JS/CSS assets; combined
+  // with the upstream's `x-content-type-options: nosniff` that blocks ES module
+  // loading ("disallowed MIME type"). Derive the type from the path extension
+  // and force it, so JS/CSS chunks always get a valid MIME type and also reach
+  // the rewrite branches below (the JS branch fixes hardcoded CDN origins).
+  const dot = fetchPath.lastIndexOf('.')
+  const pathExt = dot >= 0 ? fetchPath.slice(dot).toLowerCase() : ''
+  const missingOrPlain =
+    !upstreamContentType ||
+    /text\/plain|application\/octet-stream/i.test(upstreamContentType)
+  if (
+    (pathExt === '.js' || pathExt === '.mjs' || pathExt === '.cjs') &&
+    missingOrPlain
+  ) {
+    responseHeaders.set('Content-Type', 'application/javascript; charset=utf-8')
+  } else if (pathExt === '.css' && missingOrPlain) {
+    responseHeaders.set('Content-Type', 'text/css; charset=utf-8')
+  }
+
+  const contentType = responseHeaders.get('content-type') ?? upstreamContentType
   const isHtml = contentType.includes('text/html')
 
   if (!isHtml) {
