@@ -21,6 +21,7 @@ import { dirname, basename, join } from 'node:path'
 import { tokenize } from './lexer.mjs'
 import { prettyPrint } from './pretty.mjs'
 import { resolveScopes } from './scope.mjs'
+import { resolveLookups } from './resolve-lookups.mjs'
 
 const TOOL_DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -152,6 +153,17 @@ function main() {
   }
 
   const renamed = []
+  // Inline the decoded string at every lookup: after the closing `)` of each
+  // decoder call, emit ` /* "string" */ `. Block comments (not `//`) so an
+  // inline comment inside `b[decoder(271) /* "document" */]` can't swallow the
+  // rest of the line. verify.mjs strips comments, so reversibility is kept.
+  const stringTable = JSON.parse(
+    readFileSync(new URL('../strings.json', import.meta.url), 'utf8')
+  )
+  const lookupByEnd = new Map()
+  for (const l of resolveLookups(src, stringTable)) lookupByEnd.set(l.end, l.str)
+  let stringAnnotations = 0
+
   for (const t of tokens) {
     const structComment = commentByDeclStart.get(t.start)
     if (structComment !== undefined) {
@@ -172,6 +184,11 @@ function main() {
       }
     }
     renamed.push(t)
+    const str = lookupByEnd.get(t.end)
+    if (str !== undefined) {
+      renamed.push({ type: 'comment', text: ` /* ${JSON.stringify(str)} */`, wsBefore: '' })
+      stringAnnotations++
+    }
   }
 
   const nice = prettyPrint(renamed)
@@ -180,6 +197,7 @@ function main() {
 
   console.log(`renamed bindings:    ${renameByBinding.size} (${manualCount} manual)`)
   console.log(`structure comments:  ${inserted}`)
+  console.log(`string annotations:  ${stringAnnotations}`)
   console.log(`nice file:           ${out} (${nice.length} bytes)`)
 }
 
