@@ -130,12 +130,16 @@ async function fetchViaSidecar(
       ? Buffer.from(init.body).toString('base64')
       : ''
 
-  // Hard timeout on the sidecar round-trip. The sidecar spawns a fresh Chrome
-  // context per request; under a burst of lazy-loaded chunks it can stall past
-  // Vercel's 30s limit and get killed as a 500. Fail fast instead (the caller
-  // sees a 502 the browser can retry) rather than hanging to the kill.
+  // Hard timeout on the sidecar round-trip. Two things this has to cover:
+  //  (a) a genuinely hung Chrome fetch must fail (502) before Vercel's 30s cap
+  //      reaps it as a 500, and
+  //  (b) the sidecar's context pool QUEUES requests under a burst (bounded
+  //      concurrency), so a request near the back of the queue legitimately
+  //      waits before its fetch even starts — that wait must not be mistaken
+  //      for a hang. 25s sits under the 30s cap while leaving room for the
+  //      queued tail of a navigation-sized burst.
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 15_000)
+  const timeout = setTimeout(() => controller.abort(), 25_000)
   const sidecarResp = await fetch(`${sidecarUrl}/fetch`, {
     method: 'POST',
     headers: {
