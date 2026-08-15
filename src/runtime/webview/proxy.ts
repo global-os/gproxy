@@ -377,6 +377,16 @@ function isSameSite(a: string, b: string): boolean {
   return domainA !== null && domainA === domainB
 }
 
+// Sentry's ingest hosts (sentry.io, o{org}.ingest.sentry.io, regional
+// o{org}.ingest.{region}.sentry.io). The envelope endpoint rejects any request
+// whose Origin doesn't match the project's allowed domains — and x.com isn't
+// on X's list — so we strip Origin for these instead of spoofing it. With no
+// Origin header the relay treats it as a server-side submission (same as a
+// backend SDK) and skips the CORS check entirely.
+function isSentryHost(domain: string): boolean {
+  return domain === 'sentry.io' || domain.endsWith('.sentry.io')
+}
+
 /**
  * Computes Sec-Fetch-Site the way a real, non-proxied visit to `boundDomain`
  * would see it: same-origin for a request to the bound domain itself,
@@ -805,18 +815,21 @@ export async function proxyWebviewRequest(
     `[webview] ${incomingRequest.method} ${upstream} cookies=${incomingCookie ? incomingCookie.split(';').length : 0}`
   )
   const forwardHeaders = new Headers()
+  const isSentry = isSentryHost(fetchDomain)
   for (const [key, value] of incomingRequest.headers.entries()) {
     const lower = key.toLowerCase()
     if (HOP_BY_HOP.has(lower)) continue
     if (isVercelInternalHeader(lower)) continue
     // Present as the bound domain to all upstream services so third-party
     // integrations (e.g. Google Sign-In) see x.com rather than our proxy.
+    // Sentry is the exception: its envelope endpoint rejects a non-allowed
+    // Origin with "Cors", so strip it (no Origin = server-side submission).
     if (lower === 'origin') {
-      forwardHeaders.set('Origin', boundOrigin)
+      if (!isSentry) forwardHeaders.set('Origin', boundOrigin)
       continue
     }
     if (lower === 'referer') {
-      forwardHeaders.set('Referer', boundOrigin + '/')
+      if (!isSentry) forwardHeaders.set('Referer', boundOrigin + '/')
       continue
     }
     // Drop the browser's Accept-Encoding so we can control it below.
