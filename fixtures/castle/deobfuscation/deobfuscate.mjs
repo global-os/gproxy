@@ -21,6 +21,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url'
 import { dirname, basename, join } from 'node:path'
 import { tokenize } from './lexer.mjs'
 import { prettyPrint } from './pipeline.mjs'
+import { resolveScopes } from './scope.mjs'
 
 const TOOL_DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -34,55 +35,14 @@ function isCleanIdentifier(s) {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(s) && !RESERVED.has(s)
 }
 
-// Derive an ugly -> nice rename map from plaintext string constants. Only names
-// that don't already appear as identifiers are used, so the reverse stays
-// unambiguous (and the round-trip is provable).
-function deriveRenameMap(tokens) {
-  const used = new Set(tokens.filter((t) => t.type === 'ident').map((t) => t.text))
-  const map = Object.create(null)
-  for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i]
-    const n = tokens[i + 1]
-    const a = tokens[i + 2]
-    if (
-      t.type !== 'ident' ||
-      !n ||
-      n.type !== 'punct' ||
-      n.text !== '=' ||
-      !a ||
-      (a.type !== 'string' && a.type !== 'template')
-    ) {
-      continue
-    }
-    const inner = a.text.slice(1, -1)
-    if (!isCleanIdentifier(inner) || used.has(inner)) continue
-    map[t.text] = inner
-    used.add(inner)
-  }
-  return map
-}
-
-// Rename ugly -> nice, inserting `// nice -> ugly` only at the FIRST occurrence
-// of each symbol (its definition); every later use is renamed bare.
-export function rename(tokens, map) {
+// Collect the distinct bindings (by object identity) present in bindingByStart.
+function collectBindings(bindingByStart) {
+  const seen = new Set()
   const out = []
-  const commented = new Set()
-  for (const t of tokens) {
-    if (t.type === 'ident' && Object.hasOwn(map, t.text)) {
-      const nice = map[t.text]
-      if (!commented.has(t.text)) {
-        commented.add(t.text)
-        out.push({
-          type: 'comment',
-          text: `// ${nice} -> ${t.text}\n`,
-          wsBefore: t.wsBefore,
-        })
-        out.push({ ...t, text: nice, wsBefore: '' })
-      } else {
-        out.push({ ...t, text: nice })
-      }
-    } else {
-      out.push(t)
+  for (const b of bindingByStart.values()) {
+    if (!seen.has(b)) {
+      seen.add(b)
+      out.push(b)
     }
   }
   return out
@@ -97,39 +57,135 @@ function main() {
 
   const src = readFileSync(input, 'utf8')
   const tokens = tokenize(src)
+  const bindingByStart = resolveScopes(src)
 
-  // Auto-derived map (plaintext string constants) + manual renames from
-  // manual-rename.json (identifiers identified by hand, e.g. the string-VM
-  // arrays). Manual entries win.
-  const map = deriveRenameMap(tokens)
+  // renameByBinding: binding object -> nice name. Keyed by the binding (so the
+  // rename is scope-aware — shadowing locals of the same name are untouched).
+  const renameByBinding = new Map()
+  const usedNames = new Set(tokens.filter((t) => t.type === 'ident').map((t) => t.text))
+
+  // AUTO: string constants (`IDENT = 'string'`) — rename the binding holding a
+  // clean, non-colliding string value.
+  let autoCount = 0
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]
+    const n = tokens[i + 1]
+    const a = tokens[i + 2]
+    if (
+      t.type !== 'ident' ||
+      !n ||
+      n.type !== 'punct' ||
+      n.text !== '=' ||
+      !a ||
+      (a.type !== 'string' && a.type !== 'template')
+    ) {
+      continue
+    }
+    const binding = bindingByStart.get(t.start)
+    if (!binding || renameByBinding.has(binding)) continue
+    const inner = a.text.slice(1, -1)
+    if (!isCleanIdentifier(inner) || usedNames.has(inner)) continue
+    renameByBinding.set(binding, inner)
+    usedNames.add(inner)
+    autoCount++
+  }
+
+  // MANUAL: hand-identified bindings (manual-rename.json). Find the binding with
+  // that name that is a declaration (Variable/FunctionName/ClassName), not a
+  // shadowed param/local.
   const manual = JSON.parse(
     readFileSync(new URL('./manual-rename.json', import.meta.url), 'utf8')
   )
-  Object.assign(map, manual)
+  let manualCount = 0
+  for (const [name, nice] of Object.entries(manual)) {
+    const candidates = collectBindings(bindingByStart).filter((b) => b.name === name)
+    const target =
+      candidates.find((c) =>
+        c.defTypes.some((d) => d === 'Variable' || d === 'FunctionName' || d === 'ClassName')
+      ) || candidates[0]
+    if (target && !renameByBinding.has(target) && !usedNames.has(nice)) {
+      renameByBinding.set(target, nice)
+      usedNames.add(nice)
+      manualCount++
+    }
+  }
 
-  let nice = prettyPrint(rename(tokens, map))
-
-  // Structure comments (comments.json) anchored by a unique source substring.
+  // Structure comments (comments.json): keyed by binding (name + def type),
+  // inserted at that binding's declaration site.
   const comments = JSON.parse(
     readFileSync(new URL('./comments.json', import.meta.url), 'utf8')
   )
+  const commentByDeclStart = new Map()
   let inserted = 0
-  for (const { anchor, comment } of comments) {
-    const idx = nice.indexOf(anchor)
-    if (idx === -1) {
-      console.warn(`comment anchor not found: ${anchor.slice(0, 40)}`)
+  for (const { name, def, comment } of comments) {
+    const binding = collectBindings(bindingByStart).find(
+      (b) => b.name === name && b.defTypes.includes(def)
+    )
+    if (!binding || !binding.identifiers || !binding.identifiers[0]) {
+      console.warn(`comment anchor not found: ${name} (${def})`)
       continue
     }
-    const lineStart = nice.lastIndexOf('\n', idx) + 1
-    const indent = (nice.slice(lineStart, idx).match(/^\s*/) || [''])[0]
-    nice = nice.slice(0, lineStart) + `${indent}// ${comment}\n` + nice.slice(lineStart)
+    const nameStart = binding.identifiers[0].start
+    const nameIdx = tokens.findIndex((t) => t.type === 'ident' && t.start === nameStart)
+    // Anchor at the `function` keyword (just before the name), not the name.
+    let anchor = nameStart
+    for (let k = nameIdx - 1; k >= 0 && k >= nameIdx - 3; k--) {
+      if (tokens[k].type === 'ident' && tokens[k].text === 'function') {
+        anchor = tokens[k].start
+        break
+      }
+    }
+    commentByDeclStart.set(anchor, comment)
     inserted++
   }
+
+  // Rename scope-aware. The `// nice -> ugly` comment goes at each renamed
+  // binding's *declaration* (not its first reference — `var`/`function` are
+  // hoisted, so a reference can precede the declaration in source order).
+  const declStarts = new Set()
+  for (const binding of renameByBinding.keys()) {
+    if (binding.identifiers && binding.identifiers[0]) {
+      declStarts.add(binding.identifiers[0].start)
+    }
+  }
+
+  const renamed = []
+  for (const t of tokens) {
+    const structComment = commentByDeclStart.get(t.start)
+    if (structComment !== undefined) {
+      commentByDeclStart.delete(t.start)
+      renamed.push({
+        type: 'comment',
+        text: `// ${structComment}\n`,
+        wsBefore: t.wsBefore,
+      })
+    }
+    if (t.type === 'ident') {
+      const binding = bindingByStart.get(t.start)
+      const nice = binding ? renameByBinding.get(binding) : undefined
+      if (nice) {
+        if (declStarts.has(t.start)) {
+          renamed.push({
+            type: 'comment',
+            text: `// ${nice} -> ${t.text}\n`,
+            wsBefore: t.wsBefore,
+          })
+          renamed.push({ ...t, text: nice, wsBefore: '' })
+          continue
+        }
+        renamed.push({ ...t, text: nice })
+        continue
+      }
+    }
+    renamed.push(t)
+  }
+
+  const nice = prettyPrint(renamed)
 
   const out = join(TOOL_DIR, basename(input).replace(/\.js$/, '.deobfuscated.js'))
   writeFileSync(out, nice)
 
-  console.log(`renamed identifiers: ${Object.keys(map).length} (${Object.keys(manual).length} manual)`)
+  console.log(`renamed bindings: ${renameByBinding.size} (${autoCount} auto, ${manualCount} manual)`)
   console.log(`structure comments: ${inserted}`)
   console.log(`nice file:          ${out} (${nice.length} bytes)`)
 }

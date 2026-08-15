@@ -1,8 +1,8 @@
 [
-  { "anchor": "function t(e){if(e in Ed)", "comment": "base64 + UTF-8 string decoder (the \"transport container\" layer)" },
-  { "anchor": "function s(e,t,n,r){", "comment": "string dispatcher: stringTable[(key ^ xorKey) & mask] -> per-char decode" },
-  { "anchor": "function re(e,t,n,r,i,a,o,ee){", "comment": "per-char XOR/rotate decode step (the string VM)" },
-  { "anchor": "function ie(e){var t=[]", "comment": "string VM driver: runs re() over an encoded string" },
-  { "anchor": "function si(){", "comment": "iframe detector: reads window.location.ancestorOrigins ([] in a top tab)" },
-  { "anchor": "function sa(e){", "comment": "location-property reader: calls e(window.location), returns it if a string" }
+  { "name": "t", "def": "FunctionName", "comment": "base64 + UTF-8 string decoder (the \"transport container\" layer)" },
+  { "name": "s", "def": "FunctionName", "comment": "string dispatcher: stringTable[(key ^ xorKey) & mask] -> per-char decode" },
+  { "name": "re", "def": "FunctionName", "comment": "per-char XOR/rotate decode step (the string VM)" },
+  { "name": "ie", "def": "FunctionName", "comment": "string VM driver: runs re() over an encoded string" },
+  { "name": "si", "def": "FunctionName", "comment": "iframe detector: reads window.location.ancestorOrigins ([] in a top tab)" },
+  { "name": "sa", "def": "FunctionName", "comment": "location-property reader: calls e(window.location), returns it if a string" }
 ]

@@ -26,7 +26,7 @@ export function tokenize(src) {
   const n = src.length
 
   const push = (type, end) => {
-    tokens.push({ type, text: src.slice(i, end), wsBefore: ws })
+    tokens.push({ type, text: src.slice(i, end), wsBefore: ws, start: i, end })
     ws = ''
     i = end
   }
@@ -94,7 +94,7 @@ export function tokenize(src) {
     push('punct', readPunct(src, i))
   }
 
-  if (ws) tokens.push({ type: 'ws', text: ws, wsBefore: '' })
+  if (ws) tokens.push({ type: 'ws', text: ws, wsBefore: '', start: n, end: n })
 
   return tokens
 }

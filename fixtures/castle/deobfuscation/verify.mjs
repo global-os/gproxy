@@ -20,15 +20,19 @@ const ANNOTATION_RE = /^\/\/\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*->\s*([A-Za-z_$][A-Z
 
 // Strip annotation comments (building nice -> ugly) and reverse-rename.
 function normalize(niceTokens) {
+  // Two passes: first collect every `// nice -> ugly` comment into the reverse
+  // map (hoisted `var`s are referenced before their declaration, where the
+  // comment sits), then reverse-rename all identifiers.
   const reverse = Object.create(null)
-  const out = []
   for (const t of niceTokens) {
     if (t.type === 'comment') {
       const m = ANNOTATION_RE.exec(t.text.trim())
       if (m) reverse[m[1]] = m[2]
-      continue
     }
-    if (t.type === 'ws') continue
+  }
+  const out = []
+  for (const t of niceTokens) {
+    if (t.type === 'comment' || t.type === 'ws') continue
     if (t.type === 'ident' && Object.hasOwn(reverse, t.text)) {
       out.push({ ...t, text: reverse[t.text] })
     } else {
