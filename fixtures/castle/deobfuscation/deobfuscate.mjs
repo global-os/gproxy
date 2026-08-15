@@ -97,13 +97,40 @@ function main() {
 
   const src = readFileSync(input, 'utf8')
   const tokens = tokenize(src)
+
+  // Auto-derived map (plaintext string constants) + manual renames from
+  // manual-rename.json (identifiers identified by hand, e.g. the string-VM
+  // arrays). Manual entries win.
   const map = deriveRenameMap(tokens)
-  const nice = prettyPrint(rename(tokens, map))
+  const manual = JSON.parse(
+    readFileSync(new URL('./manual-rename.json', import.meta.url), 'utf8')
+  )
+  Object.assign(map, manual)
+
+  let nice = prettyPrint(rename(tokens, map))
+
+  // Structure comments (comments.json) anchored by a unique source substring.
+  const comments = JSON.parse(
+    readFileSync(new URL('./comments.json', import.meta.url), 'utf8')
+  )
+  let inserted = 0
+  for (const { anchor, comment } of comments) {
+    const idx = nice.indexOf(anchor)
+    if (idx === -1) {
+      console.warn(`comment anchor not found: ${anchor.slice(0, 40)}`)
+      continue
+    }
+    const lineStart = nice.lastIndexOf('\n', idx) + 1
+    const indent = (nice.slice(lineStart, idx).match(/^\s*/) || [''])[0]
+    nice = nice.slice(0, lineStart) + `${indent}// ${comment}\n` + nice.slice(lineStart)
+    inserted++
+  }
 
   const out = join(TOOL_DIR, basename(input).replace(/\.js$/, '.deobfuscated.js'))
   writeFileSync(out, nice)
 
-  console.log(`renamed identifiers: ${Object.keys(map).length}`)
+  console.log(`renamed identifiers: ${Object.keys(map).length} (${Object.keys(manual).length} manual)`)
+  console.log(`structure comments: ${inserted}`)
   console.log(`nice file:          ${out} (${nice.length} bytes)`)
 }
 

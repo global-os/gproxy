@@ -1,0 +1,9 @@
+{
+  "yU": "stringCache",
+  "vU": "stringTable",
+  "qV": "keyMaterial",
+  "JV": "decodeProgram",
+  "Rv": "stringXorKey",
+  "zv": "stringTableMask",
+  "Ed": "base64Cache"
+}
