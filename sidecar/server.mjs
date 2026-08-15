@@ -340,10 +340,6 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
             name,
             value,
           }))
-          // Ask the custom Chromium (patched url_loader.cc) to treat this
-          // request as a top-level navigation for priority purposes — Cloudflare
-          // keys on the HTTP/2 priority, which header rewrites alone can't set.
-          headers.push({ name: 'X-Gproxy-Navigation', value: '1' })
           try {
             await cdp.send('Fetch.continueRequest', { requestId, headers })
           } catch (err) {
