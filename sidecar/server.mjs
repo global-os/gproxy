@@ -31,6 +31,7 @@ const MAX_REDIRECTS = 10
 // than surface a 502 to the caller on a transient drop.
 const FETCH_ATTEMPTS = 3
 const FETCH_RETRY_DELAY_MS = 250
+const RESPONSE_EXTRA_HEADERS_TIMEOUT_MS = 1_000
 // How long to wait for Cloudflare's invisible managed challenge to self-solve
 // (proof-of-work + a self-submit) and drop a cf_clearance cookie before giving
 // up. Kept under Vercel's 30s function cap so a solve + a re-fetch both fit.
@@ -498,7 +499,7 @@ async function chromeFetchOnce(url, method, headersObj, bodyB64) {
         // merged; Fetch.requestPaused.responseHeaders omits them.
         await Promise.race([
           responseExtraPromise,
-          new Promise((r) => setTimeout(r, 100)),
+          new Promise((r) => setTimeout(r, RESPONSE_EXTRA_HEADERS_TIMEOUT_MS)),
         ])
         const raw = responseExtraHeaders || {}
         const setCookieValue = raw['Set-Cookie'] ?? raw['set-cookie'] ?? null

@@ -1,11 +1,16 @@
 import { chromium } from 'patchright'
 
-const USERNAME = 'quineglobal'
-const PASSWORD = '!Phz8d!D8qtTaxniXfJp'
+const USERNAME = process.env.X_LOGIN_USERNAME
+const PASSWORD = process.env.X_LOGIN_PASSWORD
 const SLUG = process.argv[2] || '1wwcn295'
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
+
+if (!USERNAME || !PASSWORD) {
+  console.error('Set X_LOGIN_USERNAME and X_LOGIN_PASSWORD before running login-test.mjs')
+  process.exit(1)
+}
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const ctx = await browser.newContext({ userAgent: UA, viewport: { width: 1280, height: 900 } })
