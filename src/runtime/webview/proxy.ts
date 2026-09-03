@@ -881,7 +881,14 @@ export async function proxyWebviewRequest(
     body,
     redirect: 'follow' as const,
   }
-  const { agent: outboundProxy } = await resolveOutboundProxy()
+  // No undici/direct-fetch fallback — the sidecar (real Chrome) is the only
+  // upstream path. Without it we fail loudly (502) rather than silently leak a
+  // Node TLS fingerprint. /health reports this same condition as a degraded
+  // sidecar probe (configured: false).
+  if (!sidecarUrl) {
+    console.error('[webview] TLS sidecar not configured, refusing upstream fetch')
+    return new Response('TLS sidecar unavailable', { status: 502 })
+  }
 
   // Transient fetch failures surface as 502s/errors to the browser: the TLS
   // sidecar intermittently drops chunk requests (net::ERR_FAILED), and the
@@ -898,19 +905,9 @@ export async function proxyWebviewRequest(
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     attempts = attempt
     try {
-      if (sidecarUrl) {
-        const via = await fetchViaSidecar(upstream, fetchInit)
-        upstreamResponse = via.response
-        wireRequest = via.wire
-      } else if (outboundProxy) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        upstreamResponse = (await undiciFetch(upstream, {
-          ...fetchInit,
-          dispatcher: outboundProxy,
-        } as any)) as unknown as Response
-      } else {
-        upstreamResponse = await fetch(upstream, fetchInit)
-      }
+      const via = await fetchViaSidecar(upstream, fetchInit)
+      upstreamResponse = via.response
+      wireRequest = via.wire
       lastStatus = upstreamResponse.status
       if (upstreamResponse.status < 500) {
         // Cloudflare challenged us: our cf_clearance is missing or stale. Evict

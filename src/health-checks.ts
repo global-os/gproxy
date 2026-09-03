@@ -72,7 +72,13 @@ export async function probeSidecar(
   timeoutMs = 5_000
 ): Promise<SidecarProbeResult> {
   const url = process.env.SIDECAR_URL?.replace(/\/$/, '')
-  if (!url) return { configured: false, ok: true, ms: 0 }
+  if (!url)
+    return {
+      configured: false,
+      ok: false,
+      ms: 0,
+      error: 'TLS sidecar not configured (no undici fallback)',
+    }
   const start = Date.now()
   try {
     const [res, vercelProxyIp] = await Promise.all([
